@@ -49,6 +49,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "usage_ledger": {"SELECT": EVERY, "INSERT": EVERY},
     "connections": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "connection_models": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    # Any user of a household records the window its Ollama server runs a model with (MOD-019, ADR-0093).
+    "served_context_windows": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
     "tool_permissions": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "egress_policies": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "audit_events": {
