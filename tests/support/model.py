@@ -11,6 +11,8 @@ last user message:
   provider's reason (MOD-015);
 - `cut-off` stops at the model's length limit before saying anything: no
   content, and the finish reason `length` (MOD-017);
+- `prompt-tokens:N` streams `Echo: <message>` and reports `N` prompt tokens,
+  as a server that cut the prompt to fit does (MOD-018);
 - `run:<command>` calls the agent's command tool with `<command>`, then, once
   the tool's result arrives, answers `Tool said: <result>`;
 - `runs:<command> ||| <command> …` calls the command tool with each command in
@@ -59,6 +61,13 @@ file of silence, a second and a half long, and as OpenRouter an
 `X-Generation-Id`, whose cost `GET /generation` reports. A recording that holds `fail` is
 refused.
 
+Under `/ollama`, it answers as an Ollama server does (ADR-0093): the same
+scripts under `/ollama/v1`, which lists `OLLAMA_MODELS`; `/ollama/api/version`;
+`/ollama/api/show`, whose capabilities leave out `tools` for a model whose name
+says `notools` and `thinking` for one that says `nothink`; and `/ollama/api/ps`,
+which lists every model that has answered there, loaded with
+`ollama_context_length`. Outside `/ollama`, `/api/version` is not found.
+
 Every request is recorded, with its headers, so that tests can check what
 reached the model.
 """
@@ -83,6 +92,12 @@ OPENROUTER_COST = 0.000420
 # `gpt-4o-mini` is a model the price catalog knows.
 # `test-transcribe` and `test-tts` are speech models, by their names (ADR-0088).
 SERVER_MODELS = ("test-model", "refuses-tools", "gpt-4o-mini", "test-transcribe", "test-tts")
+OLLAMA_PREFIX = "/ollama"
+OLLAMA_VERSION = "0.40.16"
+# The models of the Ollama server (ADR-0093).
+OLLAMA_MODELS = ("test-model", "small-notools", "plain-nothink")
+# The context window an Ollama server runs its models with, unless a test sets another.
+OLLAMA_CONTEXT_LENGTH = 4096
 # What Ollama answers when a model that cannot call tools is offered some.
 REFUSES_TOOLS_ERROR = "registry.ollama.ai/library/refuses-tools does not support tools"
 # The reason a content filter gives for a request it refuses.
@@ -205,12 +220,30 @@ class ModelRequest:
 class ModelServer:
     url: str
     requests: list[ModelRequest] = field(default_factory=list[ModelRequest])
+    # As an Ollama server: the window it runs models with, and the models that have answered (ADR-0093).
+    ollama_context_length: int = OLLAMA_CONTEXT_LENGTH
+    ollama_loaded: set[str] = field(default_factory=set[str])
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    @property
+    def ollama_url(self) -> str:
+        """The base URL at which the model answers as an Ollama server's OpenAI-compatible API."""
+        return self.url.removesuffix("/v1") + f"{OLLAMA_PREFIX}/v1"
 
     @property
     def openrouter_url(self) -> str:
         """The base URL at which the model answers as OpenRouter."""
         return self.url.removesuffix("/v1") + f"{OPENROUTER_PREFIX}/api/v1"
+
+    def load(self, name: str) -> None:
+        """As an Ollama server: `name` has answered a request, so it is loaded."""
+        with self._lock:
+            self.ollama_loaded.add(name)
+
+    def loaded(self) -> tuple[list[str], int]:
+        """As an Ollama server: the loaded models, and the window they run with."""
+        with self._lock:
+            return sorted(self.ollama_loaded), self.ollama_context_length
 
     def record(self, request: ModelRequest) -> None:
         with self._lock:
@@ -300,6 +333,15 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 wanted = set(modalities.replace("%2C", ",").split(","))
                 listed = _openrouter_models("sort=top-weekly" in query.split("&")) if "text" in wanted else []
                 self._json(200, {"data": listed + _openrouter_speech_models(wanted)})
+            elif path == f"{OLLAMA_PREFIX}/v1/models":
+                self._json(200, {"object": "list", "data": [{"id": name, "object": "model"} for name in OLLAMA_MODELS]})
+            elif path == f"{OLLAMA_PREFIX}/api/version":
+                self._json(200, {"version": OLLAMA_VERSION})
+            elif path == f"{OLLAMA_PREFIX}/api/ps":
+                loaded, length = model.loaded()
+                self._json(
+                    200, {"models": [{"name": name, "model": name, "context_length": length} for name in loaded]}
+                )
             elif not self.openrouter and path == "/v1/models":
                 self._json(200, {"object": "list", "data": [{"id": name, "object": "model"} for name in SERVER_MODELS]})
             else:
@@ -318,6 +360,11 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 self._transcribe(raw)
                 return
             body = cast(dict[str, Any], json.loads(raw or b"{}"))
+            if self.path == f"{OLLAMA_PREFIX}/api/show":
+                self._ollama_show(body)
+                return
+            if self.path.startswith(f"{OLLAMA_PREFIX}/") and self.path.endswith("/chat/completions"):
+                model.load(str(body.get("model", "")))
             if self.path.endswith("/audio/speech"):
                 self._speak(body)
                 return
@@ -326,6 +373,9 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             model.record(request)
             texts = request.user_texts()
             last = texts[-1] if texts else ""
+            self.prompt_tokens = PROMPT_TOKENS
+            if last.startswith("prompt-tokens:"):
+                self.prompt_tokens = int(last.removeprefix("prompt-tokens:"))
             if self.path.startswith("/html/"):
                 self._page()
                 return
@@ -556,6 +606,18 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             self._event(base | {"choices": [self._choice({"role": "assistant", "refusal": REFUSAL}, None)]})
             self._finish(base, "content_filter")
 
+        def _ollama_show(self, body: dict[str, Any]) -> None:
+            """A model's details as Ollama shows them: here, only what Sibillo reads, its capabilities."""
+            name = str(body.get("model", ""))
+            model.record(ModelRequest(None, body, {}, False, "POST", self.path))
+            if name not in OLLAMA_MODELS:
+                self._json(404, {"error": f"model '{name}' not found"})
+                return
+            capabilities = ["completion"]
+            capabilities += [] if "notools" in name else ["tools"]
+            capabilities += [] if "nothink" in name else ["thinking"]
+            self._json(200, {"capabilities": capabilities, "model_info": {"test.context_length": 131072}})
+
         def _cut_off(self, body: dict[str, Any]) -> None:
             """An answer stopped at the length limit before any content, as a model with a full context gives."""
             if not body.get("stream"):
@@ -603,9 +665,10 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             if self.openrouter:
                 # OpenRouter repeats the finish reason in a content-free choice of the usage chunk.
                 empty = {"content": "", "role": "assistant"}
-                self._event(base | {"choices": [self._choice(empty, finish_reason)], "usage": _openrouter_usage()})
+                usage = _openrouter_usage(self._prompt_tokens())
+                self._event(base | {"choices": [self._choice(empty, finish_reason)], "usage": usage})
             else:
-                self._event(base | {"choices": [], "usage": _usage()})
+                self._event(base | {"choices": [], "usage": _usage(self._prompt_tokens())})
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
 
@@ -618,7 +681,7 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 "created": int(time.time()),
                 "model": body.get("model", "test-model"),
                 "choices": [choice],
-                "usage": _openrouter_usage() if self.openrouter else _usage(),
+                "usage": _openrouter_usage(self._prompt_tokens()) if self.openrouter else _usage(self._prompt_tokens()),
             } | ({"provider": "OpenAI"} if self.openrouter else {})
 
         def _stream(self, body: dict[str, Any], pieces: list[tuple[str, float]]) -> None:
@@ -648,6 +711,10 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 self._finish(base, "stop")
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+        def _prompt_tokens(self) -> int:
+            """The prompt tokens to report: as the script asks, else `PROMPT_TOKENS`."""
+            return int(getattr(self, "prompt_tokens", PROMPT_TOKENS))
 
         def _event(self, payload: dict[str, Any]) -> None:
             self.wfile.write(f"data: {json.dumps(payload)}\n\n".encode())
@@ -700,17 +767,17 @@ def _openrouter_speech_models(modalities: set[str]) -> list[dict[str, Any]]:
     ]
 
 
-def _usage() -> dict[str, int]:
+def _usage(prompt_tokens: int = PROMPT_TOKENS) -> dict[str, int]:
     return {
-        "prompt_tokens": PROMPT_TOKENS,
+        "prompt_tokens": prompt_tokens,
         "completion_tokens": COMPLETION_TOKENS,
-        "total_tokens": PROMPT_TOKENS + COMPLETION_TOKENS,
+        "total_tokens": prompt_tokens + COMPLETION_TOKENS,
     }
 
 
-def _openrouter_usage() -> dict[str, Any]:
+def _openrouter_usage(prompt_tokens: int = PROMPT_TOKENS) -> dict[str, Any]:
     """Usage as OpenRouter reports it, with the cost of the answer."""
-    return _usage() | {
+    return _usage(prompt_tokens) | {
         "prompt_tokens_details": {"cached_tokens": 0},
         "completion_tokens_details": {"reasoning_tokens": 0},
         "cost": OPENROUTER_COST,
