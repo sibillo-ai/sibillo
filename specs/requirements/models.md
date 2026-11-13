@@ -239,6 +239,39 @@ Rationale: small local models do both, and an internal error sends the
 user, or the household's admin, looking for a fault of the system. Found by
 the first eval suite (ADR-0092).
 
+## MOD-018: A cut prompt fails the run
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration
+
+When a model's server reports that the prompt of a request reached the
+model's context window, less one token, the run MUST fail with
+`model.context_exceeded` (MOD-017) and MUST NOT keep that answer: the server
+cut the prompt, and the model did not see all of it (ADR-0093).
+
+Rationale: a server such as Ollama drops the oldest part of a prompt that
+is too large, instructions and the user's message first, and the answer
+reads as if nobody had asked anything.
+
+## MOD-019: Ollama servers are recognized
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 1
+- **Verification:** integration, e2e
+
+A connection to an Ollama server SHOULD be recognized when it is added, its
+address changes or its models are listed again, and its models' tools and
+reasoning SHOULD come from the capabilities the server lists (MOD-014,
+CNV-013). After every response from such a connection, the window the
+server runs the model with SHOULD be recorded, and the context window used
+for the model SHOULD be the smaller of it and the connection's (MOD-007,
+AGT-016, MOD-018). Where a model's window is smaller than its connection's,
+clients SHOULD tell tenant admins in the connection's settings, with both
+windows and how to raise the server's (ADR-0093).
+
 ## MOD-016: Data egress policy of a shared space
 
 - **Status:** draft

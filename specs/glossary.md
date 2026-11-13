@@ -126,6 +126,7 @@ new entry here first (ADR-0005).
 | Remote model | A model served by a third party over the internet. |
 | Cost ledger | The record of every model request made for a user, with tokens and cost but no content (MOD-006, ADR-0042). |
 | Data egress policy | The rule that decides whether a user's data may be sent to remote models: any model, or local models only. Set for the household and for each user by a tenant admin, and by each user for themself; the strictest applies (MOD-003, ADR-0091). Shared spaces will have their own (MOD-016). |
+| Served context window | The context window a model's server actually runs the model with, as an Ollama server reports it; it may be smaller than its connection's (MOD-019, ADR-0093). |
 
 ## Process
 

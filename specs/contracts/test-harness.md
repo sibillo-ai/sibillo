@@ -115,7 +115,17 @@ answer, as models do when they say what they are about to do (UX-003), and
 several tools one after another, each once the result of the one before has
 arrived, as a model working through a task does (ADR-0090). It also stops an answer
 at its length limit before saying anything, with the finish reason `length`
-and no content, as a model whose context is full does (MOD-017). It records the headers of each request, so
+and no content, as a model whose context is full does (MOD-017), and reports
+the prompt tokens a test asks for, as a server that cut the prompt reports
+them (MOD-018).
+
+Under `/ollama`, it also answers as an Ollama server does (ADR-0093): the same
+scripts under `/ollama/v1`, `/ollama/api/version` with a version,
+`/ollama/api/show` with each model's capabilities, where `tools` and
+`thinking` are left out for models whose names say so, and `/ollama/api/ps`
+with every model that has answered a request, loaded with the context window
+the test sets. Outside `/ollama`, `/api/version` is not found, as on any other
+server. It records the headers of each request, so
 tests can check what the gateway sends.
 
 It also serves speech (ADR-0088). As an OpenAI-compatible server it lists

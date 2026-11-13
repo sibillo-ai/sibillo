@@ -1865,11 +1865,22 @@ components:
         returned; `has_api_key` says whether one is set. `private_network` is
         true when the address was set by a user who is the instance admin,
         which allows a private address (MOD-009).
-      required: [id, name, kind, base_url, location, has_api_key, private_network, context_window, model_count, models_refreshed_at, created_at, updated_at]
+      required: [id, name, kind, base_url, location, has_api_key, private_network, context_window, model_count, models_refreshed_at, server, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         name: { type: string }
         kind: { $ref: "#/components/schemas/ConnectionKind" }
+        server:
+          description: |
+            The server behind a connection of kind `openai`, when Sibillo
+            recognized it; `null` otherwise (MOD-019, ADR-0093).
+          oneOf:
+            - type: object
+              required: [product, version]
+              properties:
+                product: { type: string, enum: [ollama] }
+                version: { type: string }
+            - type: "null"
         base_url: { type: string, format: uri }
         location: { $ref: "#/components/schemas/Location" }
         has_api_key: { type: boolean }
@@ -1974,7 +1985,7 @@ components:
     ModelOption:
       type: object
       description: One model a connection of the tenant offers (MOD-011, UX-015).
-      required: [connection_id, connection_name, model, name, location, prices, context_window, tools, kind, voices]
+      required: [connection_id, connection_name, model, name, location, prices, context_window, served_context_window, tools, kind, voices]
       properties:
         connection_id: { $ref: "#/components/schemas/Id" }
         connection_name: { type: string }
@@ -1995,7 +2006,20 @@ components:
         prices:
           description: Prices per million tokens when the model is paid per token and they are known, else `null`.
           oneOf: [{ $ref: "#/components/schemas/ModelPrices" }, { type: "null" }]
-        context_window: { type: [integer, "null"], minimum: 1, description: "From the provider, or the connection's for your own server." }
+        context_window:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            The window Sibillo uses for the model: from the provider, or the
+            connection's for your own server, or the served window when it
+            is smaller (MOD-019).
+        served_context_window:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            The window the model's server last said it runs the model with,
+            for a recognized Ollama server; `null` when not known (MOD-019,
+            ADR-0093).
         tools:
           type: [boolean, "null"]
           description: Whether the model can call tools; `null` when the provider does not say. A model that cannot runs without tools (MOD-014).
@@ -2789,7 +2813,9 @@ components:
         that keeps calling a tool in a way that fails, after three
         consecutive retries, with `model.tool_misuse`, and an answer that
         stops at the model's length or context limit before it says or
-        calls anything with `model.context_exceeded` (MOD-017).
+        calls anything with `model.context_exceeded` (MOD-017), as does a
+        request whose prompt the server reports reached the model's context
+        window, less one token, since the server cut it (MOD-018).
         A run that asks the user a question, or whose tool calls need
         approval, ends with `RUN_FINISHED` whose `outcome` is
         `{type: "interrupt", interrupts}`, each an `Interrupt` (AGT-015,

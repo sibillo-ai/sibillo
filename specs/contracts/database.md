@@ -446,6 +446,8 @@ A household's access to one provider (MOD-008, ADR-0069).
 | `speech_voice` | text | the voice of `speech_model`; set exactly when it is |
 | `context_window` | integer | for `openai`, the context window of its models in tokens, at least 512, 8192 unless set; null for `openrouter` (ADR-0073) |
 | `models_refreshed_at` | timestamptz | when its models were last listed |
+| `server_product` | text | `ollama` when Sibillo recognized the server behind a connection of kind `openai`; else null (MOD-019, ADR-0093) |
+| `server_version` | text | the recognized server's version; set exactly when `server_product` is |
 | `created_at`, `updated_at` | timestamptz | not null |
 
 Policies: `SELECT` where `tenant_id = app_tenant_id()`, since every user's
@@ -479,6 +481,26 @@ ADR-0069).
 
 Primary key (`connection_id`, `model`). Policies as for `connections`;
 listing the models again replaces the rows of the connection.
+
+### `served_context_windows`
+
+The window each model of a recognized Ollama server last said it runs with
+(MOD-019, ADR-0093). The worker records it after a response, for whichever
+user of the household the run is for, so any user of the tenant may write it;
+it only ever lowers the window Sibillo uses, and the model list itself stays
+with tenant admins.
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id` | uuid | not null |
+| `connection_id` | uuid | not null; (`tenant_id`, `connection_id`) references `connections` on delete cascade |
+| `model` | text | not null; the provider's name for the model |
+| `context_window` | integer | not null; between 1 and 10000000 |
+| `observed_at` | timestamptz | not null |
+
+Primary key (`connection_id`, `model`). Policies: `SELECT`, `INSERT` and
+`UPDATE` where `tenant_id = app_tenant_id()`; no `DELETE` but through its
+connection.
 
 ### Policies for private tables
 
@@ -518,6 +540,7 @@ keys, not by privileges of `sibillo_app`.
 | `audit_events` | `SELECT`, `INSERT`; `UPDATE` of `outcome`, `scope`, `reason` and `attempts`: an event is written when the call is decided and completed as it runs |
 | `connections` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `connection_models` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `served_context_windows` | `SELECT`, `INSERT`, `UPDATE` |
 | Helper functions | `EXECUTE` on `app_tenant_id()`, `app_user_id()`, `app_is_tenant_admin()`, `app_is_instance_admin()` |
 | Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` |
 
