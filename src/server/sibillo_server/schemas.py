@@ -145,10 +145,18 @@ class UpdateConnectionRequest(Request):
     api_key: ApiKey | None = None
 
 
+class Server(Response):
+    """The server behind a connection, when Sibillo recognized it (MOD-019, ADR-0093)."""
+
+    product: Literal["ollama"]
+    version: str
+
+
 class Connection(Response):
     id: uuid.UUID
     name: str
     kind: ConnectionKind
+    server: Server | None
     base_url: str
     location: Location
     has_api_key: bool
@@ -215,6 +223,8 @@ class ModelOption(Response):
     location: Location
     prices: ModelPricesOut | None
     context_window: int | None
+    # The window the model's server last said it runs the model with (MOD-019, ADR-0093).
+    served_context_window: int | None
     tools: bool | None
     reasoning: bool | None
     kind: ModelKind

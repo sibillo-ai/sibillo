@@ -241,6 +241,8 @@
     "saveVoice": "Save voice",
     "connections": "Connections",
     "connectionsHint": "Each connection brings all of its models.",
+    "servedWindow": "The server runs {{model}} with a context window of {{served}} tokens, smaller than this connection's {{configured}}, so long conversations are compacted sooner and some requests can't fit.",
+    "servedWindowFix": "To give it {{configured}} tokens, set OLLAMA_CONTEXT_LENGTH={{configured}} on the Ollama server and restart it, or lower this connection's context window to match.",
     "noConnections": "No connections yet.",
     "add": "Add a connection",
     "modelCountOne": "{{count}} model",

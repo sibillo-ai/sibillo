@@ -73,6 +73,7 @@ from sibillo_server.egress import EgressRefusedError
 from sibillo_server.gateway import (
     Gateway,
     ModelUnavailableError,
+    PromptCutError,
     RunDeps,
     connection_model,
     model_reference,
@@ -384,7 +385,7 @@ def _error_code(error: BaseException) -> str:
         return "model.egress_refused"
     # A model that cannot go on is not a fault of Sibillo (MOD-017). Pydantic AI raises the same class for
     # both, so its messages tell them apart.
-    if isinstance(error, IncompleteToolCall | ModelContextWindowExceededError):
+    if isinstance(error, IncompleteToolCall | ModelContextWindowExceededError | PromptCutError):
         return "model.context_exceeded"
     if isinstance(error, UnexpectedModelBehavior) and not isinstance(error, ContentFilterError):
         if _TOOL_RETRIES_EXCEEDED.match(error.message):

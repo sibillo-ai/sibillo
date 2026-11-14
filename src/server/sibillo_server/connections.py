@@ -16,7 +16,7 @@ import ssl
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any, cast
 from urllib.parse import urlsplit
@@ -40,7 +40,8 @@ router = APIRouter()
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 COLUMNS = (
     "c.id, c.name, c.kind, c.base_url, c.location, c.api_key_ciphertext IS NOT NULL AS has_api_key,"
-    " c.private_network, c.context_window, c.models_refreshed_at, c.created_at, c.updated_at,"
+    " c.private_network, c.context_window, c.models_refreshed_at, c.server_product, c.server_version,"
+    " c.created_at, c.updated_at,"
     " (SELECT count(*) FROM connection_models m WHERE m.connection_id = c.id) AS model_count"
 )
 CONNECT_SECONDS = 10
@@ -55,6 +56,9 @@ TESTS_PER_MINUTE = 20
 # The context window of a server's models until its admin sets it (ADR-0073).
 DEFAULT_CONTEXT_WINDOW = 8192
 TOKENS_PER_PRICE = Decimal(1_000_000)
+# Recognizing an Ollama server, and asking it about its models (MOD-019, ADR-0093).
+OLLAMA_SECONDS = 5
+OLLAMA_SHOWS_AT_ONCE = 8
 
 
 def secret_key_of(request: Request) -> bytes:
@@ -403,6 +407,9 @@ def _connection(row: Any) -> schemas.Connection:
         has_api_key=row.has_api_key,
         private_network=row.private_network,
         context_window=row.context_window,
+        server=None
+        if row.server_product is None
+        else schemas.Server(product=row.server_product, version=row.server_version),
         model_count=row.model_count,
         models_refreshed_at=row.models_refreshed_at,
         created_at=row.created_at,
@@ -440,10 +447,69 @@ def _new_target(body: schemas.CreateConnectionRequest, identity: Identity) -> tu
     return Target(body.kind, base_url.rstrip("/"), body.api_key, identity.instance_admin), location
 
 
+def ollama_root(base_url: str) -> str:
+    """The root of an Ollama server, where its own API is: its address without a final `/v1` (ADR-0093)."""
+    return base_url.rstrip("/").removesuffix("/v1")
+
+
+async def recognize(target: Target, models: list[ListedModel]) -> tuple[schemas.Server | None, list[ListedModel]]:
+    """Whether the server is Ollama, and then its chat models' tools and reasoning (MOD-019, ADR-0093).
+
+    Only what the server answers in time is used: anything else leaves the
+    server unrecognized, or a model's capabilities unknown, as before.
+    """
+    if target.kind != "openai":
+        return None, models
+    root = ollama_root(target.base_url)
+    headers = {} if target.api_key is None else {"Authorization": f"Bearer {target.api_key}"}
+    limit = httpx.Timeout(OLLAMA_SECONDS, connect=OLLAMA_SECONDS)
+    try:
+        async with connection_client(target, limit) as client:
+            response = await client.get(f"{root}/api/version", headers=headers)
+            answer = response.json() if response.status_code == 200 else None
+            version = cast(dict[str, Any], answer).get("version") if isinstance(answer, dict) else None
+            if not isinstance(version, str) or not version:
+                return None, models
+            gate = asyncio.Semaphore(OLLAMA_SHOWS_AT_ONCE)
+
+            async def show(listed: ListedModel) -> ListedModel:
+                if listed.kind != "chat":
+                    return listed
+                async with gate:
+                    try:
+                        shown = await client.post(f"{root}/api/show", json={"model": listed.model}, headers=headers)
+                        details = shown.json() if shown.status_code == 200 else None
+                    except (httpx.HTTPError, ValueError):
+                        return listed
+                found = cast(dict[str, Any], details).get("capabilities") if isinstance(details, dict) else None
+                if not isinstance(found, list):
+                    return listed
+                capabilities = {str(item) for item in cast(list[Any], found)}
+                return replace(listed, tools="tools" in capabilities, reasoning="thinking" in capabilities)
+
+            shown_models = list(await asyncio.gather(*(show(listed) for listed in models)))
+    except (httpx.HTTPError, ValueError):
+        return None, models
+    return schemas.Server(product="ollama", version=version[:100]), shown_models
+
+
+async def listing(target: Target) -> tuple[schemas.ConnectionTest, list[ListedModel], schemas.Server | None]:
+    """Test a connection and list its models, recognizing its server (MOD-013, MOD-019)."""
+    test, models = await probe(target)
+    if not test.passed:
+        return test, models, None
+    server, models = await recognize(target, models)
+    return test, models, server
+
+
 async def store_models(
-    connection: AsyncConnection, tenant_id: uuid.UUID, connection_id: uuid.UUID, models: list[ListedModel]
+    connection: AsyncConnection,
+    tenant_id: uuid.UUID,
+    connection_id: uuid.UUID,
+    models: list[ListedModel],
+    server: schemas.Server | None = None,
 ) -> None:
-    """Replace the models of a connection with those just listed."""
+    """Replace the models of a connection with those just listed, and record its server (MOD-019)."""
     await connection.execute(text("DELETE FROM connection_models WHERE connection_id = :id"), {"id": connection_id})
     for position, listed in enumerate(models, start=1):
         await connection.execute(
@@ -472,7 +538,15 @@ async def store_models(
             },
         )
     await connection.execute(
-        text("UPDATE connections SET models_refreshed_at = clock_timestamp() WHERE id = :id"), {"id": connection_id}
+        text(
+            "UPDATE connections SET models_refreshed_at = clock_timestamp(), server_product = :product,"
+            " server_version = :version WHERE id = :id"
+        ),
+        {
+            "id": connection_id,
+            "product": None if server is None else server.product,
+            "version": None if server is None else server.version,
+        },
     )
 
 
@@ -515,7 +589,7 @@ async def create_connection(
 ) -> schemas.Connection:
     _check_admin(identity)
     target, location = _new_target(body, identity)
-    test, models = await probe(target)
+    test, models, server = await listing(target)
     if not test.passed:
         raise _refused(test)
     connection_id = uuid7()
@@ -542,7 +616,7 @@ async def create_connection(
                     "private_network": target.private_network,
                 },
             )
-            await store_models(connection, identity.tenant_id, connection_id, models)
+            await store_models(connection, identity.tenant_id, connection_id, models, server)
             await _default_if_none(connection, connection_id, body.kind, models)
             return await _read(connection, connection_id)
     except DBAPIError as error:
@@ -602,8 +676,9 @@ async def update_connection(
     if "api_key" in present:
         target = Target(target.kind, target.base_url, body.api_key, target.private_network)
     models: list[ListedModel] | None = None
+    server: schemas.Server | None = None
     if "base_url" in present or "api_key" in present:
-        test, models = await probe(target)
+        test, models, server = await listing(target)
         if not test.passed:
             raise _refused(test)
     changes: dict[str, object] = {}
@@ -629,7 +704,7 @@ async def update_connection(
                 if result.rowcount == 0:
                     raise errors.not_found()
             if models is not None:
-                await store_models(connection, identity.tenant_id, connection_id, models)
+                await store_models(connection, identity.tenant_id, connection_id, models, server)
                 await _default_if_none(connection, connection_id, row.kind, models)
             return await _read(connection, connection_id)
     except DBAPIError as error:
@@ -656,10 +731,10 @@ async def test_connection(
     async with transaction(engine, identity) as connection:
         _, target = await _stored_target(connection, connection_id, secret)
     _LIMIT.take(identity.tenant_id)
-    test, models = await probe(target)
+    test, models, server = await listing(target)
     if test.passed:
         async with transaction(engine, identity) as connection:
-            await store_models(connection, identity.tenant_id, connection_id, models)
+            await store_models(connection, identity.tenant_id, connection_id, models, server)
             await _default_if_none(connection, connection_id, target.kind, models)
     return test
 
@@ -818,12 +893,12 @@ async def _refresh_stale(engine: AsyncEngine, identity: Identity, secret: bytes)
         ).all()
     for row in stale:
         key = None if row.api_key_ciphertext is None else decrypt(secret, row.id, bytes(row.api_key_ciphertext))
-        test, models = await probe(Target(row.kind, row.base_url, key, row.private_network))
+        test, models, server = await listing(Target(row.kind, row.base_url, key, row.private_network))
         if not test.passed:
             logger.info("the models of connection %s could not be listed: %s", row.id, test.reason)
             continue
         async with transaction(engine, acting) as connection:
-            await store_models(connection, identity.tenant_id, row.id, models)
+            await store_models(connection, identity.tenant_id, row.id, models, server)
 
 
 _REFRESHING: set[asyncio.Task[None]] = set()
@@ -836,11 +911,14 @@ async def list_models(identity: Authenticated, engine: Engine, secret: SecretKey
             await connection.execute(
                 text(
                     "SELECT m.connection_id, c.name AS connection_name, c.location, m.model, m.name,"
-                    " coalesce(c.context_window, m.context_window) AS context_window,"
+                    # The smaller of the connection's window and the one its server runs the model with (MOD-019).
+                    " least(coalesce(c.context_window, m.context_window), s.context_window) AS context_window,"
+                    " s.context_window AS served_context_window,"
                     " m.tools, m.reasoning, m.kind, m.voices, m.input_price, m.cached_input_price, m.output_price,"
                     " m.currency,"
                     " c.models_refreshed_at < now() - make_interval(secs => :age) AS stale"
                     " FROM connection_models m JOIN connections c ON c.id = m.connection_id"
+                    " LEFT JOIN served_context_windows s ON s.connection_id = m.connection_id AND s.model = m.model"
                     " ORDER BY c.name, c.id, m.position"
                 ),
                 {"age": REFRESH_SECONDS},
@@ -863,6 +941,7 @@ async def list_models(identity: Authenticated, engine: Engine, secret: SecretKey
             # A local server costs nothing (ADR-0069).
             prices=None if row.location == "local" else _prices(row),
             context_window=row.context_window,
+            served_context_window=row.served_context_window,
             tools=row.tools,
             reasoning=row.reasoning,
             kind=row.kind,

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, cast
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic_ai import RunContext
 from pydantic_ai.capabilities import AbstractCapability
@@ -51,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 MODEL_PREFIX = "sibillo"
 DEFAULT_CONTEXT_WINDOW = 8192
+# The largest window a server may report (specs/contracts/database.md).
+MAX_CONTEXT_WINDOW = 10_000_000
 # Compaction starts when the history would exceed this share of the window (ADR-0073).
 COMPACTION_SHARE = 0.8
 # A rough count of tokens: four characters each.
@@ -61,6 +64,14 @@ SUMMARY_PROMPT = (
 )
 # The server needs no key; OpenAI clients refuse an empty one.
 NO_API_KEY = "none"
+
+
+# How long the gateway waits for an Ollama server to say which window it runs a model with (ADR-0093).
+SERVED_WINDOW_SECONDS = 5
+
+
+class PromptCutError(Exception):
+    """The server reported a prompt as large as the model's window: it cut it to fit (MOD-018, ADR-0093)."""
 
 
 class ModelUnavailableError(Exception):
@@ -108,6 +119,13 @@ class RunDeps:
     prices: dict[str, Any] = field(default_factory=dict[str, Any])
     # The model's context window, and what the run used so far (MOD-007, ADR-0073).
     context_window: int = DEFAULT_CONTEXT_WINDOW
+    # The connection of the run's model, its own window, and, for an Ollama server, where to ask which
+    # window it runs the model with (MOD-019, ADR-0093).
+    connection_id: uuid.UUID | None = None
+    connection_window: int = DEFAULT_CONTEXT_WINDOW
+    ollama_root: str | None = None
+    connection_model: str = ""
+    private_network: bool = False
     input_tokens: int = 0
     output_tokens: int = 0
     cost: Decimal | None = Decimal(0)
@@ -136,9 +154,11 @@ async def connection_model(deps: RunDeps, connection_id: uuid.UUID, model: str) 
             await connection.execute(
                 text(
                     "SELECT c.id, c.kind, c.base_url, c.location, c.api_key_ciphertext, c.private_network, m.tools,"
-                    " m.reasoning,"
-                    " coalesce(c.context_window, m.context_window) AS context_window"
+                    " m.reasoning, c.server_product,"
+                    " coalesce(c.context_window, m.context_window) AS context_window,"
+                    " s.context_window AS served_context_window"
                     " FROM connections c JOIN connection_models m ON m.connection_id = c.id"
+                    " LEFT JOIN served_context_windows s ON s.connection_id = m.connection_id AND s.model = m.model"
                     " WHERE c.id = :id AND m.model = :model"
                 ),
                 {"id": connection_id, "model": model},
@@ -157,7 +177,12 @@ async def connection_model(deps: RunDeps, connection_id: uuid.UUID, model: str) 
     deps.location = row.location
     # Never a request the user's data egress policy refuses (MOD-003, ADR-0091).
     await check(deps.engine, deps.identity, row.location)
-    deps.context_window = row.context_window or DEFAULT_CONTEXT_WINDOW
+    deps.connection_id = row.id
+    deps.connection_model = model
+    deps.connection_window = row.context_window or DEFAULT_CONTEXT_WINDOW
+    deps.context_window = min(deps.connection_window, row.served_context_window or deps.connection_window)
+    deps.private_network = row.private_network
+    deps.ollama_root = str(row.base_url).rstrip("/").removesuffix("/v1") if row.server_product == "ollama" else None
     # Addresses not set by the instance admin connect only to checked public addresses,
     # without redirects (MOD-009, ADR-0061).
     http_client = None if row.private_network else tenant_http_client()
@@ -251,10 +276,76 @@ class Gateway(AbstractCapability[RunDeps]):
         self, ctx: RunContext[RunDeps], *, request_context: ModelRequestContext, response: ModelResponse
     ) -> ModelResponse:
         deps = ctx.deps
+        await _learn_served_window(deps)
+        if _cut(deps, response):
+            # The model answered a prompt it did not see whole: the answer is not kept (MOD-018).
+            await record_usage(deps, _ledger_id(deps.run_id, ctx.run_step), response)
+            raise PromptCutError(
+                f"the server reported {response.usage.input_tokens} prompt tokens,"
+                f" the whole of the model's {deps.context_window}-token window"
+            )
         await store_messages(deps, [*ctx.messages[deps.history_length :], response])
         await record_usage(deps, _ledger_id(deps.run_id, ctx.run_step), response)
         await _report_usage(deps, response)
         return response
+
+
+def _cut(deps: RunDeps, response: ModelResponse) -> bool:
+    """Whether the server cut the prompt: it reports one that reached the window, less one token (MOD-018)."""
+    prompt = response.usage.input_tokens or 0
+    return prompt > 0 and prompt >= deps.context_window - 1
+
+
+async def _learn_served_window(deps: RunDeps) -> None:
+    """For an Ollama server, record the window it runs the run's model with, and use it if smaller (MOD-019).
+
+    `/api/ps` lists a model once it is loaded, which it is after a response. An
+    answer that cannot be read changes nothing.
+    """
+    if deps.ollama_root is None or deps.connection_id is None:
+        return
+    client = (
+        httpx.AsyncClient(follow_redirects=False, timeout=SERVED_WINDOW_SECONDS)
+        if deps.private_network
+        else tenant_http_client()
+    )
+    try:
+        async with client:
+            response = await client.get(f"{deps.ollama_root}/api/ps", timeout=SERVED_WINDOW_SECONDS)
+        answer = response.json() if response.status_code == 200 else None
+        loaded = cast(dict[str, Any], answer).get("models") if isinstance(answer, dict) else None
+    except (httpx.HTTPError, ValueError, AttributeError):
+        logger.info("run %s: the Ollama server did not say which window it runs the model with", deps.run_id)
+        return
+    if not isinstance(loaded, list):
+        return
+    entries = [cast(dict[str, Any], item) for item in cast(list[Any], loaded) if isinstance(item, dict)]
+    window = next(
+        (
+            entry.get("context_length")
+            for entry in entries
+            if deps.connection_model in (entry.get("name"), entry.get("model"))
+        ),
+        None,
+    )
+    if not isinstance(window, int) or not 1 <= window <= MAX_CONTEXT_WINDOW:
+        return
+    async with transaction(deps.engine, deps.identity) as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO served_context_windows (tenant_id, connection_id, model, context_window, observed_at)"
+                " VALUES (:tenant_id, :connection_id, :model, :window, now())"
+                " ON CONFLICT (connection_id, model) DO UPDATE SET context_window = excluded.context_window,"
+                " observed_at = excluded.observed_at"
+            ),
+            {
+                "tenant_id": deps.identity.tenant_id,
+                "connection_id": deps.connection_id,
+                "model": deps.connection_model,
+                "window": window,
+            },
+        )
+    deps.context_window = min(deps.connection_window, window)
 
 
 async def _compacted(ctx: RunContext[RunDeps], messages: list[ModelMessage]) -> list[ModelMessage]:

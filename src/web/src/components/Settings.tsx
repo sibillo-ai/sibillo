@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bot, Check, Cloud, House, Palette, Plug, Plus, ShieldCheck, Users, X } from "lucide-react";
+import { Activity, Bot, Check, Cloud, House, Palette, Plug, Plus, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -197,6 +197,7 @@ function ModelsSection() {
                 </span>
                 <span className="col-start-2 text-[13px] break-all text-muted">{connection.base_url}</span>
               </div>
+              <ServedWindows connection={connection} models={models.data?.items ?? []} />
               <div className="mt-2.5 flex gap-2">
                 <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} onClick={() => void test(connection)}>
                   {t("settings.test")}
@@ -233,6 +234,32 @@ function ModelsSection() {
         </Dialog.Portal>
       </Dialog.Root>
     </>
+  );
+}
+
+/** Models an Ollama server runs with a smaller window than their connection's, and how to raise it (MOD-019, ADR-0093). */
+function ServedWindows({ connection, models }: { connection: Connection; models: Schemas["ModelOption"][] }) {
+  const { t, i18n } = useTranslation();
+  const configured = connection.context_window;
+  const smaller = models.filter(
+    (model) => model.connection_id === connection.id && configured !== null && model.served_context_window !== null && model.served_context_window < configured,
+  );
+  if (configured === null || smaller.length === 0) return null;
+  const number = (value: number) => value.toLocaleString(i18n.language);
+  return (
+    <div role="note" className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-danger/45 bg-raised px-3 py-2.5 text-[13px]">
+      <TriangleAlert className="mt-0.5 size-4 flex-none text-danger" aria-hidden="true" />
+      <div className="min-w-0">
+        <ul className="flex flex-col gap-0.5">
+          {smaller.map((model) => (
+            <li key={model.model}>
+              {t("settings.servedWindow", { model: model.name, served: number(model.served_context_window ?? 0), configured: number(configured) })}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1 text-muted">{t("settings.servedWindowFix", { configured: number(configured) })}</p>
+      </div>
+    </div>
   );
 }
 

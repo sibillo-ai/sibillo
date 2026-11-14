@@ -27,6 +27,7 @@ CONTRACT_TABLES = (
     "login_attempts",
     "connections",
     "connection_models",
+    "served_context_windows",
     "folders",
     "user_settings",
     "conversations",
@@ -197,13 +198,17 @@ TABLES = [
       -- The context window of a server's models; OpenRouter lists each model's (ADR-0073).
       context_window integer CHECK (context_window >= 512),
       models_refreshed_at timestamptz,
+      -- The server behind a connection of kind `openai`, when recognized (MOD-019, ADR-0093).
+      server_product text CHECK (server_product IN ('ollama')),
+      server_version text CHECK (server_version <> ''),
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       UNIQUE (tenant_id, name),
       UNIQUE (tenant_id, id),
       -- OpenRouter's inference is always remote (MOD-010).
       CHECK (kind <> 'openrouter' OR location = 'remote'),
-      CHECK ((speech_model IS NULL) = (speech_voice IS NULL))
+      CHECK ((speech_model IS NULL) = (speech_voice IS NULL)),
+      CHECK ((server_product IS NULL) = (server_version IS NULL))
     )
     """,
     # One default model per tenant (MOD-012), and one of each speech model (ADR-0088).
@@ -232,6 +237,18 @@ TABLES = [
       FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE CASCADE,
       -- A currency exactly when a price is set.
       CHECK ((currency IS NULL) = (input_price IS NULL AND cached_input_price IS NULL AND output_price IS NULL))
+    )
+    """,
+    # The window an Ollama server runs each model with, as it last said (MOD-019, ADR-0093).
+    """
+    CREATE TABLE served_context_windows (
+      tenant_id uuid NOT NULL,
+      connection_id uuid NOT NULL,
+      model text NOT NULL CHECK (model <> ''),
+      context_window integer NOT NULL CHECK (context_window BETWEEN 1 AND 10000000),
+      observed_at timestamptz NOT NULL,
+      PRIMARY KEY (connection_id, model),
+      FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE CASCADE
     )
     """,
     # A user's groups of conversations (CNV-007, ADR-0073).
@@ -811,6 +828,16 @@ APPLICATION_POLICIES = [
             ("DELETE", f"USING ({EGRESS_WRITER})"),
         )
     ),
+    # Any user of the household records what the server said, for their own runs (ADR-0093).
+    *(
+        f"CREATE POLICY served_context_windows_app_{operation.lower()} ON served_context_windows"
+        f" FOR {operation} TO sibillo_app {clause}"
+        for operation, clause in (
+            ("SELECT", "USING (tenant_id = app_tenant_id())"),
+            ("INSERT", "WITH CHECK (tenant_id = app_tenant_id())"),
+            ("UPDATE", "USING (tenant_id = app_tenant_id()) WITH CHECK (tenant_id = app_tenant_id())"),
+        )
+    ),
     *(
         f"""
         CREATE POLICY tool_permissions_app_{operation.lower()} ON tool_permissions FOR {operation} TO sibillo_app
@@ -889,6 +916,7 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, UPDATE, DELETE ON runs TO sibillo_app",
     "GRANT SELECT, INSERT ON usage_ledger TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON connections, connection_models TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE ON served_context_windows TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON tool_permissions TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON egress_policies TO sibillo_app",
     # An audit event is written when its call is decided, and completed as it runs (ADR-0090).
