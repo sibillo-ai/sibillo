@@ -89,6 +89,7 @@ jobs:
               --ignore=tests/integration/test_titles_and_compaction.py --ignore=tests/integration/test_usage.py
               --ignore=tests/integration/test_forks.py --ignore=tests/integration/test_conversation_list.py
               --ignore=tests/integration/test_workspace_files.py --ignore=tests/integration/test_conversation_files.py
+              --ignore=tests/integration/test_ollama.py
             budget: 240
           - part: runs
             paths: tests/integration/test_runs_api.py tests/integration/test_agent_tools.py
@@ -96,7 +97,7 @@ jobs:
           - part: conversations
             paths: >-
               tests/integration/test_rewinding.py tests/integration/test_models_api.py
-              tests/integration/test_remote_provider.py
+              tests/integration/test_remote_provider.py tests/integration/test_ollama.py
             budget: 240
           # Titles, compaction, costs, forks, folders and search (ADR-0073).
           - part: library
