@@ -241,7 +241,7 @@ the first eval suite (ADR-0092).
 
 ## MOD-018: A cut prompt fails the run
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -257,7 +257,7 @@ reads as if nobody had asked anything.
 
 ## MOD-019: Ollama servers are recognized
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** integration, e2e
