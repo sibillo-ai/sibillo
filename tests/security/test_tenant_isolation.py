@@ -198,9 +198,14 @@ def test_own_private_rows_cannot_be_given_to_others(
 
 
 @pytest.mark.spec("TEN-003", "TEN-006")
-# Connections are checked with the API tests, which create them.
+# Connections are checked with the API tests, which create them; served windows below.
 @pytest.mark.parametrize(
-    "table", [table for table in CONTRACT_TABLES if table not in ("login_attempts", "connections", "connection_models")]
+    "table",
+    [
+        table
+        for table in CONTRACT_TABLES
+        if table not in ("login_attempts", "connections", "connection_models", "served_context_windows")
+    ],
 )
 def test_nothing_is_visible_without_a_request_context(database: Database, world: World, table: str) -> None:
     # `users` is read through a column sibillo_app may select; the others whole.
@@ -210,6 +215,45 @@ def test_nothing_is_visible_without_a_request_context(database: Database, world:
         assert conn.execute(select).fetchall() == []
     with database.superuser() as conn:
         assert conn.execute(sql.SQL("SELECT 1 FROM {} LIMIT 1").format(sql.Identifier(table))).fetchall()
+
+
+def _served_window(database: Database, tenant_id: uuid.UUID) -> uuid.UUID:
+    """A connection of the tenant, arranged as superuser, with a window its server said it serves a model with."""
+    connection_id = uuid7()
+    with database.superuser() as conn:
+        conn.execute(
+            "INSERT INTO connections (id, tenant_id, name, kind, base_url, location, context_window, created_at,"
+            " updated_at) VALUES (%s, %s, %s, 'openai', 'https://models.example/v1', 'local', 8192, now(), now())",
+            (connection_id, tenant_id, f"server-{connection_id}"),
+        )
+        conn.execute(
+            "INSERT INTO served_context_windows (tenant_id, connection_id, model, context_window, observed_at)"
+            " VALUES (%s, %s, 'small', 4096, now())",
+            (tenant_id, connection_id),
+        )
+    return connection_id
+
+
+@pytest.mark.spec("TEN-006", "MOD-019")
+def test_served_windows_of_other_tenants_are_out_of_reach(database: Database, world: World) -> None:
+    theirs = _served_window(database, world.tenant_b)
+    with app_transaction(database, Context(world.tenant_a, world.alice.id)) as conn:
+        assert conn.execute("SELECT 1 FROM served_context_windows WHERE connection_id = %s", (theirs,)).fetchall() == []
+        assert_changes_nothing(
+            conn, "UPDATE served_context_windows SET context_window = 1 WHERE connection_id = %s", (theirs,)
+        )
+        assert_denied(
+            conn,
+            "INSERT INTO served_context_windows (tenant_id, connection_id, model, context_window, observed_at)"
+            " VALUES (%s, %s, 'other', 1, now())",
+            (world.tenant_b, theirs),
+        )
+        assert_changes_nothing(conn, "DELETE FROM served_context_windows WHERE connection_id = %s", (theirs,))
+    with database.superuser() as conn:
+        (window,) = conn.execute(
+            "SELECT context_window FROM served_context_windows WHERE connection_id = %s", (theirs,)
+        ).fetchone() or (None,)
+    assert window == 4096
 
 
 @pytest.mark.spec("TEN-006")
