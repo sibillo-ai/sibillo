@@ -43,8 +43,8 @@ Every piece of content entering a run MUST be labeled as trusted (written by
 the user or the system) or untrusted (web content, received messages,
 external files, sandbox output, connector data from third parties). The
 results of tools in the `ingests_untrusted` class, attachments and files
-of the file library given to a run, and untrusted memory items (MEM-008),
-MUST be untrusted; the user's messages,
+of the file library given to a run, untrusted memory items (MEM-008), and
+the loaded bodies of untrusted skills (AGT-025), MUST be untrusted; the user's messages,
 their answers to questions (AGT-015) and the instructions MUST be trusted. A
 run MUST count as having untrusted content when the conversation's active
 path, up to and including that run, holds any, also after compaction and in
@@ -244,18 +244,28 @@ Rationale: journeys J7 and J12.
 
 ## AGT-017: Skills
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
 
-A user MUST be able to create, edit, import, enable and delete skills in the
-open Agent Skills format: a folder with a `SKILL.md` file and optional
-bundled files. Skills MUST be private to their owner. Enabled skills MUST be
-available in all the user's conversations, with only their names and
-descriptions in the context until the model loads one. Imported skills MUST
-be treated as untrusted content (AGT-003), and their scripts MUST run only in
-the user's sandbox (ADR-0044).
+A user MUST be able to create and edit skills in the open Agent Skills
+format, a folder with a `SKILL.md` file and optional bundled files; to upload
+one as a `.zip` or `.skill` archive; to import one from a URL of a GitHub
+repository or a folder of one, or of an archive, choosing among the skills
+the source holds; to download one as an archive; and to turn each on or off
+and delete it. Skills MUST be private to their owner, MUST be validated by
+the Agent Skills rules, and MUST stay within the limits of ADR-0096. The
+download of an import MUST run in a sandbox, never in the control plane, and
+archives MUST be refused when an entry would fall outside the skill's folder
+or when they exceed the limits.
+
+Every run MUST be given the skills that are on for its user and not turned
+off in its conversation, with only their names and descriptions in the
+context until the model loads one; a conversation MUST be able to turn off
+skills that are on, and a skill turned on or added later MUST be on in the
+user's conversations. Skills MUST be read for each run, and runs MUST NOT
+keep copies of skills in their durable inputs (ADR-0044, ADR-0096).
 
 Rationale: journey J13.
 
@@ -346,3 +356,53 @@ answer, with the file's name and size and a button that downloads it, and
 MUST NOT download it without the user's action. The offer names the file in
 the workspace: it downloads the file's current content, or says that it is
 gone (ADR-0079).
+
+## AGT-024: Built-in skills
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, design
+
+The instance MUST come with built-in skills, trusted and the same for every
+user, which each user MAY turn off for themselves. Together they MUST
+describe how to use every tool the sandbox image installs (SBX-021), and one
+of them MUST describe how to write a skill and save it (AGT-026). A user's
+skill MUST NOT take the name of a built-in skill (ADR-0096).
+
+Rationale: the toolbox is used often; how to use it belongs in skills,
+read when needed, and must not drift from the image.
+
+## AGT-025: Skills from untrusted sources
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+Each skill MUST record its origin: written in the editor, uploaded, imported
+with its URL, or saved by the assistant with its conversation. Uploaded and
+imported skills MUST be untrusted, and so MUST a skill saved by the
+assistant in a run that has untrusted content when it calls the tool
+(AGT-003). Editing a skill MUST NOT change whether it is trusted; only the
+user, explicitly, MUST be able to mark an untrusted skill trusted. The
+catalog MUST mark untrusted skills as from an untrusted source, and loading
+one MUST make the run have untrusted content from then on (AGT-004). The
+scripts of every skill MUST run only in the sandbox (ADR-0096).
+
+Rationale: threats T-25 and T-36.
+
+## AGT-026: The assistant saves skills
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration
+
+The assistant MUST be able to save a folder of its sandbox as one of the
+user's skills only through a mediated tool, `save_skill`, which creates the
+skill or replaces the user's skill of the same name, never a built-in skill,
+and which asks for approval by default. It MUST NOT be offered in temporary
+conversations (CNV-011, ADR-0096).
+
+Rationale: the assistant turns work it did into a skill the user can reuse.

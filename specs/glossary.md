@@ -42,7 +42,9 @@ new entry here first (ADR-0005).
 | Reasoning | What a model works out before it answers, set per conversation to off, on or deep, and shown folded above the answer (CNV-013). |
 | Question | A question the assistant asks the user during a run, with choices; it ends the run with an interrupt, and the answer starts the next run (AGT-015, ADR-0083). |
 | Task list | The steps the assistant plans for a long task and marks as it works, kept per conversation; shown as a checklist (UX-009, ADR-0083). |
-| Skill | A reusable package of instructions and files in the open Agent Skills format, loaded by the model when relevant (AGT-017). |
+| Skill | A reusable package of instructions and files in the open Agent Skills format, loaded by the model when relevant; kept by the control plane and given read-only to the sandbox at `/skills` (AGT-017, ADR-0096). |
+| Built-in skill | A skill that comes with the instance, trusted and the same for every user, such as those that teach the sandbox toolbox (AGT-024). |
+| Untrusted skill | A skill uploaded, imported, or saved by the assistant from untrusted content, until the user marks it trusted; loading it makes the run untrusted (AGT-025). |
 | Context window | The most tokens a model reads at once: listed by the provider, or set on a connection to the household's own server (ADR-0073). |
 | Compaction | Reducing the history sent to the model when it approaches the context window, without changing the stored conversation (ADR-0041). |
 | Compaction checkpoint | The stored result of a compaction for one path, attached to the run at which it happened (ADR-0041). |

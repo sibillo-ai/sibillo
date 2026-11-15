@@ -40,6 +40,7 @@ tags:
   - name: conversations
   - name: folders
   - name: memory
+  - name: skills
   - name: runs
   - name: speech
   - name: health
@@ -323,6 +324,284 @@ paths:
       x-requirements: [MEM-003, TEN-006]
       responses:
         "204": { description: Item deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/skills:
+    get:
+      tags: [skills]
+      operationId: listMySkills
+      summary: The built-in skills, then the user's, by name.
+      description: |
+        Every skill a run of the user may be given, with whether it is on and
+        its provenance (AGT-017, AGT-024, AGT-025, ADR-0096).
+      x-requirements: [AGT-017, AGT-024, AGT-025, TEN-006]
+      responses:
+        "200":
+          description: The skills.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skills" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    post:
+      tags: [skills]
+      operationId: createSkill
+      summary: Create a skill from a SKILL.md, or from an uploaded archive.
+      description: |
+        As JSON, a new skill with one file, `SKILL.md`: written in the
+        editor, so trusted. As `multipart/form-data`, a `.zip` or `.skill`
+        archive holding one skill, with `SKILL.md` at its root or in its one
+        top folder: uploaded, so untrusted (AGT-025). The archive is read
+        without being extracted; an entry outside the skill's folder, an
+        absolute path, a `..` segment or a link refuses it with
+        `skill.invalid`. The new skill is on (AGT-017, ADR-0096).
+      x-requirements: [AGT-017, AGT-025, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillDocument" }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archive]
+              properties:
+                archive:
+                  type: string
+                  format: binary
+                  description: The archive, at most 10 MiB unpacked.
+      responses:
+        "201":
+          description: The new skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/SkillNameTaken" }
+        "413": { $ref: "#/components/responses/SkillTooLarge" }
+        "422": { $ref: "#/components/responses/SkillInvalid" }
+
+  /me/skills/import:
+    post:
+      tags: [skills]
+      operationId: importSkills
+      summary: Import skills from a URL, choosing among those it holds.
+      description: |
+        The URL is a GitHub repository, as `owner/repo` or its address, a
+        folder of one (`https://github.com/owner/repo/tree/ref/path`), or the
+        address of a `.zip` or `.skill` archive. It is downloaded in a sandbox
+        of its own, which is removed with its workspace when the request
+        ends; the control plane never fetches it (AGT-017, ADR-0096). Every
+        folder of the source with a `SKILL.md`, at its root or one or two
+        levels down, is a skill found. With `names` absent, a source with one
+        skill imports it, and a source with several imports none and lists
+        them; with `names`, those are imported. Imported skills are
+        untrusted (AGT-025), and on.
+      x-requirements: [AGT-017, AGT-025, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillImportRequest" }
+      responses:
+        "200":
+          description: What was imported, and what was found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillImport" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/SkillNameTaken" }
+        "413": { $ref: "#/components/responses/SkillTooLarge" }
+        "422": { $ref: "#/components/responses/SkillInvalid" }
+        "502":
+          description: The source could not be downloaded, or holds no skill (`skill.import_failed`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/SandboxUnavailable" }
+
+  /me/skills/builtin/{skill_name}:
+    parameters:
+      - $ref: "#/components/parameters/SkillName"
+    get:
+      tags: [skills]
+      operationId: getBuiltinSkill
+      summary: A built-in skill, with its files.
+      x-requirements: [AGT-024]
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [skills]
+      operationId: setBuiltinSkill
+      summary: Turn a built-in skill on or off for the user.
+      description: Applies from the user's next run (AGT-024).
+      x-requirements: [AGT-024, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              additionalProperties: false
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /me/skills/builtin/{skill_name}/files/{path}:
+    parameters:
+      - $ref: "#/components/parameters/SkillName"
+      - $ref: "#/components/parameters/SkillFilePath"
+    get:
+      tags: [skills]
+      operationId: readBuiltinSkillFile
+      summary: Read a file of a built-in skill, as a download.
+      x-requirements: [AGT-024]
+      responses:
+        "200":
+          description: The file, as an attachment.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/skills/{skill_id}:
+    parameters:
+      - $ref: "#/components/parameters/SkillId"
+    get:
+      tags: [skills]
+      operationId: getSkill
+      summary: One of the user's skills, with its files.
+      x-requirements: [AGT-017, AGT-025, TEN-006]
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [skills]
+      operationId: updateSkill
+      summary: Turn a skill on or off, or mark it trusted.
+      description: |
+        `untrusted` may only become false: the user marks a skill trusted
+        after reading its files, and nothing else makes it trusted (AGT-025).
+        Applies from the user's next run.
+      x-requirements: [AGT-017, AGT-025, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSkillRequest" }
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [skills]
+      operationId: deleteSkill
+      summary: Delete a skill and its files.
+      description: Deletion is physical (AGT-017).
+      x-requirements: [AGT-017, TEN-006]
+      responses:
+        "204": { description: Skill deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me/skills/{skill_id}/files/{path}:
+    parameters:
+      - $ref: "#/components/parameters/SkillId"
+      - $ref: "#/components/parameters/SkillFilePath"
+    get:
+      tags: [skills]
+      operationId: readSkillFile
+      summary: Read a file of a skill, as a download.
+      x-requirements: [AGT-017, TEN-006]
+      responses:
+        "200":
+          description: The file, as an attachment.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [skills]
+      operationId: writeSkillFile
+      summary: Write a text file of a skill, creating or replacing it.
+      description: |
+        UTF-8 text, from the editor. Writing `SKILL.md` checks it by the
+        Agent Skills rules, and takes the skill's name and description from
+        it: a new name renames the skill. Whether the skill is trusted does
+        not change (AGT-025).
+      x-requirements: [AGT-017, AGT-025, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillFileText" }
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/SkillNameTaken" }
+        "413": { $ref: "#/components/responses/SkillTooLarge" }
+        "422": { $ref: "#/components/responses/SkillInvalid" }
+    delete:
+      tags: [skills]
+      operationId: deleteSkillFile
+      summary: Delete a file of a skill; `SKILL.md` cannot be deleted.
+      x-requirements: [AGT-017, TEN-006]
+      responses:
+        "200":
+          description: The skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/SkillInvalid" }
+
+  /me/skills/{skill_id}/archive:
+    parameters:
+      - $ref: "#/components/parameters/SkillId"
+    get:
+      tags: [skills]
+      operationId: downloadSkill
+      summary: Download a skill as a zip archive, its files in a folder named after it.
+      x-requirements: [AGT-017, TEN-006]
+      responses:
+        "200":
+          description: The skill, zipped, as an attachment.
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -1782,6 +2061,22 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Id" }
+    SkillId:
+      name: skill_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    SkillName:
+      name: skill_name
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/SkillNameValue" }
+    SkillFilePath:
+      name: path
+      in: path
+      required: true
+      description: The file's path in the skill's folder, `/`-separated, URL-encoded.
+      schema: { type: string, minLength: 1, maxLength: 255 }
     PasskeyId:
       name: passkey_id
       in: path
@@ -1831,6 +2126,30 @@ components:
         The request is invalid (`request.validation_failed`), or the item
         would be over 500 characters or the user's memory over 10,000
         (`memory.full`, MEM-007); nothing was written.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    SkillInvalid:
+      description: |
+        The request is invalid (`request.validation_failed`), or the skill is
+        not valid by the Agent Skills rules, or its archive holds an entry
+        outside its folder, a link, or no single skill (`skill.invalid`);
+        nothing was written.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    SkillTooLarge:
+      description: |
+        The skill would be over 200 files, 10 MiB, or a `SKILL.md` of
+        100,000 characters, or the user's skills over 100 skills or 100 MiB
+        (`skill.too_large`, ADR-0096); nothing was written.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    SkillNameTaken:
+      description: |
+        Another of the user's skills, or a built-in skill, has the name
+        (`resource.conflict`); nothing was written.
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -1982,6 +2301,9 @@ components:
         - file.not_previewable
         - workspace.quota_exceeded
         - memory.full
+        - skill.invalid
+        - skill.too_large
+        - skill.import_failed
         - connection.test_failed
         - sandbox.unavailable
         - sandbox.command_failed
@@ -2467,6 +2789,7 @@ components:
         - remember
         - update_memory
         - forget
+        - save_skill
 
     DisabledTools:
       type: array
@@ -2693,6 +3016,182 @@ components:
           allOf: [{ $ref: "#/components/schemas/Timestamp" }]
           description: When it was last written.
 
+    SkillNameValue:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+      description: |
+        A skill's name by the Agent Skills rules, as the harness's loader
+        normalizes it; letters may be any lowercase Unicode letters, which the
+        pattern shows for ASCII only.
+
+    DisabledSkills:
+      type: array
+      description: |
+        The names of skills turned off in a conversation (AGT-017, ADR-0096);
+        every other skill that is on for the user is on. A name of no skill
+        is kept and ignored.
+      uniqueItems: true
+      maxItems: 200
+      items: { $ref: "#/components/schemas/SkillNameValue" }
+
+    Skills:
+      type: object
+      required: [builtin, own, used_bytes, limit_bytes, limit_skills]
+      additionalProperties: false
+      properties:
+        builtin:
+          type: array
+          description: The built-in skills, by name (AGT-024).
+          items: { $ref: "#/components/schemas/Skill" }
+        own:
+          type: array
+          description: The user's skills, by name.
+          items: { $ref: "#/components/schemas/Skill" }
+        used_bytes: { type: integer, minimum: 0, description: The size of the user's skills in all. }
+        limit_bytes: { type: integer, description: The most the user's skills may hold, 100 MiB. }
+        limit_skills: { type: integer, description: The most skills a user may have, 100. }
+
+    Skill:
+      type: object
+      description: A skill, with its provenance (AGT-017, AGT-025).
+      required: [id, name, description, builtin, enabled, origin, source_url, conversation, untrusted, size_bytes, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        id:
+          description: The skill's ID; `null` for a built-in skill, which its name identifies.
+          oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }]
+        name: { $ref: "#/components/schemas/SkillNameValue" }
+        description: { type: string }
+        builtin: { type: boolean }
+        enabled:
+          type: boolean
+          description: Whether it is on for the user; a conversation may still turn it off.
+        origin:
+          type: string
+          enum: [builtin, user, upload, import, assistant]
+          description: Where it came from; `user` when written in the editor.
+        source_url:
+          type: [string, "null"]
+          description: The URL it was imported from, when `origin` is `import`.
+        conversation:
+          description: |
+            The conversation where the assistant last saved it, when `origin`
+            is `assistant`; `title` is `null` and `deleted` true once the
+            conversation is deleted.
+          oneOf:
+            - type: object
+              required: [id, title, deleted]
+              additionalProperties: false
+              properties:
+                id: { $ref: "#/components/schemas/Id" }
+                title: { type: [string, "null"] }
+                deleted: { type: boolean }
+            - type: "null"
+        untrusted:
+          type: boolean
+          description: |
+            Written by someone other than the user; marked so in the catalog,
+            and loading it makes a run untrusted, until the user marks it
+            trusted (AGT-025). Always false for built-in skills.
+        size_bytes: { type: integer, minimum: 0 }
+        created_at:
+          description: When it was created; `null` for a built-in skill.
+          oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }]
+        updated_at:
+          description: When its files last changed; `null` for a built-in skill.
+          oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }]
+
+    SkillDetail:
+      allOf:
+        - $ref: "#/components/schemas/Skill"
+        - type: object
+          required: [files]
+          properties:
+            files:
+              type: array
+              description: Every file of the skill, by path, `SKILL.md` first.
+              items:
+                type: object
+                required: [path, size_bytes, executable, text]
+                additionalProperties: false
+                properties:
+                  path: { type: string }
+                  size_bytes: { type: integer, minimum: 0 }
+                  executable: { type: boolean }
+                  text:
+                    type: [string, "null"]
+                    description: The file's content when it is UTF-8 text of at most 1 MiB; else `null`, and it is downloaded.
+
+    SkillDocument:
+      type: object
+      required: [skill_md]
+      additionalProperties: false
+      properties:
+        skill_md:
+          type: string
+          minLength: 1
+          maxLength: 100000
+          description: The `SKILL.md`, with its frontmatter.
+
+    SkillFileText:
+      type: object
+      required: [text]
+      additionalProperties: false
+      properties:
+        text: { type: string, maxLength: 1048576 }
+        executable: { type: boolean, default: false }
+
+    UpdateSkillRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        enabled: { type: boolean }
+        untrusted:
+          type: boolean
+          enum: [false]
+          description: Marks the skill trusted.
+
+    SkillImportRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          description: A GitHub repository (`owner/repo` or its address), a folder of one, or an archive's address.
+        names:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/SkillNameValue" }
+          description: The skills to import, among those found.
+
+    SkillImport:
+      type: object
+      required: [imported, found]
+      additionalProperties: false
+      properties:
+        imported:
+          type: array
+          items: { $ref: "#/components/schemas/Skill" }
+        found:
+          type: array
+          description: Every skill the source holds, valid or not, for the user to choose from.
+          items:
+            type: object
+            required: [name, description, valid]
+            additionalProperties: false
+            properties:
+              name: { type: string }
+              description: { type: string }
+              valid: { type: boolean }
+              problem: { type: string, description: Why it is not valid, when it is not. }
+
     UserSettings:
       type: object
       description: A user's defaults for their conversations (CNV-013, CNV-014, ADR-0081).
@@ -2735,7 +3234,7 @@ components:
 
     Conversation:
       type: object
-      required: [id, title, archived, temporary, active_run_id, model, reasoning, disabled_tools, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
+      required: [id, title, archived, temporary, active_run_id, model, reasoning, disabled_tools, disabled_skills, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         temporary:
@@ -2762,6 +3261,9 @@ components:
         disabled_tools:
           allOf: [{ $ref: "#/components/schemas/DisabledTools" }]
           description: The tools its next run does without, copied from its user's defaults when it was created (CNV-013).
+        disabled_skills:
+          allOf: [{ $ref: "#/components/schemas/DisabledSkills" }]
+          description: The skills its next run does without; empty when it was created, and copied into a fork (AGT-017, ADR-0096).
         allowances: { $ref: "#/components/schemas/Allowances" }
         base_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
@@ -2923,6 +3425,9 @@ components:
         disabled_tools:
           allOf: [{ $ref: "#/components/schemas/DisabledTools" }]
           description: Used from the next run (CNV-013).
+        disabled_skills:
+          allOf: [{ $ref: "#/components/schemas/DisabledSkills" }]
+          description: Used from the next run (AGT-017).
         allowances:
           allOf: [{ $ref: "#/components/schemas/Allowances" }]
           description: |

@@ -297,6 +297,7 @@ A user's groups of conversations (CNV-007, ADR-0073).
 | `connection_id`, `model` | uuid, text | the model of the conversation (MOD-012): set from the tenant's default model on creation, or chosen by its user; both null when the tenant had no default model; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`), so a removed connection leaves `model` without a connection and runs fail |
 | `reasoning` | text | not null, default `on`; `off`, `on` or `deep` (CNV-013, ADR-0081) |
 | `disabled_tools` | text[] | not null, default empty; the tools that are off, each one of the names of `ToolName` in the API contract (CNV-013, ADR-0087) |
+| `disabled_skills` | text[] | not null, default empty; the names of skills turned off in this conversation, built-in or the user's (AGT-017, ADR-0096); not copied from the user's settings, so that a skill turned on or added later is on; a name of no skill is ignored; copied into a fork |
 | `base_instructions`, `additional_instructions` | text | the conversation's own instructions; null to use the user's defaults (CNV-014) |
 | `temporary` | boolean | not null, default false; set on creation and never changed (CNV-011, ADR-0082) |
 | `archived_at` | timestamptz | null when active |
@@ -328,6 +329,7 @@ most one row per user, and none until they set one.
 | `disabled_tools` | text[] | not null, default empty; as in `conversations` |
 | `base_instructions`, `additional_instructions` | text | null when unset |
 | `memory_enabled` | boolean | not null, default true; whether memory is on for the user (MEM-006, ADR-0095); a user without a row has it on |
+| `disabled_builtin_skills` | text[] | not null, default empty; the built-in skills the user turned off (AGT-024, ADR-0096) |
 | `updated_at` | timestamptz | not null |
 
 ### `memory_items` (private)
@@ -345,6 +347,39 @@ A user's memory: the only copy of what the assistant remembers about them
 | `conversation_id` | uuid | the conversation of the memory tool call that last wrote it; null when `origin` is `user`; an identifier without a reference, so that the item outlives its conversation |
 | `created_at` | timestamptz | not null |
 | `updated_at` | timestamptz | not null; when it was last written; index on (`tenant_id`, `owner_id`, `updated_at`) |
+
+### `skills` (private)
+
+A user's skills (AGT-017, AGT-025, ADR-0096). Built-in skills are not rows:
+they come with the server's package.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` on delete cascade |
+| `name` | text | not null; the name of its `SKILL.md`, by the Agent Skills rules; unique on (`tenant_id`, `owner_id`, `name`); never the name of a built-in skill, checked by the application |
+| `description` | text | not null; the description of its `SKILL.md`, 1 to 1,024 characters, checked |
+| `enabled` | boolean | not null, default true; whether the skill is on for the user |
+| `origin` | text | not null; `user`, `upload`, `import` or `assistant`, checked |
+| `source_url` | text | the URL it was imported from; not null exactly when `origin` is `import`, checked |
+| `conversation_id` | uuid | the conversation of the `save_skill` call that last wrote it; not null exactly when `origin` is `assistant`, checked; an identifier without a reference, so that the skill outlives its conversation |
+| `untrusted` | boolean | not null; true when uploaded, imported, or saved in a run with untrusted content, until the user marks it trusted (AGT-025) |
+| `size_bytes` | bigint | not null; the sum of its files' sizes, at most 10 MiB, checked; a user's skills hold at most 100 skills and 100 MiB in all, checked by the application under a lock on the user's skills |
+| `created_at` | timestamptz | not null |
+| `updated_at` | timestamptz | not null; when its files last changed |
+
+### `skill_files` (private)
+
+The files of a user's skill, `SKILL.md` included; at most 200 per skill,
+checked by the application.
+
+| Column | Type | Notes |
+|---|---|---|
+| `skill_id` | uuid | not null; (`tenant_id`, `owner_id`, `skill_id`) references `skills` on delete cascade |
+| `tenant_id`, `owner_id` | uuid | not null |
+| `path` | text | not null; relative to the skill's folder, `/`-separated, without empty, `.` or `..` segments, at most 255 characters, checked; primary key (`skill_id`, `path`) |
+| `content` | bytea | not null |
+| `executable` | boolean | not null, default false; whether the sandbox sees it executable |
 
 ### `conversation_messages` (private)
 
@@ -574,7 +609,7 @@ connection.
 
 ### Policies for private tables
 
-`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `conversations`,
+`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
 `conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`
 and `audit_events` use the same policy for every operation:
 
@@ -603,6 +638,8 @@ keys, not by privileges of `sibillo_app`.
 | `folders` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `user_settings` | `SELECT`, `INSERT`, `UPDATE` |
 | `memory_items` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `skills` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `skill_files` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `conversations` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `conversation_plans` | `SELECT`, `INSERT`, `UPDATE` |
 | `compaction_checkpoints` | `SELECT`, `INSERT`: checkpoints never change (ADR-0041) |
@@ -651,7 +688,8 @@ runs after the turn it rewinds to, and their messages and workflows, the same
 way (CNV-004, ADR-0068); the foreign key from a run to its parent cascades. Its entries in the
 cost ledger are kept, detached from the conversation and its runs, so that
 spending totals stay correct (ADR-0042), and so are its audit events
-(ADR-0090) and the memory items written in it (ADR-0095). Deletion is physical;
+(ADR-0090), the memory items written in it (ADR-0095) and the skills saved
+in it (ADR-0096). Deletion is physical;
 there is no soft delete for user content.
 
 ## Migrations

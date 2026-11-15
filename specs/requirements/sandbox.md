@@ -268,3 +268,20 @@ Node.js. The agent's instructions MUST name these tools (ADR-0080, ADR-0084).
 Rationale: files attached to a message are read and made in the sandbox,
 which keeps nothing installed after an answer (ADR-0076).
 
+## SBX-022: Skills in the sandbox
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+The files of the skills given to a run MUST be readable in its sandbox at
+`/skills/<name>/`, read-only, and outside the workspace: they MUST NOT
+persist with the workspace, be copied into its backups or forks, or count
+against its quota. The driver MUST refuse an archive of skills whose entries
+would fall outside `/skills`, such as absolute paths, `..` segments, links
+and device files (ADR-0096).
+
+Rationale: an agent that can change a skill could plant instructions in
+every later conversation (T-36).
+

@@ -466,3 +466,26 @@ conversation, a call to a memory tool MUST show what was remembered,
 changed or forgotten, and lead to the Memory page (ADR-0095).
 
 Rationale: journey J11.
+
+## UX-028: Skills in the app
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** e2e
+
+Among the user's own settings, clients MUST offer a Skills page listing the
+built-in skills and the user's, each with its name, description and a
+switch, and the user's with where they came from (AGT-025). Untrusted skills
+MUST be marked, with the explanation that someone other than the user wrote
+them; marking one trusted MUST first show its files. The page MUST let the
+user create a skill, edit its `SKILL.md` and text files, upload an archive,
+import from a URL choosing among the skills found, download a skill, and
+delete one after asking. Conversation settings MUST list the skills that are
+on, each with a switch, and show a skill off in the conversation as off. In
+a conversation, loading a skill MUST show which skill the assistant uses,
+and a call to `save_skill` MUST show the skill saved and lead to the Skills
+page (ADR-0096).
+
+Rationale: journey J13.
+

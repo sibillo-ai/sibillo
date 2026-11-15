@@ -313,6 +313,39 @@ paths:
         "204": { description: "Stopped, or was not running." }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /sandboxes/{tenant_id}/{user_id}/{conversation_id}/skills:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - $ref: "#/components/parameters/UserId"
+      - $ref: "#/components/parameters/ConversationId"
+    put:
+      operationId: setSkills
+      summary: Set the skills the sandbox's next container sees at /skills, read-only.
+      description: |
+        A tar archive of the run's skills, each in a folder named after it.
+        The driver keeps it outside the workspace, and mounts it read-only at
+        `/skills` when it creates the sandbox's container; a container that
+        is running keeps what it has. The mount is part of the fixed sandbox
+        policy: only its contents come from the request. The archive is
+        removed with the container, and is never part of the workspace, its
+        size or its exports (SBX-022, ADR-0096). An entry with an absolute
+        path, a `..` segment, or a type other than a regular file or a
+        directory refuses the whole archive with `422`; an archive over
+        128 MiB is refused with `413`. Files are readable by the sandbox user,
+        and none is executable unless its mode says so.
+      x-requirements: [SBX-022]
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema: { type: string, format: binary }
+      responses:
+        "204": { description: The skills are set. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace:
     parameters:
       - $ref: "#/components/parameters/TenantId"
