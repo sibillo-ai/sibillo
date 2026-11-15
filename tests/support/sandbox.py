@@ -37,11 +37,16 @@ TEST_LIMITS = {
     "SIBILLO_SANDBOX_MAX_OUTPUT_BYTES": "65536",
     "SIBILLO_SANDBOX_IDLE_MINUTES": "30",
     "SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB": "8",
+    "SIBILLO_SANDBOX_DISK_MB": "64",
 }
 # The label the driver gives its sandboxes, with the tenant, the user and the conversation.
 SANDBOX_LABEL = "dev.sibillo.sandbox"
 # The workspace quota above, in bytes (SBX-019).
 WORKSPACE_QUOTA_BYTES = 8 * 1024 * 1024
+# The disk of each workspace: the quota plus 10% and 32 MiB (SBX-016, ADR-0098).
+WORKSPACE_DISK_BYTES = WORKSPACE_QUOTA_BYTES * 11 // 10 + 32 * 1024 * 1024
+# The disk a sandbox may use outside its workspace (SBX-016, ADR-0098).
+SANDBOX_DISK_BYTES = 64 * 1024 * 1024
 
 
 def docker(*args: str, timeout: float = 120, check: bool = True) -> str:
