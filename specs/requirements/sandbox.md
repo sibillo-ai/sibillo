@@ -193,8 +193,9 @@ sandbox driver MUST stop those sandboxes.
 
 The disk space a sandbox can use, including its workspace, MUST be limited to
 a size configurable by the instance admin, on common host filesystems such as
-ext4: the workspace to its quota (SBX-019), and the rest of the sandbox's
-disk to a size of its own. A write beyond either limit MUST fail inside the
+ext4: the workspace to the size of its disk, which holds its quota's worth
+of files (SBX-019) and little more, and the rest of the sandbox's disk to a
+size of its own. A write beyond either limit MUST fail inside the
 sandbox, and leave the host's disk as it was. A sandbox MUST never be able
 to read or write the raw blocks of its workspace's disk. Workspaces that
 existed before these limits MUST keep their files (ADR-0098).
@@ -242,8 +243,8 @@ persistent.
 Each workspace MUST have a quota, configurable by the instance admin. After
 every command, the driver MUST report the workspace's size and quota, and
 the command's result MUST tell the agent when the workspace uses more than
-80% of its quota, or exceeds it (ADR-0076). The quota is also a hard limit
-(SBX-016).
+80% of its quota, or exceeds it (ADR-0076). The workspace's disk, a little
+larger than the quota, is its hard limit (SBX-016).
 
 ## SBX-020: Workspace export and import
 

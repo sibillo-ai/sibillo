@@ -99,7 +99,7 @@ it listens.
 | `SIBILLO_SANDBOX_PROCESSES` | no | `512` | Processes per sandbox, from 16 to 65536, enforced as `RLIMIT_NPROC`. |
 | `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS` | no | `300` | The longest a command may run, from 1 to 86400. |
 | `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES` | no | `1048576` | The most output a command returns, from 1024 to 67108864. |
-| `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB` | no | `2048` | The workspace quota in MiB, from 1 to 1048576 (SBX-019), and the size of each workspace's disk (SBX-016, ADR-0098); a larger quota grows existing disks, a smaller one applies to new disks only. |
+| `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB` | no | `2048` | The workspace quota in MiB, from 1 to 1048576 (SBX-019). Each workspace's disk is the quota plus 10% and 32 MiB, its hard limit (SBX-016, ADR-0098); a larger quota grows existing disks, a smaller one applies to new disks only. |
 | `SIBILLO_SANDBOX_DISK_MB` | no | `4096` | The disk a sandbox may use outside its workspace, in MiB, from 64 to 1048576 (SBX-016, ADR-0098). |
 | `SIBILLO_SANDBOX_IDLE_MINUTES` | no | `5` | Minutes without commands before a sandbox is stopped and its container removed, for a run that ended without stopping it (SBX-018, ADR-0078), from 1 to 10080. |
 

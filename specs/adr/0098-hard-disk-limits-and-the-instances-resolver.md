@@ -52,9 +52,11 @@ accepted today without a word.
 2. **Each workspace is a disk** of a fixed size: a sparse file,
    `workspace.ext4`, in a Docker volume of its own, `sibillo-disk-<ids>`,
    holding an ext4 filesystem made with no reserved blocks: the workspace
-   disk. Its size is the
-   workspace quota (SBX-019), which thereby becomes a wall as well as a
-   measure. The disk's file is never mounted in a sandbox, nor in any
+   disk. Its size is the workspace quota (SBX-019) plus 10% and 32 MiB, so
+   that its filesystem, whose journal and inode tables take part of it,
+   holds a quota's worth of files and a little more: the agent is still told
+   when it nears its quota and when it exceeds it, and the disk's size is the
+   wall behind that measure. The disk's file is never mounted in a sandbox, nor in any
    container that runs user content: sandboxes see only the filesystem the
    host's kernel mounted from it, so they can never write its raw blocks.
 3. **The disk helper.** A container of the driver's own does what needs the
@@ -69,7 +71,7 @@ accepted today without a word.
 4. **Attaching.** Before the driver creates a container that mounts a
    workspace, a sandbox or a container for a file operation, it attaches the
    conversation's disk, under the sandbox's lock: the helper makes the disk
-   if it is missing, grows it if it is smaller than the quota, finds the
+   if it is missing, grows it if it is smaller than point 2 says, finds the
    loop device that backs its file (`losetup -j`) or attaches one, and the
    driver creates the volume `sibillo-workspace-<ids>` of type `ext4` on that
    device, with `nodev`, `nosuid` and `discard`, so that deleted files free
@@ -87,7 +89,8 @@ accepted today without a word.
 7. **Existing workspaces** are converted when first attached: the helper
    mounts the old volume read-only and copies its regular files, folders and
    symbolic links, as workspace archives hold them (SBX-020), into a new
-   disk, at least as large as the quota and large enough to hold them; the
+   disk, of the size of point 2 or, when the files need more, of that size
+   computed from their size instead of the quota; the
    driver then removes the old volume. A conversion that fails leaves the old volume as it was, and the
    operation fails with `sandbox.unavailable` (SBX-023).
 8. **Forks, exports and imports** go through containers that mount the
@@ -109,8 +112,8 @@ accepted today without a word.
 ## Consequences
 
 - No sandbox can fill the host's disk: what a conversation can use is at
-  most the workspace quota plus `SIBILLO_SANDBOX_DISK_MB` for the length of
-  an answer.
+  most its disk, a little more than the workspace quota, plus
+  `SIBILLO_SANDBOX_DISK_MB` for the length of an answer.
 - A full workspace makes commands fail with `ENOSPC`; the agent is already
   told when it nears its quota, and can tidy up or ask the user.
 - Disks are sparse and mounted with `discard`, so the host's disk holds what
