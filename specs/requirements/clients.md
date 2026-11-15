@@ -406,7 +406,7 @@ each member sees what that means for them.
 
 ## UX-025: Changing a connection in the settings
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e
