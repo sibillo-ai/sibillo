@@ -21,6 +21,7 @@ variable.
 | `SIBILLO_SANDBOXD_TOKEN` | yes | — | The secret shared with the sandbox driver. |
 | `SIBILLO_SECRET_KEY` | yes | — | 32 random bytes, base64url-encoded (for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Encrypts the API keys of connections (ADR-0051, ADR-0069). The API and the worker must share it; changing it makes stored API keys unusable. |
 | `SIBILLO_UPLOAD_MAX_MB` | no | `1024` | The largest file one upload may bring into a workspace, in MiB, from 1 to 1048576 (CNV-017, ADR-0079). A reverse proxy in front of the API must let bodies this large through. |
+| `SIBILLO_PUBLIC_ORIGIN` | no | empty | The origin users open, `https://HOST[:PORT]` or `http://localhost[:PORT]`, with no path, such as `https://sibillo.example.org`. Passkeys are bound to its host and must come from exactly this origin (AUTH-010, ADR-0094). When empty, passkeys are unavailable. |
 | `SIBILLO_BACKUP_STATUS` | no | empty | Path of the backup service's `status.json` (ADR-0077). When set, `/health` is `degraded` when the file is missing, when the newest attempt failed, or when neither the last success nor the schedule's start is within the last two days (OPS-011). |
 
 ## Worker
@@ -123,6 +124,13 @@ display name and the password; on a terminal the password is hidden and asked
 twice, otherwise each answer is one line of standard input and the password
 is read once. It refuses when any user exists.
 
+`python -m sibillo_server remove-passkeys USERNAME` removes every passkey of
+the user with that username, ignoring case, the instance admin included,
+through `remove_passkeys` (AUTH-010, ADR-0094), and prints how many it
+removed. It fails, removing nothing, when no user has that username.
+
+Both commands read:
+
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `SIBILLO_DATABASE_URL` | yes | — | The database URL, for `sibillo_owner`. |
@@ -144,7 +152,7 @@ by `SIBILLO_CONFIG_DIR` in the environment of the `docker compose` command,
 | `SIBILLO_BACKUP_KEY` | yes | As above. Keep a copy away from the server: without it, no archive can be restored. |
 | `SIBILLO_BACKUP_DIR` | no | The host folder for archives, relative to `deploy/` or absolute; default `./backups`. |
 | `SIBILLO_PUBLISH` | no | Where the API is published, `HOST:PORT`; default `127.0.0.1:8080`. |
-| `SIBILLO_TRUSTED_PROXIES`, `SIBILLO_RUN_RETENTION_DAYS`, `SIBILLO_TEMPORARY_SWEEP_SECONDS`, `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`, `SIBILLO_SANDBOX_RESOLVER`, `SIBILLO_SANDBOX_CPUS`, `SIBILLO_SANDBOX_MEMORY_MB`, `SIBILLO_SANDBOX_PROCESSES`, `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES`, `SIBILLO_SANDBOX_IDLE_MINUTES`, `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`, `SIBILLO_BACKUP_TIME`, `SIBILLO_BACKUP_KEEP`, `SIBILLO_UPLOAD_MAX_MB` | no | Passed to the services that read them, with the defaults above. |
+| `SIBILLO_TRUSTED_PROXIES`, `SIBILLO_RUN_RETENTION_DAYS`, `SIBILLO_TEMPORARY_SWEEP_SECONDS`, `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`, `SIBILLO_SANDBOX_RESOLVER`, `SIBILLO_SANDBOX_CPUS`, `SIBILLO_SANDBOX_MEMORY_MB`, `SIBILLO_SANDBOX_PROCESSES`, `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES`, `SIBILLO_SANDBOX_IDLE_MINUTES`, `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`, `SIBILLO_BACKUP_TIME`, `SIBILLO_BACKUP_KEEP`, `SIBILLO_UPLOAD_MAX_MB`, `SIBILLO_PUBLIC_ORIGIN` | no | Passed to the services that read them, with the defaults above. |
 
 ## Migrations
 

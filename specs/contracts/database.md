@@ -4,7 +4,7 @@ The PostgreSQL schema for phase 0. The schema is a contract (ADR-0003): it
 changes only through `spec/*` pull requests, and migrations in `migrations/`
 implement it. Background: ADR-0009, ADR-0025, ADR-0031, ADR-0033, ADR-0034,
 ADR-0037, ADR-0042, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0051,
-ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073.
+ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073, ADR-0094.
 
 ## Roles
 
@@ -84,7 +84,9 @@ minimum needed and nothing else.
 | `expired_temporary_conversations(hours integer)` | `conversation_id, tenant_id, owner_id` for every temporary conversation whose `updated_at` is more than `hours` hours ago and that has no `queued` or `running` run | Deletion of temporary conversations (CNV-011, ADR-0082): only identifiers, so the worker can delete each one under its owner's request context |
 | `expired_approvals()` | `conversation_id, tenant_id, owner_id` for every conversation whose `approvals_expire_at` has passed and that has no `queued` or `running` run | Expiry of approval requests (AGT-007, ADR-0090): only identifiers, so the worker can deny them under the owner's request context |
 | `retention_expired_runs(days integer)` | `run_id` for every run whose `finished_at` is more than `days` days ago | Retention of durable workflows (TEN-009, ADR-0052): only identifiers, so the worker can delete their workflows across tenants |
+| `auth_take_sign_in(token_hash bytea)` | `user_id, tenant_id, username, role, instance_admin, disabled, challenge, expires_at`, or no row | The passkey step of a sign-in (AUTH-010, ADR-0094): deletes the `sign_in` challenge with that token hash and returns it with its user, so that a token is used once whatever the outcome; also deletes every expired challenge |
 | `bootstrap_instance(tenant_name text, username text, display_name text, password_hash text)` | `tenant_id, user_id` | Creates the first tenant and its first user, who is instance admin and tenant admin; fails if any user exists (AUTH-007). Executable only by `sibillo_owner`, run by the setup command |
+| `remove_passkeys(username text)` | `integer`, the number removed | Deletes every passkey of the user with that username, ignoring case, and fails when there is none such user (AUTH-010, ADR-0094). Executable only by `sibillo_owner`, run by the `remove-passkeys` command |
 
 Rate limiting (ADR-0047): `auth_record_login_attempt` is called once per
 login attempt, after the password is verified, with its outcome. It counts
@@ -97,6 +99,12 @@ the time, rounded up to whole seconds, until the oldest failure counted toward
 a reached limit leaves the window (the longer, when both are reached); when
 allowed, it is 0. Each call deletes attempts older than the window.
 
+The passkey step of a sign-in calls `auth_record_login_attempt` too, after
+`auth_take_sign_in` and the check of the assertion, with the sign-in's
+username, or an empty username when the token is unknown, so that it counts
+only for the source address. Checking the password to register or remove a
+passkey calls it with the user's own username (ADR-0094).
+
 These functions run as `sibillo_owner`, which forced row-level security does not
 exempt. They work through **owner policies**, created `TO sibillo_owner`, and
 these are the only policies for that role:
@@ -104,9 +112,11 @@ these are the only policies for that role:
 | Table | Operations for `sibillo_owner` | Used by |
 |---|---|---|
 | `tenants` | `SELECT`, `INSERT` | `bootstrap_instance` |
-| `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `bootstrap_instance` |
+| `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys` |
 | `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_disabled_user` |
 | `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window |
+| `passkey_challenges` | `SELECT`, `DELETE` | `auth_take_sign_in` |
+| `passkeys` | `SELECT`, `DELETE` | `remove_passkeys` |
 | `runs` | `SELECT` | `retention_expired_runs`, `expired_temporary_conversations`, `expired_approvals` |
 | `conversations` | `SELECT` | `expired_temporary_conversations`, `expired_approvals` |
 | `connections` | `SELECT` | `default_model_configured` |
@@ -209,6 +219,49 @@ from the verified credentials.
 
 No policies for `sibillo_app`: accessed only through
 `auth_record_login_attempt`. Rows older than the rate-limit window are deleted.
+
+### `passkeys`
+
+The passkeys of each user (AUTH-010, ADR-0094).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `user_id` | uuid | not null; (`tenant_id`, `user_id`) references `users` on delete cascade |
+| `credential_id` | bytea | not null, unique across the instance |
+| `public_key` | bytea | not null; the COSE public key |
+| `sign_count` | bigint | not null; the last signature counter |
+| `transports` | text[] | not null, default empty; as the device reported them |
+| `name` | text | not null; given by the user, 1 to 100 characters |
+| `created_at` | timestamptz | not null |
+| `last_used_at` | timestamptz | null until the first sign-in with it |
+
+Policies:
+- `SELECT`, `DELETE` where `tenant_id = app_tenant_id()` and (`user_id =
+  app_user_id()` or `app_is_tenant_admin()`): tenant admins count and remove
+  a user's passkeys.
+- `INSERT`, `UPDATE` where `tenant_id = app_tenant_id()` and `user_id =
+  app_user_id()`. The passkey step of a sign-in sets the request context
+  from the sign-in's user before reading the passkeys and updating
+  `sign_count` and `last_used_at`.
+
+### `passkey_challenges` (private)
+
+WebAuthn challenges waiting for their answer, each valid for 5 minutes and
+deleted when used (ADR-0094).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `user_id` | uuid | not null; (`tenant_id`, `user_id`) references `users` on delete cascade |
+| `purpose` | text | `sign_in` or `registration` |
+| `token_hash` | bytea | SHA-256 of the sign-in token; unique; not null exactly when `purpose` is `sign_in` |
+| `challenge` | bytea | not null; 32 random bytes |
+| `created_at` | timestamptz | not null |
+| `expires_at` | timestamptz | not null; 5 minutes after `created_at` |
+
+The `sign_in` row is inserted after the password is verified, with the
+request context set from the verified credentials, like a device session.
 
 ### `folders` (private)
 
@@ -504,7 +557,7 @@ connection.
 
 ### Policies for private tables
 
-`device_sessions`, `folders`, `user_settings`, `conversations`,
+`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `conversations`,
 `conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`
 and `audit_events` use the same policy for every operation:
 
@@ -513,7 +566,8 @@ USING      (tenant_id = app_tenant_id() AND owner_id = app_user_id())
 WITH CHECK (tenant_id = app_tenant_id() AND owner_id = app_user_id())
 ```
 
-(`device_sessions` uses `user_id` in place of `owner_id`.)
+(`device_sessions` and `passkey_challenges` use `user_id` in place of
+`owner_id`.)
 
 ## Privileges of `sibillo_app`
 
@@ -527,6 +581,8 @@ keys, not by privileges of `sibillo_app`.
 | `users` | `SELECT` on every column except `password_hash`; `INSERT`; `UPDATE` of `display_name`, `password_hash`, `role`, `disabled_at` |
 | `device_sessions` | `SELECT`, `INSERT`, `DELETE`; `UPDATE` of `revoked_at` |
 | `login_attempts` | none |
+| `passkeys` | `SELECT`, `INSERT`, `DELETE`; `UPDATE` of `sign_count` and `last_used_at` |
+| `passkey_challenges` | `SELECT`, `INSERT`, `DELETE` |
 | `folders` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `user_settings` | `SELECT`, `INSERT`, `UPDATE` |
 | `conversations` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
@@ -542,7 +598,7 @@ keys, not by privileges of `sibillo_app`.
 | `connection_models` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `served_context_windows` | `SELECT`, `INSERT`, `UPDATE` |
 | Helper functions | `EXECUTE` on `app_tenant_id()`, `app_user_id()`, `app_is_tenant_admin()`, `app_is_instance_admin()` |
-| Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` |
+| Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` and `remove_passkeys` |
 
 `EXECUTE` on functions is revoked from `PUBLIC`.
 
@@ -610,3 +666,6 @@ are only added, and upgrade every released version (OPS-005).
   keeping `private_network` true (MOD-009).
 - A tenant admin can neither read nor change a user's own data egress policy,
   and a user can change only their own (MOD-003).
+- A tenant admin can read and remove the passkeys of the users of their
+  tenant, but cannot add or change one; a user adds and changes only their
+  own (AUTH-010).

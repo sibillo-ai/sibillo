@@ -101,7 +101,7 @@ account MUST NOT restore any session.
 
 ## AUTH-010: Passkeys as a second factor
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -111,5 +111,7 @@ ones that use the device's biometrics. Once a user has a passkey, signing in
 MUST require their password and one of their passkeys. A tenant admin MUST be
 able to remove the passkeys of a user of their tenant, and an operator
 command MUST be able to remove the instance admin's, so that a lost passkey
-never locks a user out for good (ADR-0065).
+never locks a user out for good (ADR-0065). Passkeys MUST be bound to the
+configured origin of the instance, and registering or removing one's own
+passkey MUST require the user's password (ADR-0094).
 

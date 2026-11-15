@@ -423,3 +423,25 @@ show its test as when adding a connection (UX-016).
 Rationale: an admin who raises the window of their own server, or moves it
 to another address, should not have to remove the connection and lose the
 conversations' choice of its models.
+
+## UX-026: Passkeys in the app
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** e2e
+
+Among the user's own settings, clients MUST list the user's passkeys
+(AUTH-010), each with its name, when it was created and when it was last
+used, and MUST let the user add one, asking for their password and a name,
+and remove one, asking for their password. When the instance cannot use
+passkeys (ADR-0094), clients MUST say so and that the instance admin can
+enable them. At sign-in, after the password of a user who has passkeys,
+clients MUST ask for a passkey, and MUST let the user ask for it again or
+go back to the password when the device's prompt is cancelled or fails.
+Among the household's settings (UX-015), clients MUST show tenant admins
+how many passkeys each user has, and let them remove them all, after
+confirming that the user will then sign in with their password alone.
+
+Rationale: a second factor that is hard to add, or that locks
+someone out, would be turned off.
