@@ -102,6 +102,8 @@ new entry here first (ADR-0005).
 | Sandbox | A per-user isolated execution environment with internet access and no access to local networks. |
 | Workspace | The persistent folder of a conversation's sandbox, `/workspace`, which keeps what the user wants to keep; everything else in the sandbox is discarded when it stops (ADR-0076, ADR-0078). |
 | Scratch folder | The folder where a sandbox's commands start, `/scratch`, discarded with the sandbox (ADR-0076). |
+| Workspace disk | A sparse file holding the ext4 filesystem of one workspace, of the size of the workspace quota, attached to a loop device and mounted at `/workspace`; never mounted where user content runs (SBX-016, ADR-0098). |
+| Disk helper | A short-lived privileged container of the sandbox driver that makes, grows, attaches and detaches workspace disks with fixed commands; never runs user content (ADR-0098). |
 | Workspace panel | The client's view of a conversation's workspace, as a tree of files and folders to preview, download, upload, move and delete (UX-019, ADR-0079). |
 | Sandbox driver | The only component allowed to manage containers; exposes a minimal API to the control plane. |
 | Workspace backend | The control-plane component that presents a conversation's sandbox to Pydantic AI as a workspace, through the sandbox driver (ADR-0035, ADR-0078). |

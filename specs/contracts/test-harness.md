@@ -222,13 +222,19 @@ where it is missing, these tests fail; they never skip.
    `SIBILLO_NETGUARD_CONTAINER` from the steps above, and limits small enough for
    tests to reach them. It is ready when `GET /v1/health` with the token
    answers `200`, within 120 seconds.
-4. At the end of the session, stop the driver, then the network guard, which
-   removes its table, and remove every container and volume the session's
-   driver created, and the sandbox bridge.
+4. At the end of the session, stop the driver with `SIGTERM`, which detaches
+   the loop devices of its workspaces' disks (ADR-0098), then the network
+   guard, which removes its table, and remove every container and volume the
+   session's driver created, and the sandbox bridge.
 
 To check the gVisor minimum (SBX-017), a test starts a second driver, with
 the same environment, its own port, and `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`
 newer than the installed release (ADR-0058).
+To check configuration that the driver or the network guard refuses, such as
+a resolver at a local address (SBX-007), a test starts the driver process, or
+a container of the `netguard` image with the same options as above and that
+configuration, and expects it to exit before it is ready; neither installs or
+changes anything before it exits.
 
 Security tests check isolation from inside sandboxes, through the driver's
 `exec`, and may remove the table with `nft` inside the network guard's

@@ -39,9 +39,10 @@ paths:
       summary: Readiness of the driver and of sandbox isolation.
       description: |
         Healthy only when the isolation runtime is registered and recent
-        enough, the egress table is in place, and the startup canary sandbox
-        passed (SBX-003, SBX-015, SBX-017).
-      x-requirements: [SBX-003, SBX-015, SBX-017, OPS-002, OPS-009]
+        enough, the egress table is in place, the startup canary sandbox
+        passed, and workspaces' disks can be attached (SBX-003, SBX-015,
+        SBX-016, SBX-017).
+      x-requirements: [SBX-003, SBX-015, SBX-016, SBX-017, OPS-002, OPS-009]
       responses:
         "200":
           description: Ready to start sandboxes.
@@ -66,7 +67,7 @@ paths:
       description: |
         A sandbox that is not running is always created anew from the
         sandbox image, with the conversation's workspace (SBX-018, ADR-0076).
-      x-requirements: [SBX-001, SBX-002, SBX-012, SBX-015, SBX-018]
+      x-requirements: [SBX-001, SBX-002, SBX-012, SBX-015, SBX-016, SBX-018]
       responses:
         "200":
           description: The sandbox is running.
@@ -529,7 +530,7 @@ components:
         runtime_version: { type: string, description: "e.g. release-20261026.0" }
         checks:
           type: object
-          required: [platform, isolation_runtime, runtime_version, egress_table, canary]
+          required: [platform, isolation_runtime, runtime_version, egress_table, canary, disks]
           properties:
             platform:
               $ref: "#/components/schemas/Check"
@@ -537,7 +538,17 @@ components:
             isolation_runtime: { $ref: "#/components/schemas/Check" }
             runtime_version: { $ref: "#/components/schemas/Check" }
             egress_table: { $ref: "#/components/schemas/Check" }
-            canary: { $ref: "#/components/schemas/Check" }
+            canary:
+              $ref: "#/components/schemas/Check"
+              description: |
+                The canary sandbox runs under gVisor, reaches no blocked address,
+                and its disk outside the workspace has the configured size
+                (SBX-003, SBX-016, ADR-0098).
+            disks:
+              $ref: "#/components/schemas/Check"
+              description: |
+                The disk helper ran at startup and found a free loop device, so
+                that workspaces can have their disks (SBX-016, ADR-0098).
 
     Entry:
       type: object

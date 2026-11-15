@@ -76,14 +76,17 @@ A sandbox MUST NOT be able to reach any other sandbox over the network.
 
 ## SBX-007: Isolated name resolution
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** security
 
 Sandboxes SHOULD resolve names only through a resolver chosen by the
 instance, and SHOULD NOT be able to resolve names of containers or hosts
-internal to the instance or the household network.
+internal to the instance or the household network. DNS traffic from a
+sandbox, on ports 53 and 853, SHOULD reach only the instance's resolver,
+blocked outside the sandbox's kernel as SBX-005 is, and the instance's
+resolver SHOULD be refused when it is a local address (ADR-0098).
 
 ## SBX-008: No secrets in sandboxes
 
@@ -183,14 +186,18 @@ sandbox driver MUST stop those sandboxes.
 
 ## SBX-016: Workspace disk limit
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
-- **Verification:** integration
+- **Verification:** integration, security
 
 The disk space a sandbox can use, including its workspace, MUST be limited to
 a size configurable by the instance admin, on common host filesystems such as
-ext4.
+ext4: the workspace to its quota (SBX-019), and the rest of the sandbox's
+disk to a size of its own. A write beyond either limit MUST fail inside the
+sandbox, and leave the host's disk as it was. A sandbox MUST never be able
+to read or write the raw blocks of its workspace's disk. Workspaces that
+existed before these limits MUST keep their files (ADR-0098).
 
 ## SBX-017: Supported gVisor release
 
@@ -235,7 +242,8 @@ persistent.
 Each workspace MUST have a quota, configurable by the instance admin. After
 every command, the driver MUST report the workspace's size and quota, and
 the command's result MUST tell the agent when the workspace uses more than
-80% of its quota, or exceeds it (ADR-0076). Hard disk limits are SBX-016.
+80% of its quota, or exceeds it (ADR-0076). The quota is also a hard limit
+(SBX-016).
 
 ## SBX-020: Workspace export and import
 
