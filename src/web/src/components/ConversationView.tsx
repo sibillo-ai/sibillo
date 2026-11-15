@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
+import { Brain, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -11,6 +11,7 @@ import { forkConversation, rewindConversation, updateConversation, useRefreshCon
 import { formatMoney, isPaid, USAGE } from "../costs";
 import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
 import { useNotify } from "../notices";
+import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
@@ -681,8 +682,10 @@ function Answer({
     | { kind: "reasoning"; parts: Reasoning[] }
     | { kind: "tools"; parts: Tool[] }
     | { kind: "memory"; part: Tool; change: MemoryChange }
+    | { kind: "skill"; part: Tool; name: string; saved: boolean }
   )[] = [];
   let change: MemoryChange | null;
+  let skill: string | null;
   for (const part of parts) {
     const last = blocks.at(-1);
     if (part.kind === "text") blocks.push({ kind: "text", part });
@@ -692,6 +695,11 @@ function Answer({
     } else if ((change = memoryChangeOf(part.name, part.result)) !== null) {
       // What the assistant remembered, changed or forgot, where it happened (UX-027).
       blocks.push({ kind: "memory", part, change });
+    } else if ((skill = loadedSkillOf(part.name, argumentsOf(part.args), part.result)) !== null) {
+      // Which skill the assistant uses, and a skill it saved, where it happened (UX-028).
+      blocks.push({ kind: "skill", part, name: skill, saved: false });
+    } else if ((skill = savedSkillOf(part.name, part.result)) !== null) {
+      blocks.push({ kind: "skill", part, name: skill, saved: true });
     } else if (offerOf(part) === null) {
       if (last?.kind === "tools") last.parts.push(part);
       else blocks.push({ kind: "tools", parts: [part] });
@@ -706,6 +714,8 @@ function Answer({
           <ReasoningView key={block.parts[0]?.id} text={block.parts.map((part) => part.text).join("\n\n")} />
         ) : block.kind === "memory" ? (
           <MemoryCard key={block.part.id} part={block.part} change={block.change} />
+        ) : block.kind === "skill" ? (
+          <SkillCard key={block.part.id} name={block.name} saved={block.saved} />
         ) : (
           <div key={block.parts[0]?.id} className="flex flex-col items-start gap-1.5">
             {block.parts.map((part) => (
@@ -857,6 +867,28 @@ function MemoryCard({ part, change }: { part: Extract<LivePart, { kind: "tool" }
           </Link>
         </span>
         <span className="text-[13.5px] break-words text-muted">{said}</span>
+      </span>
+    </div>
+  );
+}
+
+/** A skill the assistant loaded or saved, with the way to the Skills page (UX-028, ADR-0096). */
+function SkillCard({ name, saved }: { name: string; saved: boolean }) {
+  const { t } = useTranslation();
+  const label = saved ? t("skills.chatSaved") : t("skills.chatUsing");
+  return (
+    <div role="group" aria-label={label} className="flex w-[min(100%,460px)] items-start gap-3 rounded-2xl border border-line bg-surface py-2.5 pr-3 pl-3 shadow-soft">
+      <span className="grid size-9 flex-none place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
+        <Sparkles className="size-[18px]" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center justify-between gap-2">
+          <b className="text-[13.5px] font-semibold">{label}</b>
+          <Link to={SKILLS_SECTION} className="text-[13px] font-semibold text-accent underline-offset-2 hover:underline">
+            {t("skills.chatLink")}
+          </Link>
+        </span>
+        <span className="font-mono text-[13.5px] break-all text-muted">{name}</span>
       </span>
     </div>
   );

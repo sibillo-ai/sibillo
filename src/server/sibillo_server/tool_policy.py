@@ -41,6 +41,8 @@ EXTERNAL_EFFECTS: frozenset[CapabilityClass] = frozenset({"external_communicatio
 WEB_AND_COMMANDS = frozenset({"web_search", "read_page", "run_command", "start_command"})
 # Labels the part of a user's message that lists its attachments (CNV-017).
 ATTACHMENTS_ORIGIN = "sibillo.attachments"
+# Labels the result of loading a skill with the skill's name and whether it is untrusted (AGT-025, ADR-0096).
+SKILL_ORIGIN = "sibillo.skill"
 # What the model is told of a call the user did not approve.
 DENIED = "The user denied this call, so it did not run. Do not try it again unless the user asks."
 EXPIRED = "Nobody approved this call within a day, so it was denied and did not run."
@@ -93,6 +95,10 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "remember": _OWN,
     "update_memory": _OWN,
     "forget": _OWN,
+    # Saves a skill that later conversations are given: the user sees it before it does (AGT-026, ADR-0096).
+    "save_skill": Declaration(frozenset(), "ask"),
+    # Loads a skill: what it brings in is untrusted when the skill is, by provenance (AGT-025, ADR-0096).
+    "load_capability": _OWN,
     # The output limits' own tool, which reads back a large result set aside (AGT-014): no switch (ADR-0087).
     "read_tool_result": _READS,
 }
@@ -109,13 +115,22 @@ def has_external_effects(tool: str) -> bool:
     return declaration is None or bool(EXTERNAL_EFFECTS & declaration.classes)
 
 
+def _untrusted_skill(part: ToolReturnPart) -> bool:
+    """Whether the part loaded an untrusted skill (AGT-025)."""
+    metadata: Any = part.metadata
+    if part.tool_name != "load_capability" or not isinstance(metadata, dict):
+        return False
+    skill: Any = cast(dict[str, Any], metadata).get(SKILL_ORIGIN)
+    return isinstance(skill, dict) and cast(dict[str, Any], skill).get("untrusted") is True
+
+
 def has_untrusted_content(messages: Sequence[ModelMessage]) -> bool:
     """Whether the messages hold untrusted content: results of tools that ingest it, or attachments (AGT-003)."""
     for message in messages:
         if not isinstance(message, ModelRequest):
             continue
         for part in message.parts:
-            if isinstance(part, ToolReturnPart) and ingests_untrusted(part.tool_name):
+            if isinstance(part, ToolReturnPart) and (ingests_untrusted(part.tool_name) or _untrusted_skill(part)):
                 return True
             if isinstance(part, UserPromptPart) and not isinstance(part.content, str):
                 for item in part.content:

@@ -22,6 +22,7 @@ from sibillo_server import (
     runs,
     settings,
     sign_in,
+    skills,
     speech,
     web,
     workspace,
@@ -60,6 +61,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(passkeys.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(memory.router, prefix=API_PREFIX)
+    app.include_router(skills.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(connections.router, prefix=API_PREFIX)
     app.include_router(conversations.router, prefix=API_PREFIX)

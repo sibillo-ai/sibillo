@@ -83,6 +83,21 @@ def memory_full() -> ApiError:
     return ApiError(422, "memory.full", "Memory full")
 
 
+def skill_invalid(detail: str) -> ApiError:
+    """A skill that breaks the Agent Skills rules, or an archive that is not one skill (AGT-017, ADR-0096)."""
+    return ApiError(422, "skill.invalid", "Invalid skill", detail=detail)
+
+
+def skill_too_large(detail: str) -> ApiError:
+    """A skill, or a user's skills, over their limits (ADR-0096)."""
+    return ApiError(413, "skill.too_large", "Skill too large", detail=detail)
+
+
+def skill_import_failed(detail: str) -> ApiError:
+    """A URL whose download failed, or that holds no skill (AGT-017, ADR-0096)."""
+    return ApiError(502, "skill.import_failed", "Import failed", detail=detail)
+
+
 def invalid(location: str, code: str) -> ApiError:
     """A request rejected for one field, as `request.validation_failed`."""
     return ApiError(

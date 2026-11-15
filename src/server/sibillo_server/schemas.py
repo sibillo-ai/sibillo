@@ -353,16 +353,20 @@ type ToolName = Literal[
     "remember",
     "update_memory",
     "forget",
+    "save_skill",
 ]
 
 
-def _unique(tools: list[ToolName]) -> list[ToolName]:
+def _unique[T](tools: list[T]) -> list[T]:
     if len(set(tools)) != len(tools):
-        raise ValueError("a tool is listed twice")
+        raise ValueError("an item is listed twice")
     return tools
 
 
 type DisabledTools = Annotated[list[ToolName], AfterValidator(_unique)]
+# A skill's name by the Agent Skills rules, in ASCII; the API checks Unicode names by those rules (ADR-0096).
+type SkillName = Annotated[str, Field(min_length=1, max_length=64)]
+type DisabledSkills = Annotated[list[SkillName], Field(max_length=200), AfterValidator(_unique)]
 
 # Tool permissions, approvals and audit events (AGT-002, AGT-005, AGT-008, ADR-0090).
 type CapabilityClass = Literal[
@@ -477,6 +481,7 @@ class UpdateConversationRequest(Request):
     pinned: bool | None = None
     reasoning: Reasoning | None = None
     disabled_tools: DisabledTools | None = None
+    disabled_skills: DisabledSkills | None = None
     # Only withdraws what the user allowed (AGT-006, ADR-0090).
     allowances: AllowancesUpdate | None = None
     # Present and null uses the user's defaults again (CNV-014).
@@ -554,6 +559,7 @@ class Conversation(Response):
     model: ModelChoiceOut | None
     reasoning: Reasoning
     disabled_tools: list[ToolName]
+    disabled_skills: list[str]
     allowances: Allowances
     base_instructions: str | None
     additional_instructions: str | None
@@ -733,3 +739,82 @@ class Memory(Response):
     items: list[MemoryItem]
     used_characters: int
     limit_characters: int
+
+
+# Skills (AGT-017, AGT-024 to AGT-026, ADR-0096).
+
+
+class SkillConversation(Response):
+    id: uuid.UUID
+    title: str | None
+    deleted: bool
+
+
+class Skill(Response):
+    id: uuid.UUID | None
+    name: str
+    description: str
+    builtin: bool
+    enabled: bool
+    origin: Literal["builtin", "user", "upload", "import", "assistant"]
+    source_url: str | None
+    conversation: SkillConversation | None
+    untrusted: bool
+    size_bytes: int
+    created_at: Timestamp | None
+    updated_at: Timestamp | None
+
+
+class SkillFile(Response):
+    path: str
+    size_bytes: int
+    executable: bool
+    text: str | None
+
+
+class SkillDetail(Skill):
+    files: list[SkillFile]
+
+
+class Skills(Response):
+    builtin: list[Skill]
+    own: list[Skill]
+    used_bytes: int
+    limit_bytes: int
+    limit_skills: int
+
+
+class SkillDocument(Request):
+    skill_md: Annotated[str, Field(min_length=1, max_length=100_000)]
+
+
+class SkillFileText(Request):
+    text: Annotated[str, Field(max_length=1_048_576)]
+    executable: bool = False
+
+
+class UpdateSkillRequest(Request):
+    enabled: bool | None = None
+    untrusted: Literal[False] | None = None
+
+
+class BuiltinSkillSetting(Request):
+    enabled: bool
+
+
+class SkillImportRequest(Request):
+    url: Annotated[str, Field(min_length=3, max_length=2000)]
+    names: Annotated[list[SkillName], Field(min_length=1), AfterValidator(_unique)] | None = None
+
+
+class FoundSkill(Response):
+    name: str
+    description: str
+    valid: bool
+    # Left out when the skill is valid (ADR-0096).
+    problem: Annotated[str | None, Field(exclude_if=lambda value: value is None)] = None
+
+
+class SkillImport(Response):
+    imported: list[Skill]
+    found: list[FoundSkill]

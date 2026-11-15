@@ -36,6 +36,8 @@ from sibillo_sandboxd.workspaces import UnsafeArchiveError
 
 API_PREFIX = "/v1"
 # A conversation's sandbox (SBX-001, ADR-0078).
+# The most an archive of skills may hold (SBX-022): a user's skills, and the built-in ones.
+SKILLS_MAX_BYTES = 128 * 1024 * 1024
 SANDBOX = f"{API_PREFIX}/sandboxes/{{tenant_id}}/{{user_id}}/{{conversation_id}}"
 
 
@@ -249,6 +251,32 @@ def create_app(configuration: DriverConfiguration) -> FastAPI:
                 async for chunk in request.stream():
                     await asyncio.to_thread(file.write, chunk)
             await sandboxes.import_workspace(sandbox, archive)
+        except UnsafeArchiveError as error:
+            raise DriverError(422, "driver.validation_failed", f"The archive is refused: {error}") from error
+        except tarfile.TarError as error:
+            raise DriverError(422, "driver.validation_failed", "The archive is not a tar archive") from error
+        finally:
+            await asyncio.to_thread(shutil.rmtree, folder, True)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.put(f"{SANDBOX}/skills", dependencies=authenticated)
+    async def set_skills(  # pyright: ignore[reportUnusedFunction]
+        sandbox: Addressed,
+        request: Request,
+        sandboxes: Annotated[Sandboxes, Depends(ready)],
+    ) -> Response:
+        """The skills of the sandbox's next container, read-only at /skills (SBX-022, ADR-0096)."""
+        folder = await asyncio.to_thread(_temporary_folder, "sibillo-skills-", None)
+        archive = folder / "skills.tar"
+        received = 0
+        try:
+            with archive.open("wb") as file:
+                async for chunk in request.stream():
+                    received += len(chunk)
+                    if received > SKILLS_MAX_BYTES:
+                        raise DriverError(413, "driver.too_large", "The skills are too large")
+                    await asyncio.to_thread(file.write, chunk)
+            await sandboxes.set_skills(sandbox, archive)
         except UnsafeArchiveError as error:
             raise DriverError(422, "driver.validation_failed", f"The archive is refused: {error}") from error
         except tarfile.TarError as error:

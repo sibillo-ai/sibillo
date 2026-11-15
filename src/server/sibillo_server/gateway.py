@@ -116,6 +116,12 @@ class RunDeps:
     # The user's memory items, as the run started; `None` while memory is off or the conversation is
     # temporary (MEM-006, MEM-007, ADR-0095). Typed loosely: `sibillo_server.memory` depends on this module.
     memory: tuple[Any, ...] | None = None
+    # The skills the run is given, as it started (AGT-017, ADR-0096); typed loosely, as memory is. And whether the
+    # conversation is temporary, where nothing is saved (CNV-011).
+    skills: tuple[Any, ...] | None = None
+    temporary: bool = False
+    # Gives the run's skills to its sandbox before its first command (SBX-022); set by the worker.
+    prepare_sandbox: Callable[[], Awaitable[None]] | None = None
     # The run this one continues: for a run that answers an interrupt, the run that asked (ADR-0033).
     parent_run_id: uuid.UUID | None = None
     location: str = "remote"

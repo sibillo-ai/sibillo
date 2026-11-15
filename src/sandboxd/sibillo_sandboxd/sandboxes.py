@@ -14,7 +14,9 @@ import codecs
 import contextlib
 import json
 import logging
+import shutil
 import tarfile
+import tempfile
 import time
 import uuid
 import zipfile
@@ -40,12 +42,13 @@ from sibillo_sandboxd.policy import (
     MIB,
     NETWORK,
     SCRATCH,
+    SKILLS,
     WORKSPACE,
     SandboxId,
     container_config,
     network_config,
 )
-from sibillo_sandboxd.workspaces import check_archive, workspace_entries
+from sibillo_sandboxd.workspaces import check_archive, check_skills_archive, workspace_entries
 
 logger = logging.getLogger("sibillo.sandboxd")
 
@@ -80,6 +83,9 @@ class Sandboxes:
         self.configuration = configuration
         self._locks: dict[str, asyncio.Lock] = {}
         self._last_used: dict[str, float] = {}
+        # The skills each sandbox's next container gets, as archives of the driver's own (SBX-022).
+        self._skills_folder = Path(tempfile.mkdtemp(prefix="sibillo-skills-"))
+        self._skills: dict[str, Path] = {}
 
     async def ensure_network(self) -> dict[str, Any]:
         """The sandbox bridge, created on first use; returns its inspection."""
@@ -91,14 +97,17 @@ class Sandboxes:
             network = await self.docker.networks.create(network_config())
         return await network.show()
 
-    async def start_container(self, name: str, volume: str | None, labels: dict[str, str]) -> Any:
+    async def start_container(
+        self, name: str, volume: str | None, labels: dict[str, str], *, skills: str | None = None
+    ) -> Any:
         """Create and start a container with the fixed policy, then point it at the instance's resolver."""
         await self.ensure_network()
         if volume is not None:
             # Labelled with the image too, so that what a driver created can be told from another's.
             image = {f"{LABEL}.image": self.configuration.image}
             await self.docker.volumes.create({"Name": volume, "Labels": {LABEL: "workspace"} | labels | image})
-        container = await self.docker.containers.create(container_config(self.configuration, volume, labels), name=name)
+        config = container_config(self.configuration, volume, labels, skills=skills)
+        container = await self.docker.containers.create(config, name=name)
         await container.start()
         await self._write_resolver(container)
         return container
@@ -158,7 +167,8 @@ class Sandboxes:
                 raise
         started = container is None
         if started:
-            container = await self.start_container(name, sandbox.volume, sandbox.labels)
+            skills = await self._fill_skills(sandbox)
+            container = await self.start_container(name, sandbox.volume, sandbox.labels, skills=skills)
         self._last_used[name] = time.monotonic()
         return container, started
 
@@ -170,7 +180,7 @@ class Sandboxes:
         self._last_used.pop(name, None)
 
     async def _remove(self, name: str) -> None:
-        """Stop a sandbox and remove its container, keeping its workspace (SBX-018)."""
+        """Stop a sandbox and remove its container, keeping its workspace (SBX-018); its skills go with it."""
         try:
             container = await self.docker.containers.get(name)
             with contextlib.suppress(DockerError):
@@ -179,6 +189,61 @@ class Sandboxes:
         except DockerError as error:
             if error.status != NOT_FOUND:
                 raise
+        await self._delete_volume(name.replace("sibillo-sandbox-", "sibillo-skills-", 1))
+
+    async def _delete_volume(self, volume: str) -> None:
+        try:
+            await (await self.docker.volumes.get(volume)).delete()
+        except DockerError as error:
+            if error.status != NOT_FOUND:
+                raise
+
+    # --- Skills (SBX-022, ADR-0096) ---
+
+    async def set_skills(self, sandbox: SandboxId, source: Path) -> None:
+        """Keep the archive at `source` for the sandbox's next container, refusing it whole when unsafe."""
+        await asyncio.to_thread(check_skills_archive, source)
+        target = self._skills_folder / f"{sandbox.container}.tar"
+        await asyncio.to_thread(shutil.move, source, target)
+        self._skills[sandbox.container] = target
+
+    async def _fill_skills(self, sandbox: SandboxId) -> str:
+        """A new volume of skills for the sandbox's new container: what was set for it, else nothing.
+
+        A container of the driver's own, without network, writes the archive into it; the sandbox then
+        mounts it read-only. The archive is used once.
+        """
+        volume = sandbox.skills_volume
+        await self._delete_volume(volume)
+        image = {f"{LABEL}.image": self.configuration.image}
+        await self.docker.volumes.create({"Name": volume, "Labels": {LABEL: "skills"} | sandbox.labels | image})
+        archive = self._skills.pop(sandbox.container, None)
+        if archive is None:
+            return volume
+        try:
+            labels = sandbox.labels | {f"{LABEL}.files": "true"}
+            config = container_config(self.configuration, None, labels, skills=volume, skills_writable=True)
+            config["HostConfig"] = {**config["HostConfig"], "NetworkMode": "none", "Dns": []}
+            helper = await self.docker.containers.create(
+                config, name=f"sibillo-skills-fill-{sandbox.conversation_id}-{uuid.uuid4().hex[:8]}"
+            )
+            try:
+                await helper.start()
+                with archive.open("rb") as file:
+                    async with self.docker._query(  # pyright: ignore[reportPrivateUsage]
+                        f"containers/{helper.id}/archive",
+                        method="PUT",
+                        params={"path": SKILLS},
+                        data=file,
+                        headers={"content-type": "application/x-tar"},
+                    ) as response:
+                        await response.read()
+            finally:
+                with contextlib.suppress(DockerError):
+                    await helper.delete(force=True)
+        finally:
+            archive.unlink(missing_ok=True)
+        return volume
 
     async def stop_all(self) -> int:
         """Stop and remove every sandbox of this driver's image, running or not.
@@ -190,6 +255,13 @@ class Sandboxes:
         filters = {"label": [f"{LABEL}=sandbox"], "ancestor": [self.configuration.image]}
         containers = await self.docker.containers.list(all=True, filters=json.dumps(filters))
         await asyncio.gather(*(container.delete(force=True) for container in containers), return_exceptions=True)
+        # The skills of the containers removed go with them (SBX-022).
+        volumes = await self.docker.volumes.list(
+            filters={"label": [f"{LABEL}=skills", f"{LABEL}.image={self.configuration.image}"]}
+        )
+        await asyncio.gather(
+            *(self._delete_volume(volume["Name"]) for volume in volumes.get("Volumes") or []), return_exceptions=True
+        )
         self._last_used.clear()
         return len(containers)
 
@@ -478,7 +550,10 @@ class Sandboxes:
 
 
 def zip_from_tar(source: Path, destination: Path) -> None:
-    """Rewrite Docker's tar of a folder as a zip of its regular files, named relative to that folder."""
+    """Rewrite Docker's tar of a folder as a zip of its regular files, named relative to that folder.
+
+    Each file keeps whether it is executable, which a skill's scripts need (ADR-0096).
+    """
     with tarfile.open(source, "r:") as archive, zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as result:
         for member in archive:
             if not member.isreg():
@@ -487,6 +562,9 @@ def zip_from_tar(source: Path, destination: Path) -> None:
             extracted = archive.extractfile(member)
             if extracted is None:
                 continue
-            with extracted, result.open(name, "w") as target:
+            info = zipfile.ZipInfo(name)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (0o100000 | (0o755 if member.mode & 0o111 else 0o644)) << 16
+            with extracted, result.open(info, "w") as target:
                 while chunk := extracted.read(ARCHIVE_CHUNK_BYTES):
                     target.write(chunk)

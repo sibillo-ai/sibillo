@@ -989,6 +989,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/93/c028862cc71391ad5f3befe1d1979ea4dec271b686cea72a22f432c81e99/pydantic_ai_harness-0.64.0-py3-none-any.whl", hash = "sha256:cb4f5c592c08975433adf58bfaf52671e51705d5c41c5db42f31788f934d44f2", size = 1754157, upload-time = "2026-10-31T00:22:21.974Z" },
 ]
 
+[package.optional-dependencies]
+skills = [
+    { name = "pyyaml" },
+]
+
 [[package]]
 name = "pydantic-ai-slim"
 version = "2.64.0"
@@ -1350,7 +1355,7 @@ dependencies = [
     { name = "dbos" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "pydantic-ai-harness" },
+    { name = "pydantic-ai-harness", extra = ["skills"] },
     { name = "pydantic-ai-slim", extra = ["ag-ui", "dbos", "openai"] },
     { name = "python-multipart" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -1367,7 +1372,7 @@ requires-dist = [
     { name = "dbos", specifier = "==3.4.0" },
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx", specifier = "==0.28.1" },
-    { name = "pydantic-ai-harness", specifier = "==0.64.0" },
+    { name = "pydantic-ai-harness", extras = ["skills"], specifier = "==0.64.0" },
     { name = "pydantic-ai-slim", extras = ["ag-ui", "dbos", "openai"], specifier = "==2.64.0" },
     { name = "python-multipart", specifier = "==0.0.32" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.6" },

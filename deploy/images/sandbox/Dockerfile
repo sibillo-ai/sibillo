@@ -79,7 +79,8 @@ RUN python3 -m venv /opt/reader \
     && rm /opt/reader-requirements.txt
 COPY --chmod=0755 deploy/images/sandbox/sibillo-read-page /usr/local/bin/sibillo-read-page
 
-# Commands start in the scratch folder; only /workspace persists (ADR-0076).
-RUN mkdir -p /scratch /workspace
+# Commands start in the scratch folder; only /workspace persists (ADR-0076); skills are mounted at /skills
+# (ADR-0096).
+RUN mkdir -p /scratch /workspace /skills
 WORKDIR /scratch
 CMD ["sleep", "infinity"]

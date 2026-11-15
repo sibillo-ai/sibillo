@@ -13,6 +13,8 @@ BRIDGE_INTERFACE = "sibillosbx0"
 WORKSPACE = "/workspace"
 # Where commands start: discarded with the sandbox, unlike the workspace (SBX-018, ADR-0076).
 SCRATCH = "/scratch"
+# The skills given to a run, read-only and outside the workspace (SBX-022, ADR-0096).
+SKILLS = "/skills"
 LABEL = "dev.sibillo.sandbox"
 MIB = 1024 * 1024
 
@@ -32,6 +34,11 @@ class SandboxId:
     @property
     def volume(self) -> str:
         return f"sibillo-workspace-{self.tenant_id}-{self.user_id}-{self.conversation_id}"
+
+    @property
+    def skills_volume(self) -> str:
+        """The skills of the sandbox's container, mounted read-only at /skills and removed with it (SBX-022)."""
+        return f"sibillo-skills-{self.tenant_id}-{self.user_id}-{self.conversation_id}"
 
     @property
     def labels(self) -> dict[str, str]:
@@ -58,12 +65,23 @@ def network_config() -> dict[str, Any]:
     }
 
 
-def container_config(configuration: DriverConfiguration, volume: str | None, labels: dict[str, str]) -> dict[str, Any]:
+def container_config(
+    configuration: DriverConfiguration,
+    volume: str | None,
+    labels: dict[str, str],
+    *,
+    skills: str | None = None,
+    skills_writable: bool = False,
+) -> dict[str, Any]:
     """A sandbox container: gVisor, the sandbox bridge, the limits, no privileges, no credentials.
 
-    `volume` is the user's workspace, the only mount; the canary has none.
+    `volume` is the conversation's workspace; the canary has none. `skills` is the volume of the skills
+    given to the sandbox, read-only at /skills (SBX-022, ADR-0096); writable only to the driver's own
+    container that fills it.
     """
-    mounts = [] if volume is None else [{"Type": "volume", "Source": volume, "Target": WORKSPACE}]
+    mounts: list[dict[str, Any]] = [] if volume is None else [{"Type": "volume", "Source": volume, "Target": WORKSPACE}]
+    if skills is not None:
+        mounts.append({"Type": "volume", "Source": skills, "Target": SKILLS, "ReadOnly": not skills_writable})
     memory = configuration.memory_mb * MIB
     return {
         "Image": configuration.image,

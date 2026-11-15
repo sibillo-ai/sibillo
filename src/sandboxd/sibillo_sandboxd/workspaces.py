@@ -41,6 +41,19 @@ def check_archive(path: Path) -> None:
                 _relative(posixpath.join(posixpath.dirname(name), member.linkname))
 
 
+# The skills of a sandbox are files and folders only (SBX-022, ADR-0096).
+SKILL_TYPES = frozenset({tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE})
+
+
+def check_skills_archive(path: Path) -> None:
+    """Refuse an archive of skills with an entry outside /skills, or one that is not a file or a folder."""
+    with tarfile.open(path, "r:") as archive:
+        for member in archive:
+            _relative(member.name)
+            if member.type not in SKILL_TYPES:
+                raise UnsafeArchiveError(f"not a file or a folder: {member.name}")
+
+
 def workspace_entries(source: Path, destination: Path, root: str) -> None:
     """Rewrite Docker's archive of the folder `root` as one named relative to that folder.
 

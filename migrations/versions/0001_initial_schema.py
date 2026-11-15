@@ -33,6 +33,8 @@ CONTRACT_TABLES = (
     "folders",
     "user_settings",
     "memory_items",
+    "skills",
+    "skill_files",
     "conversations",
     "conversation_plans",
     "runs",
@@ -54,6 +56,8 @@ PRIVATE_TABLES = (
     "folders",
     "user_settings",
     "memory_items",
+    "skills",
+    "skill_files",
     "conversations",
     "conversation_plans",
     "runs",
@@ -89,7 +93,8 @@ TOOL_NAMES = (
     "'remove_task', "
     "'remember', "
     "'update_memory', "
-    "'forget'"
+    "'forget', "
+    "'save_skill'"
     "]"
 )
 # The capability classes of tools (AGT-005, ADR-0012).
@@ -308,6 +313,46 @@ TABLES = [
     )
     """,
     "CREATE INDEX memory_items_owner_idx ON memory_items (tenant_id, owner_id, updated_at)",
+    # A user's skills and their files (AGT-017, AGT-025, ADR-0096); built-in skills are not rows.
+    """
+    CREATE TABLE skills (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 64),
+      description text NOT NULL CHECK (char_length(description) BETWEEN 1 AND 1024),
+      enabled boolean NOT NULL DEFAULT true,
+      origin text NOT NULL CHECK (origin IN ('user', 'upload', 'import', 'assistant')),
+      source_url text,
+      conversation_id uuid,
+      untrusted boolean NOT NULL,
+      size_bytes bigint NOT NULL CHECK (size_bytes BETWEEN 0 AND 10485760),
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CHECK ((origin = 'import') = (source_url IS NOT NULL)),
+      CHECK ((origin = 'assistant') = (conversation_id IS NOT NULL)),
+      UNIQUE (tenant_id, owner_id, name),
+      UNIQUE (tenant_id, owner_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    r"""
+    CREATE TABLE skill_files (
+      skill_id uuid NOT NULL,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      -- Relative to the skill's folder, without empty, "." or ".." segments.
+      path text NOT NULL CHECK (
+        char_length(path) BETWEEN 1 AND 255
+        AND path !~ '(^|/)(\.|\.\.)?(/|$)'
+        AND left(path, 1) <> '/'
+      ),
+      content bytea NOT NULL,
+      executable boolean NOT NULL DEFAULT false,
+      PRIMARY KEY (skill_id, path),
+      FOREIGN KEY (tenant_id, owner_id, skill_id) REFERENCES skills (tenant_id, owner_id, id) ON DELETE CASCADE
+    )
+    """,
     # A user's groups of conversations (CNV-007, ADR-0073).
     """
     CREATE TABLE folders (
@@ -335,6 +380,7 @@ TABLES = [
       base_instructions text,
       additional_instructions text,
       memory_enabled boolean NOT NULL DEFAULT true,
+      disabled_builtin_skills text[] NOT NULL DEFAULT '{{}}',
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (tenant_id, owner_id),
       FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
@@ -359,6 +405,8 @@ TABLES = [
       -- Its settings and its own instructions (CNV-013, CNV-014, ADR-0081).
       reasoning text NOT NULL DEFAULT 'on' CHECK (reasoning IN ('off', 'on', 'deep')),
       disabled_tools text[] NOT NULL DEFAULT '{{}}' CHECK (disabled_tools <@ {TOOL_NAMES}),
+      -- The skills off in it, by name (AGT-017, ADR-0096).
+      disabled_skills text[] NOT NULL DEFAULT '{{}}',
       -- What its user allowed by answering approval requests (AGT-004, AGT-006, ADR-0090).
       allowed_web_and_commands boolean NOT NULL DEFAULT false,
       allowed_tools text[] NOT NULL DEFAULT '{{}}' CHECK (allowed_tools <@ {TOOL_NAMES}),
@@ -1043,6 +1091,8 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, UPDATE, DELETE ON folders TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON user_settings TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON memory_items TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON skills TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON skill_files TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON conversation_plans TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON conversations TO sibillo_app",
     "GRANT SELECT, INSERT ON compaction_checkpoints TO sibillo_app",

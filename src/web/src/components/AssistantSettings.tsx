@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { api, unwrap, type Allowances, type Conversation, type ModelChoice, type Reasoning, type ToolName, type UserSettings, type UserSettingsView } from "../api/client";
 import { updateConversation } from "../conversations";
 import { findModel, useModels } from "../models";
+import { skillsOn, useSkills } from "../skills";
 import { useNotify } from "../notices";
 import { toolLabel, useLockedTools } from "../tools";
 import { OwnEgressSwitch } from "./EgressSettings";
@@ -24,6 +25,7 @@ const TOOL_GROUPS: { id: string; tools: ToolName[] }[] = [
   { id: "questions", tools: ["ask_user_question"] },
   { id: "tasks", tools: ["write_plan", "read_plan", "add_task", "update_task_status", "update_task_statuses", "remove_task"] },
   { id: "memory", tools: ["remember", "update_memory", "forget"] },
+  { id: "skills", tools: ["save_skill"] },
 ];
 const SWITCH =
   "relative h-6 w-10 flex-none rounded-full bg-line-strong transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-accent after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-bg after:transition-transform peer-checked:after:translate-x-4";
@@ -347,6 +349,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
   const inheritedAdditional = defaults.additional_instructions ?? "";
   const [reasoning, setReasoning] = useState(conversation.reasoning);
   const [disabled, setDisabled] = useState(conversation.disabled_tools);
+  const [skillsOff, setSkillsOff] = useState(conversation.disabled_skills);
   const [base, setBase] = useState(conversation.base_instructions ?? inheritedBase);
   const [additional, setAdditional] = useState(conversation.additional_instructions ?? inheritedAdditional);
   const [allowances, setAllowances] = useState<Allowances>(conversation.allowances);
@@ -357,6 +360,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
       const updated = await updateConversation(conversation.id, {
         reasoning,
         disabled_tools: disabled,
+        disabled_skills: skillsOff,
         ...(withdrawn ? { allowances } : {}),
         base_instructions: own(base, inheritedBase),
         additional_instructions: own(additional, inheritedAdditional),
@@ -382,6 +386,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
       <div className="flex min-h-0 flex-col gap-6 overflow-y-auto px-[22px] py-4">
         <ReasoningField value={reasoning} onChange={setReasoning} reasons={reasons} />
         <ToolSwitches disabled={disabled} onChange={setDisabled} />
+        <SkillSwitches off={skillsOff} onChange={setSkillsOff} />
         <AllowedInChat allowances={allowances} onChange={setAllowances} />
         <AdditionalPrompt value={additional} onChange={setAdditional} placeholder={t("assistant.none")} />
         <DangerZone value={base} inherited={inheritedBase} onChange={setBase} />
@@ -393,6 +398,36 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
         </button>
       </div>
     </Dialog.Content>
+  );
+}
+
+/** The skills on for the user, each with a switch for this conversation; a skill added later is on (AGT-017, UX-028). */
+function SkillSwitches({ off, onChange }: { off: string[]; onChange: (off: string[]) => void }) {
+  const { t } = useTranslation();
+  const heading = useId();
+  const skills = skillsOn(useSkills().data);
+  return (
+    <div role="group" aria-labelledby={heading}>
+      <h3 id={heading} className="mb-1 text-sm font-bold">
+        {t("skills.title")}
+      </h3>
+      <p className="mb-2.5 max-w-[62ch] text-sm text-muted">{t("skills.chatHint")}</p>
+      {skills.length === 0 ? (
+        <p className="text-sm text-muted">{t("skills.noneOn")}</p>
+      ) : (
+        <div className="flex max-w-[460px] flex-col rounded-[14px] border border-line px-2.5 py-1.5">
+          {skills.map((skill) => (
+            <Switch
+              key={skill.name}
+              label={skill.name}
+              description={skill.description}
+              checked={!off.includes(skill.name)}
+              onChange={(on) => onChange(on ? off.filter((name) => name !== skill.name) : [...off, skill.name])}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

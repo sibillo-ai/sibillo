@@ -294,6 +294,7 @@ async def create_run(
         attachments=attachments or [],
         reasoning=conversation.reasoning,
         disabled_tools=list(conversation.disabled_tools),
+        disabled_skills=list(conversation.disabled_skills),
         base_instructions=base,
         additional_instructions=additional,
         temporary=conversation.temporary,

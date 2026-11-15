@@ -31,6 +31,8 @@ class RunWorkflowInput:
     # CNV-014, ADR-0081): null base instructions are the built-in ones.
     reasoning: str = "on"
     disabled_tools: list[str] = field(default_factory=list[str])
+    # The skills off in the conversation, by name (AGT-017, ADR-0096); the skills themselves are read by the run.
+    disabled_skills: list[str] = field(default_factory=list[str])
     base_instructions: str | None = None
     additional_instructions: str | None = None
     # A temporary conversation gets no title (CNV-011, ADR-0082).

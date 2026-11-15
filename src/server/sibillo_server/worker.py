@@ -90,6 +90,8 @@ from sibillo_server.questions import REQUESTS, asks_user, expired, interrupts
 from sibillo_server.runs import create_run, enqueue, fail_unqueued
 from sibillo_server.sandbox import CommandPurposes, SandboxDriver, SandboxWorkspace, sandbox_ref, stop_sandbox
 from sibillo_server.settings import BUILT_IN_BASE_INSTRUCTIONS
+from sibillo_server.skills import TOOLS as SKILL_TOOLS
+from sibillo_server.skills import RunSkills, run_skills, sandbox_preparer
 from sibillo_server.tool_policy import ATTACHMENTS_ORIGIN as POLICY_ATTACHMENTS_ORIGIN
 from sibillo_server.tool_policy import DENIED, EXPIRED, Allowances, has_untrusted_content
 from sibillo_server.web_tools import TOOLS as WEB_TOOLS
@@ -166,16 +168,13 @@ DOWNLOAD_INSTRUCTIONS = (
     " files, and web pages. Make a web page one self-contained HTML file, with its scripts and styles"
     " inline: it runs without any network access, so it cannot load libraries, fonts or data from anywhere."
 )
-# The sandbox toolbox (SBX-021, ADR-0080).
+# The sandbox toolbox, named; the built-in skills say how to use it (SBX-021, AGT-024, ADR-0080, ADR-0096).
 TOOLBOX_INSTRUCTIONS = (
-    "The sandbox has these tools, ready without installing anything: for PDFs, pdftotext, pdftoppm,"
-    " pdfinfo and qpdf; markitdown, which turns PDF, Word, Excel, PowerPoint and HTML files into Markdown"
-    " for you to read; pandoc for documents, with the DejaVu, Liberation and Noto fonts, and Typst to make"
-    " PDFs: `pandoc in.md -o out.pdf --pdf-engine=typst`, or `typst compile` for Typst documents; ImageMagick"
-    " (magick) for images, ffmpeg and ffprobe for audio and video; jq, sqlite3, file, zip and unzip; Node.js (node)"
-    " with npm. python3 has pandas, numpy, matplotlib, Pillow, pypdf, python-docx, openpyxl and python-pptx."
-    " There is no office suite and no text recognition. Use these tools before installing anything, and"
-    " install only what is missing: it lasts for this answer only."
+    "The sandbox has tools ready without installing anything: pdftotext, pdftoppm, pdfinfo, qpdf, markitdown,"
+    " pandoc, typst, ImageMagick (magick), ffmpeg, ffprobe, jq, sqlite3, file, zip, unzip, node and npm, and"
+    " python3 with pandas, numpy, matplotlib, Pillow, pypdf, python-docx, openpyxl and python-pptx; there is no"
+    " office suite and no text recognition. The built-in skills say how to use them for each kind of file."
+    " Use them before installing anything, and install only what is missing: it lasts for this answer only."
 )
 
 
@@ -304,7 +303,8 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
     # Web search through the instance's search service, page reading in the sandbox (ADR-0075).
     # And offering a file of the workspace to download (AGT-023, ADR-0079).
     # And the user's memory, kept through tools of its own (MEM-007, ADR-0095).
-    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST),
+    # And saving a skill (AGT-026, ADR-0096).
+    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS),
     capabilities=[
         Gateway(),
         # The user's sandbox, and the harness's tools that work in it (AGT-011, ADR-0035).
@@ -319,6 +319,8 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
         # from run to run (AGT-015, UX-009, ADR-0083).
         _instructions_while_on(AskUser[RunDeps](answerer=None)),
         _instructions_while_on(Planning[RunDeps](store_resolver=_plan_store)),
+        # The skills that are on, offered by name and description and loaded when needed (AGT-017, ADR-0096).
+        RunSkills(),
         # Tool permissions, approvals and audit events (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).
         Approvals(),
         DBOSDurability(event_stream_handler=_handle_events),
@@ -442,6 +444,8 @@ async def run_workflow(serialized_input: str) -> None:
         permissions = await permissions_of(connection, identity.user_id)
         # Read for each run, never part of its input (MEM-003, ADR-0095).
         memory = await run_memory(connection, temporary=run.temporary)
+        # Read for each run too (AGT-017, ADR-0096).
+        skills = await run_skills(connection, run.disabled_skills)
     deps = RunDeps(
         engine=_engine(),
         identity=identity,
@@ -469,8 +473,11 @@ async def run_workflow(serialized_input: str) -> None:
         # An untrusted memory item makes the run untrusted from its start (MEM-008, ADR-0095).
         untrusted=untrusted or any(item.untrusted for item in memory or ()),
         memory=memory,
+        skills=skills,
+        temporary=run.temporary,
         parent_run_id=parent_run_id,
     )
+    deps = replace(deps, prepare_sandbox=sandbox_preparer(deps))
     encoder: AGUIEventStream[Any, Any] = AGUIEventStream(thread_id=run.conversation_id, run_id=run.run_id)
     _ENCODERS[run.run_id] = encoder
     asking = False

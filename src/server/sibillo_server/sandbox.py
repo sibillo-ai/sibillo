@@ -12,7 +12,7 @@ import json
 import logging
 import math
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
@@ -56,8 +56,17 @@ class SandboxDriver:
 class SandboxBackend:
     """A workspace backend on one conversation's sandbox, through the driver."""
 
-    def __init__(self, driver: SandboxDriver, tenant_id: str, user_id: str, conversation_id: str) -> None:
+    def __init__(
+        self,
+        driver: SandboxDriver,
+        tenant_id: str,
+        user_id: str,
+        conversation_id: str,
+        prepare: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._driver = driver
+        # What the run gives the sandbox before its first command: its skills (SBX-022, ADR-0096).
+        self._prepare = prepare
         self._path = f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}"
         self._ref = sandbox_ref(tenant_id, user_id, conversation_id)
 
@@ -81,6 +90,8 @@ class SandboxBackend:
         env: Mapping[str, str] | None = None,
         timeout: float | None = None,  # noqa: ASYNC109 - the workspace protocol's parameter
     ) -> CommandResult:
+        if self._prepare is not None:
+            await self._prepare()
         request: dict[str, Any] = {"env": dict(env or {})}
         if shell:
             if not isinstance(command, str):
@@ -160,6 +171,7 @@ def backend_for(deps: RunDeps) -> SandboxBackend:
         str(deps.identity.tenant_id),
         str(deps.identity.user_id),
         str(deps.conversation_id),
+        deps.prepare_sandbox,
     )
 
 
