@@ -55,6 +55,7 @@ database procedure (ADR-0050):
    | `SIBILLO_TRUSTED_PROXIES` | `127.0.0.1` |
    | `SIBILLO_SECRET_KEY` | A random key chosen by the test suite |
    | `SIBILLO_SANDBOXD_URL`, `SIBILLO_SANDBOXD_TOKEN` | Those of the sandbox driver below |
+   | `SIBILLO_PUBLIC_ORIGIN` | `http://localhost:PORT`, with the port above (ADR-0094) |
 
 2. The server is ready when `GET /v1/me` without a token answers `401`. A
    server that is not ready within 30 seconds, or exits, fails the session,
@@ -78,6 +79,20 @@ and body, every event of an event stream, and the body of every request the
 server accepted with a `2xx` status. A mismatch fails the test. The harness
 keeps the output of every process it starts, the API, the worker and the
 sandbox driver, for tests that check what they log (ADR-0058).
+
+To check an instance that cannot use passkeys (ADR-0094), a test starts a
+second API with the same environment, its own port, and no
+`SIBILLO_PUBLIC_ORIGIN`, and stops it when it ends.
+
+## Passkeys
+
+Tests answer WebAuthn ceremonies (AUTH-010) with a software authenticator of
+the test suite: it makes ES256 keys, answers registrations with attestation
+`none` and assertions with a signature counter, as WebAuthn Level 3 defines
+them, for the origin and relying party ID a test chooses, so that tests can
+also answer for another origin, replay an answer or send a counter that goes
+backwards. Users with passkeys that a test does not register through the API
+are arranged in the database as superuser.
 
 The harness also records the outbound connections of the API and the worker
 (OBS-006, ADR-0072): it starts both with an audit hook, through Python's
@@ -175,6 +190,12 @@ without asking. In hands-free mode the app marks its large button with
 `reading` or `failed`, and with `data-voice-cue`, the last sound it played:
 `start`, `end`, `tick`, `answer` or `error` (ADR-0088). Media buttons reach
 the app in tests as the keyboard's media keys.
+
+Tests of passkeys open the app at `http://localhost:PORT/`, the origin the
+API is given, and answer the browser's WebAuthn prompts with Chromium's
+virtual authenticator, through the DevTools protocol: a platform
+authenticator with user verification, whose prompts a test can also make
+fail.
 
 Unit tests of the app's own code run with Vitest, without a server. The
 cookie session's `Secure` attribute is accepted on `127.0.0.1` by Chromium,
