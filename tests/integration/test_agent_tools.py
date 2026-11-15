@@ -8,6 +8,7 @@ message is `run:<command>` (tests/support/model.py).
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import pytest
@@ -27,7 +28,7 @@ from tests.support.runs import (
     text_of,
     wait_for_run,
 )
-from tests.support.sandbox import Driver
+from tests.support.sandbox import Driver, docker
 from tests.support.server import Server
 
 
@@ -416,3 +417,29 @@ def test_a_call_that_may_have_run_twice_after_a_crash_says_so(
     (event,) = body(response)["items"]
     assert event["run_id"] == run_id
     assert event["repeated"] is True
+
+
+@pytest.mark.spec("SBX-023", "SBX-015")
+def test_a_run_whose_sandbox_cannot_be_reached_fails_as_such(
+    server: Server, token: str, default_model: HarnessModel, sandboxes: Driver
+) -> None:
+    conversation = create_conversation(server, token)["id"]
+    # Without its egress rules, the driver refuses sandboxes until isolation is verified again (SBX-015).
+    docker("exec", sandboxes.netguard, "nft", "delete", "table", "inet", "sibillo")
+    try:
+        deadline = time.monotonic() + 20
+        while _driver_ready(sandboxes):
+            assert time.monotonic() < deadline, "the driver kept accepting sandboxes without egress rules"
+            time.sleep(0.5)
+        run_id, events = start_run(server, token, conversation, "run:echo unreachable")
+        run = wait_for_run(server, token, run_id)
+        assert (run["status"], run["error_code"]) == ("failed", "sandbox.unavailable")
+        assert events[-1].type == "RUN_ERROR"
+        assert events[-1].data.get("code") == "sandbox.unavailable"
+    finally:
+        sandboxes.wait_until_ready()
+
+
+def _driver_ready(sandboxes: Driver) -> bool:
+    with sandboxes.client() as client:
+        return client.get("/health").status_code == 200
