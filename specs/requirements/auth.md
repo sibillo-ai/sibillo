@@ -101,7 +101,7 @@ account MUST NOT restore any session.
 
 ## AUTH-010: Passkeys as a second factor
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security

@@ -426,7 +426,7 @@ conversations' choice of its models.
 
 ## UX-026: Passkeys in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e
