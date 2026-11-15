@@ -462,7 +462,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
-  /me/skills/builtin/{skill_name}/files/{path}:
+  /me/skills/builtin/{skill_name}/file:
     parameters:
       - $ref: "#/components/parameters/SkillName"
       - $ref: "#/components/parameters/SkillFilePath"
@@ -530,7 +530,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /me/skills/{skill_id}/files/{path}:
+  /me/skills/{skill_id}/file:
     parameters:
       - $ref: "#/components/parameters/SkillId"
       - $ref: "#/components/parameters/SkillFilePath"
@@ -2073,9 +2073,9 @@ components:
       schema: { $ref: "#/components/schemas/SkillNameValue" }
     SkillFilePath:
       name: path
-      in: path
+      in: query
       required: true
-      description: The file's path in the skill's folder, `/`-separated, URL-encoded.
+      description: The file's path in the skill's folder, `/`-separated.
       schema: { type: string, minLength: 1, maxLength: 255 }
     PasskeyId:
       name: passkey_id

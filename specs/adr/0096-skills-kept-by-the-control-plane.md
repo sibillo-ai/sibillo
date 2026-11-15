@@ -144,9 +144,9 @@ Several forces shape the rest:
    `POST /me/skills/import` imports from a URL; `GET`, `PATCH` and `DELETE`
    on `/me/skills/{id}` read a skill with its list of files, turn it on or
    off, mark it trusted, and delete it; `PUT` and `DELETE` on
-   `/me/skills/{id}/files/{path}` write and remove a text file, `SKILL.md`
-   included, which renames the skill when its name changes; `GET` on that
-   path reads a file, and `/me/skills/{id}/archive` downloads the skill.
+   `/me/skills/{id}/file?path=…` write and remove a text file, `SKILL.md`
+   included, which renames the skill when its name changes; `GET` on it
+   reads a file, and `/me/skills/{id}/archive` downloads the skill.
    Built-in skills are read the same way and turned on or off with
    `PATCH /me/skills/builtin/{name}`. Conversation settings gain
    `disabled_skills`.
