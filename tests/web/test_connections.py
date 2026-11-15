@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import socket
 from typing import Any
 from uuid import uuid4
@@ -80,7 +81,7 @@ def test_changing_a_server_keeps_what_is_not_changed(
     expect(dialog.get_by_label("Name", exact=True)).to_have_value(name)
     expect(dialog.get_by_label("Address")).to_have_value(default_model.endpoint.url)
     expect(dialog.get_by_label("Context window")).to_have_value("8192")
-    expect(dialog.get_by_label("API key", exact=False)).to_have_value("")
+    expect(dialog.get_by_label(re.compile("^New API key"))).to_have_value("")
     assert accessibility_violations(page) == []
     renamed = f"Office PC {uuid4().hex[:6]}"
     dialog.get_by_label("Name", exact=True).fill(renamed)
@@ -139,7 +140,7 @@ def test_openrouter_asks_only_for_a_name_and_a_new_key(
     _settings(page, admin)
     dialog = _edit(page, name)
     expect(dialog.get_by_label("Name", exact=True)).to_have_value(name)
-    expect(dialog.get_by_label("API key", exact=False)).to_have_value("")
+    expect(dialog.get_by_label(re.compile("^New API key"))).to_have_value("")
     expect(dialog.get_by_label("Address")).to_have_count(0)
     expect(dialog.get_by_label("Context window")).to_have_count(0)
     expect(dialog.get_by_label("Remove the API key")).to_have_count(0)
