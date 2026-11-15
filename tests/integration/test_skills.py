@@ -144,6 +144,28 @@ def _everything_sent(model: HarnessModel, text: str) -> str:
     return "\n".join(json.dumps(request.body) for request in model.endpoint.requests_with(text))
 
 
+def _tool_results(model: HarnessModel, text: str) -> str:
+    """What the model received as results of tools, for the run of `text`."""
+    return "\n".join(
+        str(message.get("content", ""))
+        for request in model.endpoint.requests_with(text)
+        for message in request.body.get("messages", [])
+        if message.get("role") == "tool"
+    )
+
+
+def _approving_once(server: Server, token: str, conversation_id: str, text: str) -> str:
+    """Run `text`, approving each request once, the scope every request offers (ADR-0090): its last run."""
+    run_id, events = start_run(server, token, conversation_id, text)
+    last = run_id
+    while wait_for_run(server, token, last)["status"] == "interrupted":
+        pending = [interrupt["id"] for interrupt in interrupts(events) if interrupt["reason"] == "approval"]
+        assert pending, "the run asks a question, not for approval"
+        events = resumed(server, token, conversation_id, [approve(interrupt_id) for interrupt_id in pending])
+        last = events[0].data["runId"]
+    return last
+
+
 @pytest.mark.spec("AGT-024")
 def test_built_in_skills_are_listed_on_and_trusted(server: Server, token: str) -> None:
     skills = _skills(server, token)
@@ -538,7 +560,7 @@ def test_the_files_of_skills_are_in_the_sandbox_read_only(
     command = f"run:{script}"
     _, _, last = approving(server, token, conversation_id, command)
     assert wait_for_run(server, token, last)["status"] == "completed"
-    result = _everything_sent(default_model, command)
+    result = _tool_results(default_model, command)
     assert "hello-from-skill" in result
     assert "notes" in result
     assert "read-only" in result
@@ -605,7 +627,7 @@ def test_a_skill_saved_from_a_trusted_run_is_trusted_and_one_saved_after_untrust
     skill_md = _skill_md(name)
     conversation_id = create_conversation(server, token)["id"]
     write = f"write_file {json.dumps({'path': f'/scratch/{name}/SKILL.md', 'content': skill_md})}"
-    _, _, last = approving(
+    last = _approving_once(
         server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{name}'})}"
     )
     assert wait_for_run(server, token, last)["status"] == "completed"
@@ -619,7 +641,7 @@ def test_a_skill_saved_from_a_trusted_run_is_trusted_and_one_saved_after_untrust
         f" >>> write_file {json.dumps({'path': f'/scratch/{other}/SKILL.md', 'content': _skill_md(other)})}"
         f" >>> save_skill {json.dumps({'path': f'/scratch/{other}'})}"
     )
-    _, _, last = approving(server, token, untrusted_conversation, text)
+    last = _approving_once(server, token, untrusted_conversation, text)
     assert wait_for_run(server, token, last)["status"] == "completed"
     saved = next(skill for skill in _own(server, token) if skill["name"] == other)
     assert (saved["origin"], saved["untrusted"]) == ("assistant", True)
@@ -635,7 +657,7 @@ def test_save_skill_replaces_the_users_skill_of_that_name_but_never_a_built_in_o
     conversation_id = create_conversation(server, token)["id"]
     new_md = _skill_md(name, "The replacement.")
     write = f"write_file {json.dumps({'path': f'/scratch/{name}/SKILL.md', 'content': new_md})}"
-    _, _, last = approving(
+    last = _approving_once(
         server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{name}'})}"
     )
     assert wait_for_run(server, token, last)["status"] == "completed"
@@ -646,7 +668,7 @@ def test_save_skill_replaces_the_users_skill_of_that_name_but_never_a_built_in_o
     builtin = _skills(server, token)["builtin"][0]["name"]
     write = f"write_file {json.dumps({'path': f'/scratch/{builtin}/SKILL.md', 'content': _skill_md(builtin)})}"
     text = f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{builtin}'})}"
-    _, _, last = approving(server, token, conversation_id, text)
+    last = _approving_once(server, token, conversation_id, text)
     assert wait_for_run(server, token, last)["status"] == "completed"
     assert "built-in" in _everything_sent(default_model, text)
     assert [skill["name"] for skill in _own(server, token)] == [name]
