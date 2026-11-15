@@ -7,7 +7,9 @@ conversation, holding the files themselves.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -22,19 +24,22 @@ def _sandbox() -> tuple[str, str, str]:
     return str(uuid7()), str(uuid7()), str(uuid7())
 
 
-def _backing_files() -> list[str]:
-    """The files behind the host's loop devices, as the host's kernel reports them."""
-    files: list[str] = []
-    for path in Path("/sys/block").glob("loop*/loop/backing_file"):
-        try:
-            files.append(path.read_text().strip())
-        except OSError:
-            continue
-    return files
+def _device(tenant_id: str, user_id: str, conversation_id: str) -> str:
+    """The loop device the workspace's volume mounts, from its options."""
+    volume = f"sibillo-workspace-{tenant_id}-{user_id}-{conversation_id}"
+    options = cast(
+        dict[str, str], json.loads(docker("volume", "inspect", "--format", "{{json .Options}}", volume)) or {}
+    )
+    return str(options.get("device", ""))
 
 
-def _attached(conversation_id: str) -> bool:
-    return any(conversation_id in file for file in _backing_files())
+def _backs_a_disk(device: str) -> bool:
+    """Whether the host's kernel reports the device attached to a workspace's disk."""
+    path = Path("/sys/block") / Path(device).name / "loop" / "backing_file"
+    try:
+        return path.read_text().strip().endswith("/workspace.ext4")
+    except OSError:
+        return False
 
 
 def _volumes(conversation_id: str) -> list[str]:
@@ -45,11 +50,13 @@ def _volumes(conversation_id: str) -> list[str]:
 def test_deleting_a_workspace_detaches_and_deletes_its_disk(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "echo x > /workspace/x").exit_code == 0
-    assert _attached(conversation_id), _backing_files()
+    device = _device(tenant_id, user_id, conversation_id)
+    assert device.startswith("/dev/loop"), device
+    assert _backs_a_disk(device)
     with sandboxes.client() as client:
         response = client.delete(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace")
     assert response.status_code == 204, response.text
-    assert not _attached(conversation_id), _backing_files()
+    assert not _backs_a_disk(device)
     assert _volumes(conversation_id) == []
 
 
@@ -113,7 +120,7 @@ def test_an_old_workspace_is_converted_keeping_its_files(sandboxes: Driver) -> N
     assert fifo == "no-fifo"
     # A disk of its own, large enough for the files and limited.
     assert big < int(disk) <= big * 11 // 10 + 32 * MIB
-    assert _attached(conversation_id)
+    assert _backs_a_disk(_device(tenant_id, user_id, conversation_id))
     # Still there in the next sandbox: the conversion happens once.
     sandboxes.stop(tenant_id, user_id, conversation_id)
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "cat /workspace/notes/a.txt").stdout == "kept\n"
