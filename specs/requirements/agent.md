@@ -409,7 +409,7 @@ Rationale: the assistant turns work it did into a skill the user can reuse.
 
 ## AGT-027: A run's limit of model requests
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
