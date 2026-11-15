@@ -48,6 +48,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.toolsets import FunctionToolset
 from pydantic_ai.ui.ag_ui import AGUIEventStream
+from pydantic_ai.workspaces import WorkspaceUnavailableError
 from pydantic_ai_harness.ask_user import AskUser
 from pydantic_ai_harness.filesystem import FileSystem
 from pydantic_ai_harness.planning import Planning
@@ -397,6 +398,9 @@ async def _history(
 def _error_code(error: BaseException) -> str:
     if isinstance(error, UsageLimitExceeded):
         return "run.step_limit"
+    # The sandbox needs a moment, or its host attention: not a fault of Sibillo (SBX-023).
+    if isinstance(error, WorkspaceUnavailableError):
+        return "sandbox.unavailable"
     if isinstance(error, EgressRefusedError):
         return "model.egress_refused"
     # A model that cannot go on is not a fault of Sibillo (MOD-017). Pydantic AI raises the same class for

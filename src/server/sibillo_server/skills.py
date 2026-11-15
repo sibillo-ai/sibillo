@@ -35,7 +35,7 @@ from pydantic_ai import RunContext, Tool, ToolReturn
 from pydantic_ai.capabilities import AbstractCapability, CombinedCapability
 from pydantic_ai.messages import ToolCallPart, WorkspaceRef
 from pydantic_ai.tools import ToolDefinition
-from pydantic_ai.workspaces import FileEntry, WorkspaceReadOnlyError
+from pydantic_ai.workspaces import FileEntry, WorkspaceReadOnlyError, WorkspaceUnavailableError
 from pydantic_ai_harness.skills import SkillDefinition, Skills
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -1029,14 +1029,18 @@ def sandbox_preparer(deps: RunDeps) -> Callable[[], Awaitable[None]]:
                     files[skill.name] = BUILTIN_FILES[skill.name] if own is None else await _files(connection, own)
             archive = await asyncio.to_thread(_tar, files)
             path = f"/sandboxes/{deps.identity.tenant_id}/{deps.identity.user_id}/{deps.conversation_id}/skills"
-            async with httpx.AsyncClient(
-                base_url=deps.sandboxd_url,
-                headers={"Authorization": f"Bearer {deps.sandboxd_token}"},
-                timeout=DRIVER_TIMEOUT_SECONDS,
-            ) as client:
-                response = await client.put(path, content=archive, headers={"Content-Type": "application/x-tar"})
+            try:
+                async with httpx.AsyncClient(
+                    base_url=deps.sandboxd_url,
+                    headers={"Authorization": f"Bearer {deps.sandboxd_token}"},
+                    timeout=DRIVER_TIMEOUT_SECONDS,
+                ) as client:
+                    response = await client.put(path, content=archive, headers={"Content-Type": "application/x-tar"})
+            except httpx.HTTPError as error:
+                raise WorkspaceUnavailableError(f"the sandbox driver is unreachable: {error}") from error
             if response.status_code != 204:
-                raise RuntimeError(f"the sandbox driver refused the run's skills ({response.status_code})")
+                # As any other refusal of the driver, the sandbox is unavailable (SBX-023).
+                raise WorkspaceUnavailableError(f"the sandbox is unavailable ({response.status_code})")
             given = True
 
     return prepare
