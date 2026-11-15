@@ -154,6 +154,14 @@ def _tool_results(model: HarnessModel, text: str) -> str:
     )
 
 
+def _written(folder: str, skill_md: str) -> str:
+    """Calls of the file tools that write a skill's folder; the folder is made first, as the tools want."""
+    return (
+        f"create_directory {json.dumps({'path': folder})}"
+        f" >>> write_file {json.dumps({'path': f'{folder}/SKILL.md', 'content': skill_md})}"
+    )
+
+
 def _approving_once(server: Server, token: str, conversation_id: str, text: str) -> str:
     """Run `text`, approving each request once, the scope every request offers (ADR-0090): its last run."""
     run_id, events = start_run(server, token, conversation_id, text)
@@ -626,7 +634,7 @@ def test_a_skill_saved_from_a_trusted_run_is_trusted_and_one_saved_after_untrust
     name = _name("trusted")
     skill_md = _skill_md(name)
     conversation_id = create_conversation(server, token)["id"]
-    write = f"write_file {json.dumps({'path': f'/scratch/{name}/SKILL.md', 'content': skill_md})}"
+    write = _written(f"/scratch/{name}", skill_md)
     last = _approving_once(
         server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{name}'})}"
     )
@@ -638,7 +646,7 @@ def test_a_skill_saved_from_a_trusted_run_is_trusted_and_one_saved_after_untrust
     untrusted_conversation = create_conversation(server, token)["id"]
     text = (
         f"chain:web_search {json.dumps({'query': fresh_query()})}"
-        f" >>> write_file {json.dumps({'path': f'/scratch/{other}/SKILL.md', 'content': _skill_md(other)})}"
+        f" >>> {_written(f'/scratch/{other}', _skill_md(other))}"
         f" >>> save_skill {json.dumps({'path': f'/scratch/{other}'})}"
     )
     last = _approving_once(server, token, untrusted_conversation, text)
@@ -656,7 +664,7 @@ def test_save_skill_replaces_the_users_skill_of_that_name_but_never_a_built_in_o
     _write(server, token, original["id"], "old.md", "old")
     conversation_id = create_conversation(server, token)["id"]
     new_md = _skill_md(name, "The replacement.")
-    write = f"write_file {json.dumps({'path': f'/scratch/{name}/SKILL.md', 'content': new_md})}"
+    write = _written(f"/scratch/{name}", new_md)
     last = _approving_once(
         server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{name}'})}"
     )
@@ -666,7 +674,7 @@ def test_save_skill_replaces_the_users_skill_of_that_name_but_never_a_built_in_o
     with server.client(token) as client:
         assert [file["path"] for file in body(client.get(f"/me/skills/{skill['id']}"))["files"]] == ["SKILL.md"]
     builtin = _skills(server, token)["builtin"][0]["name"]
-    write = f"write_file {json.dumps({'path': f'/scratch/{builtin}/SKILL.md', 'content': _skill_md(builtin)})}"
+    write = _written(f"/scratch/{builtin}", _skill_md(builtin))
     text = f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{builtin}'})}"
     last = _approving_once(server, token, conversation_id, text)
     assert wait_for_run(server, token, last)["status"] == "completed"
