@@ -287,7 +287,7 @@ every later conversation (T-36).
 
 ## SBX-023: An unreachable sandbox fails the run as such
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
