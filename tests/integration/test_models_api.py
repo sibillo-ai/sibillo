@@ -316,7 +316,8 @@ def test_a_server_brings_its_first_model_as_default(
         }
 
 
-# Every tool of the assistant, each a user can switch off by its name (ADR-0081, ADR-0087).
+# Every tool the model is offered by default: each a user can switch off by its name (ADR-0081, ADR-0087), and the
+# loading of skills.
 TOOLS = frozenset(
     {
         "web_search",
@@ -345,6 +346,8 @@ TOOLS = frozenset(
         "update_memory",
         "forget",
         "save_skill",
+        # Offered while a skill is on, as the built-in skills are by default; it has no switch (ADR-0096).
+        "load_capability",
     }
 )
 NO_DEFAULTS: dict[str, Any] = {

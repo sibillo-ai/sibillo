@@ -220,7 +220,7 @@ def test_sandboxes_hold_no_credentials(sandboxes: Driver) -> None:
         assert not [entry for entry in container["Config"]["Env"] if "TOKEN" in entry or "KEY" in entry]
 
 
-@pytest.mark.spec("SBX-012", "SBX-002", "SBX-011")
+@pytest.mark.spec("SBX-012", "SBX-002", "SBX-011", "SBX-022")
 def test_sandbox_containers_follow_the_fixed_policy(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
     sandboxes.sh(tenant_id, user_id, conversation_id, "true")
@@ -235,8 +235,11 @@ def test_sandbox_containers_follow_the_fixed_policy(sandboxes: Driver) -> None:
         assert host.get("IpcMode", "") in {"", "private", "shareable", "none"}
         assert host["NetworkMode"] == SANDBOX_NETWORK
         assert not host.get("Binds")
-        assert [mount["Type"] for mount in container["Mounts"]] == ["volume"]
-        assert [mount["Destination"] for mount in container["Mounts"]] == ["/workspace"]
+        # The workspace, and the skills of the run, read-only (SBX-022, ADR-0096).
+        mounts = sorted(container["Mounts"], key=lambda mount: mount["Destination"])
+        assert [mount["Type"] for mount in mounts] == ["volume", "volume"]
+        assert [mount["Destination"] for mount in mounts] == ["/skills", "/workspace"]
+        assert [mount["RW"] for mount in mounts] == [False, True]
         assert host["NanoCpus"] == 500_000_000
         assert host["Memory"] == 256 * 1024 * 1024
         ulimits: list[dict[str, Any]] = host.get("Ulimits") or []
