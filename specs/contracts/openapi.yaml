@@ -3055,9 +3055,10 @@ components:
 
     Skill:
       type: object
-      description: A skill, with its provenance (AGT-017, AGT-025).
+      description: |
+        A skill, with its provenance (AGT-017, AGT-025). `SkillDetail` adds
+        its files, so this schema allows more properties.
       required: [id, name, description, builtin, enabled, origin, source_url, conversation, untrusted, size_bytes, created_at, updated_at]
-      additionalProperties: false
       properties:
         id:
           description: The skill's ID; `null` for a built-in skill, which its name identifies.
