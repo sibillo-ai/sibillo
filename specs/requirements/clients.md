@@ -403,3 +403,23 @@ speech models (ADR-0091).
 
 Rationale: journey J14; the household decides what may leave the house, and
 each member sees what that means for them.
+
+## UX-025: Changing a connection in the settings
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** e2e
+
+Among the household's settings (UX-015), clients MUST let tenant admins
+change a connection as the API allows (MOD-008): its name, and for a
+connection to the household's own server its address, where it runs and its
+context window, which they MUST also let admins set when they add one. A new
+API key replaces the old one, which clients MUST NOT show; leaving the key
+empty keeps it, and admins MUST be able to remove the key of a connection to
+their own server. A change that fails its test is not saved, and clients MUST
+show its test as when adding a connection (UX-016).
+
+Rationale: an admin who raises the window of their own server, or moves it
+to another address, should not have to remove the connection and lose the
+conversations' choice of its models.
