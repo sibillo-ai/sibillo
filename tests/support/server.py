@@ -172,6 +172,19 @@ def _wait_until_ready(api: Process, worker: Process, base_url: str) -> None:
 _SERVER = pytest.StashKey[Server | BaseException]()
 
 
+# The limit of model requests of a run in tests (AGT-027, specs/contracts/test-harness.md).
+RUN_REQUEST_LIMIT = 20
+
+
+def _evaluating(config: pytest.Config) -> bool:
+    """Whether the session is the eval suite, whose runs keep the default limit of model requests."""
+    try:
+        config.getoption("--eval-models")
+    except ValueError:
+        return False
+    return True
+
+
 def start_server(config: pytest.Config, database: Database, sandbox_driver: tuple[str, str], search_url: str) -> Server:
     """Start the API and the worker once per test session; later calls return the same server.
 
@@ -222,6 +235,9 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
             "SIBILLO_TEMPORARY_SWEEP_SECONDS": "1",
             "SIBILLO_APPROVAL_SWEEP_SECONDS": "1",
         }
+        # A low limit of model requests, so that a test reaches it quickly; evals keep the default (ADR-0097).
+        if not _evaluating(config):
+            worker_environment["SIBILLO_RUN_REQUEST_LIMIT"] = str(RUN_REQUEST_LIMIT)
         worker = Process("worker", base | shared | worker_environment, command="worker")
         config.add_cleanup(worker.close)
         server = Server(

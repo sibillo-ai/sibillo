@@ -27,7 +27,7 @@ from tests.support.runs import (
     text_of,
     wait_for_run,
 )
-from tests.support.server import Server
+from tests.support.server import RUN_REQUEST_LIMIT, Server
 
 LIFECYCLE = {"RUN_STARTED", "RUN_FINISHED", "RUN_ERROR"}
 
@@ -421,3 +421,44 @@ def test_a_queued_run_without_a_workflow_does_not_block_its_conversation(
     run_id, events = start_run(server, token, conversation["id"], "after the stuck run")
     assert wait_for_run(server, token, run_id)["status"] == "completed"
     assert text_of(events) == "Echo: after the stuck run"
+
+
+def _plan_reads(count: int) -> str:
+    """Calls of a tool that changes nothing, one model request each."""
+    return "chain:" + " >>> ".join(["read_plan {}"] * count)
+
+
+@pytest.mark.spec("AGT-027", "CNV-018")
+def test_a_run_that_reaches_its_limit_of_model_requests_fails_as_such(
+    server: Server, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    # A first turn, so that the conversation's title is asked for apart from the run under test.
+    first, _ = start_run(server, token, conversation_id, "hello")
+    assert wait_for_run(server, token, first)["status"] == "completed"
+    text = _plan_reads(RUN_REQUEST_LIMIT + 5)
+    run_id, events = start_run(server, token, conversation_id, text)
+    run = wait_for_run(server, token, run_id)
+    assert (run["status"], run["error_code"]) == ("failed", "run.step_limit")
+    assert events[-1].type == "RUN_ERROR"
+    assert events[-1].data.get("code") == "run.step_limit"
+    assert str(RUN_REQUEST_LIMIT) in str(events[-1].data.get("message", ""))
+    assert len(default_model.endpoint.requests_with(text)) == RUN_REQUEST_LIMIT
+    # What it did stays in the conversation, and the user can ask it to go on.
+    shown = messages(server, token, conversation_id)["items"]
+    assert "read_plan" in str(shown)
+    run_id, _ = start_run(server, token, conversation_id, "go on")
+    assert wait_for_run(server, token, run_id)["status"] == "completed"
+
+
+@pytest.mark.spec("AGT-027", "AGT-022")
+def test_the_agent_is_told_to_keep_long_work_in_the_workspace(
+    server: Server, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    text = f"instructions {uuid7()}"
+    run_id, _ = start_run(server, token, conversation_id, text)
+    assert wait_for_run(server, token, run_id)["status"] == "completed"
+    system = default_model.endpoint.requests_with(text)[0].system_text()
+    assert "many steps" in system
+    assert "/workspace" in system

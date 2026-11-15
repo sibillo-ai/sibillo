@@ -20,7 +20,7 @@ from playwright.sync_api import Browser, Locator, Page, Route, expect
 from tests.support.accounts import Account
 from tests.support.fixtures import HarnessModel, HouseholdModel
 from tests.support.model import REFUSAL, SERVER_MODELS
-from tests.support.server import Server
+from tests.support.server import RUN_REQUEST_LIMIT, Server
 from tests.web.conftest import accessibility_violations, sign_in
 
 
@@ -431,6 +431,16 @@ def test_a_model_that_cannot_go_on_says_what_to_do(page: Page, member: Account) 
     _send(page, "chain:" + " >>> ".join(["read_file {}"] * 4))
     expect(page.get_by_role("main").get_by_role("alert").last).to_contain_text("another model", timeout=30_000)
     assert "model.tool_misuse" not in page.get_by_role("main").get_by_role("alert").last.inner_text()
+
+
+@pytest.mark.spec("AGT-027", "UX-014")
+def test_a_run_stopped_by_its_limit_says_the_user_can_ask_to_continue(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    _send(page, "chain:" + " >>> ".join(["read_plan {}"] * (RUN_REQUEST_LIMIT + 5)))
+    error = page.get_by_role("main").get_by_role("alert").last
+    expect(error).to_contain_text("many steps", timeout=30_000)
+    expect(error).to_contain_text("continue")
+    assert "run.step_limit" not in error.inner_text(), "the error shows a code instead of words"
 
 
 @pytest.mark.spec("UX-018")
