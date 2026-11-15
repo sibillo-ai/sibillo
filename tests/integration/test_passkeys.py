@@ -89,9 +89,11 @@ def test_registering_a_passkey_lists_it(server: Server, account: Account, device
 
 @pytest.mark.spec("AUTH-010")
 def test_registration_options_bind_the_passkey_to_the_instance_and_never_name_the_username(
-    server: Server, account: Account, device: Authenticator, enrolled: dict[str, Any]
+    server: Server, account: Account, device: Authenticator
 ) -> None:
-    started = start_registration(server, login(server, account), account.password)
+    token = login(server, account)
+    register_passkey(server, token, account, device)
+    started = start_registration(server, token, account.password)
     assert started.status_code == 201, started.text
     options = body(started)["options"]
     assert options["rp"]["id"] == "localhost"
