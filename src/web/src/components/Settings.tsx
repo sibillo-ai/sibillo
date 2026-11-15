@@ -16,6 +16,8 @@ import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
 type SpeechSettings = Schemas["SpeechSettings"];
 
 const CONNECTIONS = ["connections"] as const;
+// The window of a connection to your own server unless set (ADR-0073).
+const DEFAULT_CONTEXT_WINDOW = 8192;
 const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
@@ -134,6 +136,7 @@ function ModelsSection() {
   const models = useModels();
   const connections = useQuery({ queryKey: CONNECTIONS, queryFn: async () => unwrap(await api.GET("/tenant/connections")).items });
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Connection | null>(null);
   const [removing, setRemoving] = useState<Connection | null>(null);
   const [results, setResults] = useState<Record<string, ConnectionTest>>({});
 
@@ -202,6 +205,9 @@ function ModelsSection() {
                 <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} onClick={() => void test(connection)}>
                   {t("settings.test")}
                 </button>
+                <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} aria-label={t("settings.editLabel", { name: connection.name })} onClick={() => setEditing(connection)}>
+                  {t("settings.edit")}
+                </button>
                 <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} onClick={() => setRemoving(connection)}>
                   {t("settings.remove")}
                 </button>
@@ -217,7 +223,8 @@ function ModelsSection() {
           </button>
         </div>
       </section>
-      {adding && <AddConnection onClose={() => setAdding(false)} onAdded={refresh} existing={connections.data ?? []} />}
+      {adding && <ConnectionDialog onClose={() => setAdding(false)} onSaved={refresh} existing={connections.data ?? []} />}
+      {editing && <ConnectionDialog key={editing.id} connection={editing} onClose={() => setEditing(null)} onSaved={refresh} existing={connections.data ?? []} />}
       <Dialog.Root open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
@@ -396,10 +403,13 @@ function TestResult({ test }: { test: ConnectionTest }) {
   );
 }
 
-function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void>; existing: Connection[] }) {
+/** Adds a connection, or changes one (UX-016, UX-025); a change that fails its test is not saved (MOD-013). */
+function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<void>; existing: Connection[]; connection?: Connection }) {
   const { t } = useTranslation();
   const notify = useNotify();
-  const [kind, setKind] = useState<"openrouter" | "openai">("openrouter");
+  const editing = props.connection;
+  const [chosenKind, setKind] = useState<"openrouter" | "openai">("openrouter");
+  const kind = editing?.kind ?? chosenKind;
   const [result, setResult] = useState<ConnectionTest | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -414,13 +424,63 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
       return { name, kind, api_key: field("api_key") };
     }
     const key = field("api_key");
+    const window = field("context_window");
     return {
       name: field("name"),
       kind,
       base_url: field("base_url"),
       location: field("location") === "remote" ? ("remote" as const) : ("local" as const),
+      ...(window ? { context_window: Number(window) } : {}),
       ...(key ? { api_key: key } : {}),
     };
+  }
+
+  /** Only what the admin changed; an empty key keeps the current one. */
+  function changes(form: HTMLFormElement, connection: Connection): Schemas["UpdateConnectionRequest"] {
+    const data = new FormData(form);
+    const field = (name: string) => String(data.get(name) ?? "").trim();
+    const update: Schemas["UpdateConnectionRequest"] = {};
+    if (field("name") !== connection.name) update.name = field("name");
+    const key = field("api_key");
+    if (data.get("remove_key") === "on") update.api_key = null;
+    else if (key) update.api_key = key;
+    if (connection.kind === "openai") {
+      if (field("base_url") !== connection.base_url) update.base_url = field("base_url");
+      const location = field("location") === "remote" ? "remote" : "local";
+      if (location !== connection.location) update.location = location;
+      const window = Number(field("context_window"));
+      if (field("context_window") && window !== connection.context_window) update.context_window = window;
+    }
+    return update;
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>, connection: Connection) {
+    event.preventDefault();
+    const update = changes(event.currentTarget, connection);
+    if (Object.keys(update).length === 0) {
+      props.onClose();
+      return;
+    }
+    setBusy(true);
+    setResult(null);
+    try {
+      const saved = unwrap(await api.PATCH("/tenant/connections/{connection_id}", { params: { path: { connection_id: connection.id } }, body: update }));
+      await props.onSaved();
+      props.onClose();
+      notify({ kind: "info", title: t("connection.saved", { name: saved.name }) });
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function failed(error: unknown) {
+    // A connection that fails its test is not saved; its test says why (MOD-013).
+    const test = error instanceof ApiError ? (error.problem.test as ConnectionTest | undefined) : undefined;
+    if (test) setResult(test);
+    else if (error instanceof ApiError && error.problem.title) notify({ kind: "error", title: t("errors.title"), text: String(error.problem.detail ?? error.problem.title) });
+    else notify({ kind: "error", title: t("errors.title"), text: t("errors.internal_error") });
   }
 
   async function runTest(form: HTMLFormElement | null) {
@@ -441,7 +501,7 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
     const body = request(event.currentTarget);
     try {
       const connection = unwrap(await api.POST("/tenant/connections", { body }));
-      await props.onAdded();
+      await props.onSaved();
       props.onClose();
       notify({
         kind: "info",
@@ -449,10 +509,7 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
         text: connection.model_count === 1 ? t("connection.connectedBodyOne", { count: 1 }) : t("connection.connectedBodyMany", { count: connection.model_count }),
       });
     } catch (error) {
-      // A connection that fails its test is not saved; its test says why (MOD-013).
-      const test = error instanceof ApiError ? (error.problem.test as ConnectionTest | undefined) : undefined;
-      if (test) setResult(test);
-      else notify({ kind: "error", title: t("errors.title"), text: t("errors.internal_error") });
+      failed(error);
     } finally {
       setBusy(false);
     }
@@ -464,43 +521,59 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content className="rise fixed top-1/2 left-1/2 z-50 max-h-[calc(100%-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[20px] bg-raised p-[22px] shadow-soft">
-          <Dialog.Title className="mb-3 text-lg font-bold">{t("connection.title")}</Dialog.Title>
-          <Dialog.Description className="sr-only">{t("connection.kind")}</Dialog.Description>
-          <div role="group" aria-label={t("connection.kind")} className="inline-flex flex-wrap gap-0.5 rounded-xl bg-hover p-[3px]">
+          <Dialog.Title className="mb-3 text-lg font-bold">{editing ? t("connection.editTitle", { name: editing.name }) : t("connection.title")}</Dialog.Title>
+          <Dialog.Description className="sr-only">{editing ? t("connection.editDescription") : t("connection.kind")}</Dialog.Description>
+          {!editing && <div role="group" aria-label={t("connection.kind")} className="inline-flex flex-wrap gap-0.5 rounded-xl bg-hover p-[3px]">
             <button type="button" className={choice} aria-pressed={kind === "openrouter"} onClick={() => (setKind("openrouter"), setResult(null))}>
               {t("connection.openrouter")}
             </button>
             <button type="button" className={choice} aria-pressed={kind === "openai"} onClick={() => (setKind("openai"), setResult(null))}>
               {t("connection.server")}
             </button>
-          </div>
-          <form key={kind} onSubmit={(event) => void connect(event)} className="mt-3.5 flex flex-col gap-3.5">
+          </div>}
+          <form key={kind} onSubmit={(event) => void (editing ? save(event, editing) : connect(event))} className="mt-3.5 flex flex-col gap-3.5">
             {kind === "openrouter" ? (
-              <Field id="api-key" label={t("connection.apiKey")} hint={t("connection.apiKeyHint")}>
-                <input id="api-key" name="api_key" type="password" autoComplete="off" required className={INPUT} />
-              </Field>
+              <>
+                {editing && (
+                  <Field id="openrouter-name" label={t("connection.name")}>
+                    <input id="openrouter-name" name="name" required maxLength={100} defaultValue={editing.name} className={INPUT} />
+                  </Field>
+                )}
+                <Field id="api-key" label={editing ? t("connection.newApiKey") : t("connection.apiKey")} hint={editing ? t("connection.keepKeyHint") : t("connection.apiKeyHint")}>
+                  <input id="api-key" name="api_key" type="password" autoComplete="off" required={!editing} className={INPUT} />
+                </Field>
+              </>
             ) : (
               <>
                 <Field id="server-name" label={t("connection.name")}>
-                  <input id="server-name" name="name" required maxLength={100} className={INPUT} />
+                  <input id="server-name" name="name" required maxLength={100} defaultValue={editing?.name} className={INPUT} />
                 </Field>
                 <Field id="server-address" label={t("connection.address")} hint={t("connection.addressHint")}>
-                  <input id="server-address" name="base_url" type="url" required className={INPUT} />
+                  <input id="server-address" name="base_url" type="url" required defaultValue={editing?.base_url} className={INPUT} />
                 </Field>
                 <fieldset className="flex flex-col gap-1.5">
                   <legend className="mb-1.5 text-[13.5px] font-semibold">{t("connection.where")}</legend>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="location" value="local" defaultChecked />
+                    <input type="radio" name="location" value="local" defaultChecked={(editing?.location ?? "local") === "local"} />
                     {t("connection.atHome")}
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="location" value="remote" />
+                    <input type="radio" name="location" value="remote" defaultChecked={editing?.location === "remote"} />
                     {t("connection.elsewhere")}
                   </label>
                 </fieldset>
-                <Field id="server-key" label={t("connection.apiKeyOptional")}>
+                <Field id="server-window" label={t("connection.contextWindow")} hint={t("connection.contextWindowHint")}>
+                  <input id="server-window" name="context_window" type="number" min={512} max={10000000} step={1} required defaultValue={editing?.context_window ?? DEFAULT_CONTEXT_WINDOW} className={INPUT} />
+                </Field>
+                <Field id="server-key" label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
                   <input id="server-key" name="api_key" type="password" autoComplete="off" className={INPUT} />
                 </Field>
+                {editing?.has_api_key && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="remove_key" />
+                    {t("connection.removeKey")}
+                  </label>
+                )}
               </>
             )}
             {busy && (
@@ -510,13 +583,15 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
             )}
             {result && <TestResult test={result} />}
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <button type="button" className={BUTTON} disabled={busy} onClick={(event) => void runTest(event.currentTarget.form)}>
-                {t("connection.test")}
-              </button>
+              {!editing && (
+                <button type="button" className={BUTTON} disabled={busy} onClick={(event) => void runTest(event.currentTarget.form)}>
+                  {t("connection.test")}
+                </button>
+              )}
               <span className="flex-1" />
               <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
               <button type="submit" className={PRIMARY} disabled={busy}>
-                {t("connection.connect")}
+                {editing ? t("connection.save") : t("connection.connect")}
               </button>
             </div>
           </form>
@@ -526,7 +601,7 @@ function AddConnection(props: { onClose: () => void; onAdded: () => Promise<void
   );
 }
 
-function Field(props: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+function Field(props: { id: string; label: string; hint?: string | undefined; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={props.id} className="text-[13.5px] font-semibold">

@@ -258,7 +258,9 @@
     "system": "System",
     "light": "Light",
     "dark": "Dark",
-    "saved": "Saved."
+    "saved": "Saved.",
+    "edit": "Edit",
+    "editLabel": "Edit {{name}}"
   },
   "connection": {
     "title": "Add a connection",
@@ -311,7 +313,17 @@
       "http_error": "Check the address: most servers expect /v1 at the end, such as http://192.168.1.10:11434/v1.",
       "unauthorized": "Copy the key again. For OpenRouter, keys start with sk-or-, and a deleted or disabled key stops working.",
       "not_a_model_server": "Check the address: it reaches something else, such as a router's page."
-    }
+    },
+    "editTitle": "Change {{name}}",
+    "editDescription": "Change this connection. A new address or key is tested before it is saved.",
+    "newApiKey": "New API key",
+    "newApiKeyOptional": "New API key (optional)",
+    "keepKeyHint": "Leave it empty to keep the current key.",
+    "removeKey": "Remove the API key",
+    "contextWindow": "Context window",
+    "contextWindowHint": "The most tokens a model of this server reads at once. On Ollama, it is set by OLLAMA_CONTEXT_LENGTH.",
+    "save": "Save",
+    "saved": "{{name}} is saved"
   },
   "errors": {
     "title": "Something went wrong",
