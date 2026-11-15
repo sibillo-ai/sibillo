@@ -111,7 +111,9 @@ def _patch(server: Server, token: str, skill_id: str, **changes: Any) -> Any:
 
 def _write(server: Server, token: str, skill_id: str, path: str, text: str, executable: bool = False) -> Any:
     with server.client(token) as client:
-        return client.put(f"/me/skills/{skill_id}/files/{path}", json={"text": text, "executable": executable})
+        return client.put(
+            f"/me/skills/{skill_id}/file", params={"path": path}, json={"text": text, "executable": executable}
+        )
 
 
 def _request(server: Server, token: str, model: HarnessModel, conversation_id: str, text: str) -> ModelRequest:
@@ -249,11 +251,15 @@ def test_the_user_creates_edits_and_deletes_a_skill(server: Server, token: str) 
     assert _skills(server, token)["used_bytes"] == detail["size_bytes"]
     with server.client(token) as client:
         # SKILL.md stays; other files go.
-        assert_problem(client.delete(f"/me/skills/{skill['id']}/files/SKILL.md"), 422, "skill.invalid")
-        response = client.delete(f"/me/skills/{skill['id']}/files/scripts/plan.sh")
+        assert_problem(
+            client.delete(f"/me/skills/{skill['id']}/file", params={"path": "SKILL.md"}), 422, "skill.invalid"
+        )
+        response = client.delete(f"/me/skills/{skill['id']}/file", params={"path": "scripts/plan.sh"})
         assert response.status_code == 200, response.text
         assert [file["path"] for file in body(response)["files"]] == ["SKILL.md"]
-        assert client.get(f"/me/skills/{skill['id']}/files/SKILL.md").content.decode().startswith("---")
+        assert (
+            client.get(f"/me/skills/{skill['id']}/file", params={"path": "SKILL.md"}).content.decode().startswith("---")
+        )
         assert client.delete(f"/me/skills/{skill['id']}").status_code == 204
         assert_problem(client.get(f"/me/skills/{skill['id']}"), 404, "resource.not_found")
         assert_problem(client.delete(f"/me/skills/{skill['id']}"), 404, "resource.not_found")
@@ -279,14 +285,16 @@ def test_skills_are_checked_by_the_agent_skills_rules(server: Server, token: str
         assert_problem(client.post("/me/skills", json={"skill_md": _skill_md(builtin)}), 409, "resource.conflict")
         other = _create(server, token, _skill_md(_name("other")))
         assert_problem(
-            client.put(f"/me/skills/{other['id']}/files/SKILL.md", json={"text": _skill_md(taken["name"])}),
+            client.put(
+                f"/me/skills/{other['id']}/file", params={"path": "SKILL.md"}, json={"text": _skill_md(taken["name"])}
+            ),
             409,
             "resource.conflict",
         )
         # A path that leaves the skill's folder is refused.
         for path in ("../escape.md", "a/../../b.md", "a//b.md"):
-            response = client.put(f"/me/skills/{other['id']}/files/{path}", json={"text": "x"})
-            assert response.status_code in (404, 422), response.text
+            response = client.put(f"/me/skills/{other['id']}/file", params={"path": path}, json={"text": "x"})
+            assert_problem(response, 422, "request.validation_failed")
     assert sorted(skill["name"] for skill in _own(server, token)) == sorted([taken["name"], other["name"]])
 
 
@@ -295,7 +303,7 @@ def test_a_skill_over_its_limits_is_refused(server: Server, token: str) -> None:
     skill = _create(server, token, _skill_md(_name()))
     with server.client(token) as client:
         assert_problem(
-            client.put(f"/me/skills/{skill['id']}/files/SKILL.md", json={"text": "x" * 100_001}),
+            client.put(f"/me/skills/{skill['id']}/file", params={"path": "SKILL.md"}, json={"text": "x" * 100_001}),
             422,
             "request.validation_failed",
         )
@@ -737,9 +745,9 @@ def test_skills_of_others_cannot_be_read_changed_or_deleted(
             for response in (
                 client.get(f"/me/skills/{mine['id']}"),
                 client.get(f"/me/skills/{mine['id']}/archive"),
-                client.get(f"/me/skills/{mine['id']}/files/SKILL.md"),
+                client.get(f"/me/skills/{mine['id']}/file", params={"path": "SKILL.md"}),
                 client.patch(f"/me/skills/{mine['id']}", json={"enabled": False}),
-                client.put(f"/me/skills/{mine['id']}/files/x.md", json={"text": "x"}),
+                client.put(f"/me/skills/{mine['id']}/file", params={"path": "x.md"}, json={"text": "x"}),
                 client.delete(f"/me/skills/{mine['id']}"),
             ):
                 assert_problem(response, 404, "resource.not_found")

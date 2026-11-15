@@ -29,8 +29,9 @@ ALLOWED_CAPABILITIES = {
     # own state (AGT-015, UX-009, ADR-0083).
     "pydantic_ai_harness.ask_user._capability.AskUser",
     "pydantic_ai_harness.planning._capability.Planning",
-    # Skills, read from the control plane: their catalog, and their bodies when loaded (AGT-017, ADR-0096).
-    "pydantic_ai_harness.skills._capability.Skills",
+    # Skills, read from the control plane by the harness's `Skills`: their catalog, and their bodies when
+    # loaded (AGT-017, ADR-0096).
+    "sibillo_server.skills.RunSkills",
     "pydantic_ai.durable_exec.dbos._durability.DBOSDurability",
     # Tool permissions, approvals and audit events: it takes tools away, ends the run to ask, and records
     # each call (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).
