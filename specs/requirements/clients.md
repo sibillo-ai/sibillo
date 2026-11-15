@@ -448,7 +448,7 @@ someone out, would be turned off.
 
 ## UX-027: Memory in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e

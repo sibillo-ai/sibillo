@@ -5,7 +5,7 @@ over it. Background: ADR-0013, ADR-0095.
 
 ## MEM-001: Memory is visible
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e
@@ -17,7 +17,7 @@ the user cannot see (ADR-0095).
 
 ## MEM-002: Memory is editable
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e
@@ -28,7 +28,7 @@ and the assistant MUST use the edited version from the next run on
 
 ## MEM-003: Memory deletion is real
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -41,7 +41,7 @@ keep copies of memory items in their durable inputs or in stored messages
 
 ## MEM-004: Memory is private
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** security
@@ -51,7 +51,7 @@ shared space only when it is explicitly created there.
 
 ## MEM-005: Memory provenance
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** integration
@@ -62,7 +62,7 @@ untrusted (MEM-008), and show this to the user (ADR-0095).
 
 ## MEM-006: Memory can be disabled
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -74,7 +74,7 @@ is off (ADR-0095).
 
 ## MEM-007: The assistant keeps memory through tools
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -89,7 +89,7 @@ truncating (ADR-0095).
 
 ## MEM-008: Memory written from untrusted content
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
