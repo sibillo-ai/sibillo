@@ -9,6 +9,7 @@ import { ApiError, api, unwrap, type ModelChoice, type MessagePage, type PathRun
 import type { ResumeEntry } from "../api/stream";
 import { forkConversation, rewindConversation, updateConversation, useRefreshConversations } from "../conversations";
 import { formatMoney, isPaid, USAGE } from "../costs";
+import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
 import { useNotify } from "../notices";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
@@ -675,13 +676,22 @@ function Answer({
   // consecutive reasoning one fold (UX-003, CNV-013, ADR-0085).
   type Reasoning = Extract<LivePart, { kind: "reasoning" }>;
   type Tool = Extract<LivePart, { kind: "tool" }>;
-  const blocks: ({ kind: "text"; part: Extract<LivePart, { kind: "text" }> } | { kind: "reasoning"; parts: Reasoning[] } | { kind: "tools"; parts: Tool[] })[] = [];
+  const blocks: (
+    | { kind: "text"; part: Extract<LivePart, { kind: "text" }> }
+    | { kind: "reasoning"; parts: Reasoning[] }
+    | { kind: "tools"; parts: Tool[] }
+    | { kind: "memory"; part: Tool; change: MemoryChange }
+  )[] = [];
+  let change: MemoryChange | null;
   for (const part of parts) {
     const last = blocks.at(-1);
     if (part.kind === "text") blocks.push({ kind: "text", part });
     else if (part.kind === "reasoning") {
       if (last?.kind === "reasoning") last.parts.push(part);
       else blocks.push({ kind: "reasoning", parts: [part] });
+    } else if ((change = memoryChangeOf(part.name, part.result)) !== null) {
+      // What the assistant remembered, changed or forgot, where it happened (UX-027).
+      blocks.push({ kind: "memory", part, change });
     } else if (offerOf(part) === null) {
       if (last?.kind === "tools") last.parts.push(part);
       else blocks.push({ kind: "tools", parts: [part] });
@@ -694,6 +704,8 @@ function Answer({
           <Markdown key={block.part.id} text={block.part.text} />
         ) : block.kind === "reasoning" ? (
           <ReasoningView key={block.parts[0]?.id} text={block.parts.map((part) => part.text).join("\n\n")} />
+        ) : block.kind === "memory" ? (
+          <MemoryCard key={block.part.id} part={block.part} change={block.change} />
         ) : (
           <div key={block.parts[0]?.id} className="flex flex-col items-start gap-1.5">
             {block.parts.map((part) => (
@@ -823,6 +835,30 @@ function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind:
         )}
       </div>
     </details>
+  );
+}
+
+/** A change of the user's memory, with what it holds now and the way to the Memory page (UX-027, ADR-0095). */
+function MemoryCard({ part, change }: { part: Extract<LivePart, { kind: "tool" }>; change: MemoryChange }) {
+  const { t } = useTranslation();
+  const args = argumentsOf(part.args);
+  const label = change === "remember" ? t("memory.chatRemembered") : change === "update_memory" ? t("memory.chatChanged") : t("memory.chatForgot");
+  const said = change !== "forget" && typeof args.text === "string" ? args.text : t("memory.chatForgotItem");
+  return (
+    <div role="group" aria-label={label} className="flex w-[min(100%,460px)] items-start gap-3 rounded-2xl border border-line bg-surface py-2.5 pr-3 pl-3 shadow-soft">
+      <span className="grid size-9 flex-none place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
+        <Brain className="size-[18px]" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center justify-between gap-2">
+          <b className="text-[13.5px] font-semibold">{label}</b>
+          <Link to={MEMORY_SECTION} className="text-[13px] font-semibold text-accent underline-offset-2 hover:underline">
+            {t("memory.chatLink")}
+          </Link>
+        </span>
+        <span className="text-[13.5px] break-words text-muted">{said}</span>
+      </span>
+    </div>
   );
 }
 

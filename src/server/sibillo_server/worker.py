@@ -81,6 +81,8 @@ from sibillo_server.gateway import (
     record_usage,
     store_messages,
 )
+from sibillo_server.memory import MEMORY_INSTRUCTIONS, MEMORY_TOOLS, memory_section, run_memory
+from sibillo_server.memory import TOOLS as MEMORY_TOOL_LIST
 from sibillo_server.offers import TOOLS as OFFER_TOOLS
 from sibillo_server.permissions import permissions_of
 from sibillo_server.plans import ConversationPlanStore, plan_steps
@@ -204,11 +206,15 @@ def instructions(ctx: RunContext[RunDeps]) -> str:
         TOOLBOX_INSTRUCTIONS if on & {"run_command", "start_command"} else "",
     ]
     base = BUILT_IN_BASE_INSTRUCTIONS if deps.base_instructions is None else deps.base_instructions
+    # Memory: how to keep it while its tools are on, then what the user's memory holds (MEM-007, ADR-0095).
+    keeping = deps.memory is not None and bool(on & MEMORY_TOOLS)
     parts = [
         base,
         " ".join(part for part in working[:2] if part),
         working[2],
         VOICE_INSTRUCTIONS.get(deps.voice or "", ""),
+        MEMORY_INSTRUCTIONS if keeping else "",
+        memory_section(deps.memory),
         deps.additional_instructions or "",
     ]
     return "\n\n".join(part for part in parts if part.strip())
@@ -297,7 +303,8 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
     instructions=instructions,
     # Web search through the instance's search service, page reading in the sandbox (ADR-0075).
     # And offering a file of the workspace to download (AGT-023, ADR-0079).
-    tools=(*WEB_TOOLS, *OFFER_TOOLS),
+    # And the user's memory, kept through tools of its own (MEM-007, ADR-0095).
+    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST),
     capabilities=[
         Gateway(),
         # The user's sandbox, and the harness's tools that work in it (AGT-011, ADR-0035).
@@ -433,6 +440,8 @@ async def run_workflow(serialized_input: str) -> None:
             )
         ).one()
         permissions = await permissions_of(connection, identity.user_id)
+        # Read for each run, never part of its input (MEM-003, ADR-0095).
+        memory = await run_memory(connection, temporary=run.temporary)
     deps = RunDeps(
         engine=_engine(),
         identity=identity,
@@ -457,7 +466,9 @@ async def run_workflow(serialized_input: str) -> None:
             web_and_commands=allowed.allowed_web_and_commands,
             tools=frozenset(allowed.allowed_tools),
         ),
-        untrusted=untrusted,
+        # An untrusted memory item makes the run untrusted from its start (MEM-008, ADR-0095).
+        untrusted=untrusted or any(item.untrusted for item in memory or ()),
+        memory=memory,
         parent_run_id=parent_run_id,
     )
     encoder: AGUIEventStream[Any, Any] = AGUIEventStream(thread_id=run.conversation_id, run_id=run.run_id)

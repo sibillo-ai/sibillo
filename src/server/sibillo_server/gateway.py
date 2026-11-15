@@ -14,7 +14,7 @@ import json
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, cast
 
@@ -113,6 +113,9 @@ class RunDeps:
     permissions: Permissions = field(default_factory=Permissions)
     allowances: Allowances = field(default_factory=Allowances)
     untrusted: bool = False
+    # The user's memory items, as the run started; `None` while memory is off or the conversation is
+    # temporary (MEM-006, MEM-007, ADR-0095). Typed loosely: `sibillo_server.memory` depends on this module.
+    memory: tuple[Any, ...] | None = None
     # The run this one continues: for a run that answers an interrupt, the run that asked (ADR-0033).
     parent_run_id: uuid.UUID | None = None
     location: str = "remote"
@@ -384,7 +387,9 @@ async def _compacted(ctx: RunContext[RunDeps], messages: list[ModelMessage]) -> 
     ]
     deps.compacted = (cut, summary)
     checkpoint = storable(
-        ModelMessagesTypeAdapter.dump_python([*summary, *messages[cut : deps.history_length]], mode="json")
+        ModelMessagesTypeAdapter.dump_python(
+            without_instructions([*summary, *messages[cut : deps.history_length]]), mode="json"
+        )
     )
     async with transaction(deps.engine, deps.identity) as connection:
         await connection.execute(
@@ -481,6 +486,15 @@ async def record_usage(deps: RunDeps, entry_id: uuid.UUID, response: ModelRespon
         )
 
 
+def without_instructions(messages: list[ModelMessage]) -> list[ModelMessage]:
+    """The messages, their requests without instructions: each run builds its own, and they hold the user's
+    memory, which must leave no copy behind (MEM-003, ADR-0095).
+    """
+    return [
+        replace(message, instructions=None) if isinstance(message, ModelRequest) else message for message in messages
+    ]
+
+
 def storable(value: Any) -> Any:
     """`value` with every NUL character as U+FFFD: Postgres stores none in text or JSONB (CNV-018)."""
     if isinstance(value, str):
@@ -496,7 +510,7 @@ async def store_messages(deps: RunDeps, messages: list[ModelMessage]) -> None:
     """Store the run's messages so far; already stored ones are kept as they are (ADR-0041)."""
     if not messages:
         return
-    serialized = storable(ModelMessagesTypeAdapter.dump_python(messages, mode="json"))
+    serialized = storable(ModelMessagesTypeAdapter.dump_python(without_instructions(messages), mode="json"))
     async with transaction(deps.engine, deps.identity) as connection:
         for seq, message in enumerate(serialized, start=1):
             await connection.execute(

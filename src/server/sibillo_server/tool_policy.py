@@ -88,6 +88,11 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "update_task_status": _OWN,
     "update_task_statuses": _OWN,
     "remove_task": _OWN,
+    # They change only the user's own memory, which the user sees and corrects; provenance guards what they
+    # write (MEM-008, ADR-0095).
+    "remember": _OWN,
+    "update_memory": _OWN,
+    "forget": _OWN,
     # The output limits' own tool, which reads back a large result set aside (AGT-014): no switch (ADR-0087).
     "read_tool_result": _READS,
 }

@@ -78,6 +78,11 @@ def temporary() -> ApiError:
     return ApiError(409, "conversation.temporary", "Temporary conversation")
 
 
+def memory_full() -> ApiError:
+    """An item would be over 500 characters, or the user's memory over 10,000 (MEM-007, ADR-0095)."""
+    return ApiError(422, "memory.full", "Memory full")
+
+
 def invalid(location: str, code: str) -> ApiError:
     """A request rejected for one field, as `request.validation_failed`."""
     return ApiError(

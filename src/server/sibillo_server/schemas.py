@@ -350,6 +350,9 @@ type ToolName = Literal[
     "update_task_status",
     "update_task_statuses",
     "remove_task",
+    "remember",
+    "update_memory",
+    "forget",
 ]
 
 
@@ -690,3 +693,43 @@ class WorkspaceMoveRequest(Request):
 
     from_: Annotated[str, Field(alias="from", min_length=1, max_length=4096)]
     to: Annotated[str, Field(min_length=1, max_length=4096)]
+
+
+# Memory (MEM-001 to MEM-008, ADR-0095).
+def _memory_text(value: str) -> str:
+    value = value.strip()
+    if not 1 <= len(value) <= 500:
+        raise ValueError("a memory item holds 1 to 500 characters")
+    return value
+
+
+class MemorySetting(Request):
+    enabled: bool
+
+
+class MemoryItemText(Request):
+    # Surrounding whitespace is removed before the limits are checked.
+    text: Annotated[str, Field(max_length=500), AfterValidator(_memory_text)]
+
+
+class MemoryConversation(Response):
+    id: uuid.UUID
+    title: str | None
+    deleted: bool
+
+
+class MemoryItem(Response):
+    id: uuid.UUID
+    text: str
+    origin: Literal["user", "assistant"]
+    untrusted: bool
+    conversation: MemoryConversation | None
+    created_at: Timestamp
+    updated_at: Timestamp
+
+
+class Memory(Response):
+    enabled: bool
+    items: list[MemoryItem]
+    used_characters: int
+    limit_characters: int

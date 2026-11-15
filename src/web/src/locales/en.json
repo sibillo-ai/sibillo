@@ -270,7 +270,8 @@
     "edit": "Edit",
     "editLabel": "Edit {{name}}",
     "security": "Security",
-    "members": "Members"
+    "members": "Members",
+    "memory": "Memory"
   },
   "connection": {
     "title": "Add a connection",
@@ -437,7 +438,8 @@
       "files": "Files",
       "showing": "Showing files",
       "questions": "Questions",
-      "tasks": "Task list"
+      "tasks": "Task list",
+      "memory": "Memory"
     },
     "toolNames": {
       "web_search": "Search the web",
@@ -461,7 +463,10 @@
       "add_task": "Add a task",
       "update_task_status": "Update a task",
       "update_task_statuses": "Update several tasks",
-      "remove_task": "Remove a task"
+      "remove_task": "Remove a task",
+      "remember": "Remember something",
+      "update_memory": "Change a memory",
+      "forget": "Forget a memory"
     },
     "cannotReason": "This model can't reason.",
     "additional": "Additional prompt",
@@ -635,5 +640,43 @@
     "removeLabel": "Remove the passkeys of {{username}}",
     "removeTitle": "Remove the passkeys of {{name}}?",
     "removeBody": "{{username}} will then sign in with their password alone, until they add a passkey again. Their open sessions stay signed in."
+  },
+  "memory": {
+    "title": "Memory",
+    "hint": "What the assistant remembers about you, given to every chat but temporary ones. It is all there is: nothing else is kept. Change or delete anything here.",
+    "switch": "Memory",
+    "on": "The assistant remembers what matters and uses it in your chats.",
+    "off": "Memory is off: the assistant neither uses nor adds to it. What is here stays until you delete it.",
+    "used": "{{used}} of {{limit}} characters",
+    "none": "Nothing remembered yet.",
+    "items": "Memory items",
+    "add": "Add",
+    "addTitle": "Add to memory",
+    "editTitle": "Edit memory",
+    "itemHint": "One fact about you, in a short sentence. The assistant uses it from your next message.",
+    "confirmHint": "The assistant wrote this after reading content that was not yours. Check it. Saving it confirms it, and the assistant then trusts it.",
+    "text": "Text",
+    "length": "{{count}} of {{limit}} characters",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "editLabel": "Edit: {{text}}",
+    "delete": "Delete",
+    "deleteLabel": "Delete: {{text}}",
+    "deleteAll": "Delete all",
+    "deleteAllTitle": "Delete everything the assistant remembers?",
+    "deleteAllBody": "Every item will be deleted for good, {{count}} in all. This cannot be undone.",
+    "byYou": "Written by you",
+    "fromChat": "From the chat",
+    "fromDeletedChat": "From a deleted chat",
+    "untitledChat": "Untitled",
+    "untrusted": "Untrusted.",
+    "untrustedHint": "Written after the assistant read content that was not yours, such as a web page: it may be wrong, or planted. Until you save it, the assistant treats it with caution.",
+    "full": "Memory is full: it holds at most 10,000 characters. Shorten or delete other items first.",
+    "chatRemembered": "Remembered",
+    "chatChanged": "Memory changed",
+    "chatForgot": "Forgot",
+    "chatForgotItem": "An item of your memory",
+    "chatLink": "Memory"
   }
 }

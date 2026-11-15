@@ -32,6 +32,7 @@ CONTRACT_TABLES = (
     "served_context_windows",
     "folders",
     "user_settings",
+    "memory_items",
     "conversations",
     "conversation_plans",
     "runs",
@@ -52,6 +53,7 @@ TENANT_TABLES = ("connections", "connection_models")
 PRIVATE_TABLES = (
     "folders",
     "user_settings",
+    "memory_items",
     "conversations",
     "conversation_plans",
     "runs",
@@ -84,7 +86,10 @@ TOOL_NAMES = (
     "'add_task', "
     "'update_task_status', "
     "'update_task_statuses', "
-    "'remove_task'"
+    "'remove_task', "
+    "'remember', "
+    "'update_memory', "
+    "'forget'"
     "]"
 )
 # The capability classes of tools (AGT-005, ADR-0012).
@@ -286,6 +291,23 @@ TABLES = [
       FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE CASCADE
     )
     """,
+    # A user's memory: the only copy of what the assistant remembers about them (MEM-001 to MEM-008, ADR-0095).
+    """
+    CREATE TABLE memory_items (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      text text NOT NULL CHECK (char_length(text) BETWEEN 1 AND 500),
+      origin text NOT NULL CHECK (origin IN ('user', 'assistant')),
+      untrusted boolean NOT NULL,
+      conversation_id uuid,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CHECK (origin = 'assistant' OR (NOT untrusted AND conversation_id IS NULL)),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX memory_items_owner_idx ON memory_items (tenant_id, owner_id, updated_at)",
     # A user's groups of conversations (CNV-007, ADR-0073).
     """
     CREATE TABLE folders (
@@ -312,6 +334,7 @@ TABLES = [
       disabled_tools text[] NOT NULL DEFAULT '{{}}' CHECK (disabled_tools <@ {TOOL_NAMES}),
       base_instructions text,
       additional_instructions text,
+      memory_enabled boolean NOT NULL DEFAULT true,
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (tenant_id, owner_id),
       FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
@@ -1019,6 +1042,7 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, DELETE ON passkey_challenges TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON folders TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON user_settings TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON memory_items TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON conversation_plans TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON conversations TO sibillo_app",
     "GRANT SELECT, INSERT ON compaction_checkpoints TO sibillo_app",

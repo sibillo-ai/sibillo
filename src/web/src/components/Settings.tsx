@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bot, Check, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { Activity, Bot, Brain, Check, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 
 import { ApiError, api, unwrap, type Connection, type ConnectionTest, type ModelChoice, type Schemas, type User } from "../api/client";
 import { findModel, MODELS, useModels } from "../models";
@@ -11,6 +12,7 @@ import { type Theme, useTheme } from "../theme";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
+import { MemorySection } from "./MemorySettings";
 import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
 
@@ -23,7 +25,7 @@ const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
-type Tab = "models" | "permissions" | "members" | "assistant" | "activity" | "security" | "appearance";
+type Tab = "models" | "permissions" | "members" | "assistant" | "memory" | "activity" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
@@ -32,15 +34,15 @@ interface TabItem {
 }
 
 /**
- * The settings: for everyone their assistant (CNV-013, CNV-014), their passkeys (UX-026) and the
+ * The settings: for everyone their assistant (CNV-013, CNV-014), their memory (UX-027), their passkeys (UX-026) and the
  * theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
  */
 export function Settings({ me }: { me: User }) {
   const { t } = useTranslation();
   const admin = me.role === "tenant_admin";
-  const [tab, setTab] = useState<Tab>(admin ? "models" : "assistant");
   const yours: TabItem[] = [
     { id: "assistant", label: t("assistant.title"), icon: <Bot className="size-[18px]" aria-hidden="true" /> },
+    { id: "memory", label: t("settings.memory"), icon: <Brain className="size-[18px]" aria-hidden="true" /> },
     { id: "activity", label: t("activity.page.title"), icon: <Activity className="size-[18px]" aria-hidden="true" /> },
     { id: "security", label: t("settings.security"), icon: <KeyRound className="size-[18px]" aria-hidden="true" /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette className="size-[18px]" aria-hidden="true" /> },
@@ -52,6 +54,11 @@ export function Settings({ me }: { me: User }) {
         { id: "members", label: t("settings.members"), icon: <UserRound className="size-[18px]" aria-hidden="true" /> },
       ]
     : [];
+  // The open section is in the address, so that a link opens it, such as the Memory page from a chat
+  // (UX-027), and a reload keeps it.
+  const [search, setSearch] = useSearchParams();
+  const tab = [...yours, ...household].find((item) => item.id === search.get("section"))?.id ?? (admin ? "models" : "assistant");
+  const setTab = (id: Tab) => setSearch({ section: id }, { replace: true });
   return (
     <div className="relative min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto grid max-w-[900px] grid-cols-1 gap-[18px] px-4 pt-6 pb-14 md:grid-cols-[190px_minmax(0,1fr)] md:gap-9">
@@ -71,6 +78,8 @@ export function Settings({ me }: { me: User }) {
             <PasskeysSection />
           ) : tab === "assistant" ? (
             <AssistantSection />
+          ) : tab === "memory" ? (
+            <MemorySection />
           ) : tab === "activity" ? (
             <ActivitySection />
           ) : (
