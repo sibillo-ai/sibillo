@@ -243,6 +243,26 @@ instance administrator's own are removed on the server:
 docker compose run --rm setup sibillo_server remove-passkeys YOUR-USERNAME
 ```
 
+**Memory**
+
+The assistant remembers what each person would want it to know in their
+other chats, such as who is in the household or how they like answers, and
+says so in the chat whenever it remembers, changes or forgets something
+(MEM-007, ADR-0095). Everything it remembers is listed in **Settings**, then
+**Memory**, where each person edits or deletes any of it, adds their own, or
+turns memory off. Temporary chats never use it. Memory is short, at most
+10,000 characters a person, and it is given to the model whole in every chat,
+so the data egress policy applies to it as to the rest of the chat.
+
+An item the assistant wrote after reading a web page, a command's output or
+an attached file is marked untrusted: it could have been planted by what it
+read. Until its owner saves it, the assistant treats it with caution, and
+asks before searching or running commands. Deleting an item deletes it from
+the database for good. It stays in three places outside memory: the chat
+where the assistant wrote it, until that chat is deleted; backup archives,
+until they are rotated; and, for remote models, whatever the provider keeps
+of what it was sent.
+
 **Web search**
 
 The assistant searches the web through SearXNG, a search engine that runs
