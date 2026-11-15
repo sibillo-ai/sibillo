@@ -3805,7 +3805,8 @@ components:
         request whose prompt the server reports reached the model's context
         window, less one token, since the server cut it (MOD-018). A run
         that reaches its limit of model requests fails with
-        `run.step_limit` (AGT-027).
+        `run.step_limit` (AGT-027), and one whose sandbox cannot be started or
+        reached with `sandbox.unavailable` (SBX-023).
         A run that asks the user a question, or whose tool calls need
         approval, ends with `RUN_FINISHED` whose `outcome` is
         `{type: "interrupt", interrupts}`, each an `Interrupt` (AGT-015,
