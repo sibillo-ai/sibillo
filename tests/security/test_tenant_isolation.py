@@ -92,6 +92,12 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " VALUES (%s, %s, 'intruder', now())",
                 (tenant, user),
             )
+        case "memory_items":
+            return (
+                "INSERT INTO memory_items (id, tenant_id, owner_id, text, origin, untrusted, created_at, updated_at)"
+                " VALUES (%s, %s, %s, 'intruder', 'user', false, now(), now())",
+                (uuid7(), tenant, user),
+            )
         case "conversations":
             return (
                 "INSERT INTO conversations (id, tenant_id, owner_id, title, last_message_at, created_at, updated_at)"

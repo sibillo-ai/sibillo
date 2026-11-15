@@ -25,6 +25,7 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "passkey_challenges": ("id",),
     "folders": ("id",),
     "user_settings": ("owner_id",),
+    "memory_items": ("id",),
     "conversations": ("id",),
     "conversation_plans": ("conversation_id",),
     "compaction_checkpoints": ("run_id",),
@@ -71,9 +72,18 @@ def create_tenant(conn: psycopg.Connection) -> uuid.UUID:
 
 
 def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> User:
-    user_id, conversation_id, run_id, session_id, ledger_id, folder_id, audit_id, challenge_id, passkey_id = (
-        uuid7() for _ in range(9)
-    )
+    (
+        user_id,
+        conversation_id,
+        run_id,
+        session_id,
+        ledger_id,
+        folder_id,
+        audit_id,
+        challenge_id,
+        passkey_id,
+        memory_id,
+    ) = (uuid7() for _ in range(10))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -104,6 +114,11 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO user_settings (tenant_id, owner_id, additional_instructions, updated_at)"
         " VALUES (%s, %s, %s, now())",
         (tenant_id, user_id, "Test instructions"),
+    )
+    conn.execute(
+        "INSERT INTO memory_items (id, tenant_id, owner_id, text, origin, untrusted, created_at, updated_at)"
+        " VALUES (%s, %s, %s, %s, 'user', false, now(), now())",
+        (memory_id, tenant_id, user_id, "Test memory item"),
     )
     conn.execute(
         "INSERT INTO conversations (id, tenant_id, owner_id, title, folder_id, last_message_at, created_at, updated_at)"
@@ -156,6 +171,7 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "passkey_challenges": (challenge_id,),
         "folders": (folder_id,),
         "user_settings": (user_id,),
+        "memory_items": (memory_id,),
         "conversations": (conversation_id,),
         "conversation_plans": (conversation_id,),
         "compaction_checkpoints": (run_id,),

@@ -341,6 +341,9 @@ TOOLS = frozenset(
         "update_task_status",
         "update_task_statuses",
         "remove_task",
+        "remember",
+        "update_memory",
+        "forget",
     }
 )
 NO_DEFAULTS: dict[str, Any] = {

@@ -50,6 +50,10 @@ DECLARED: dict[str, tuple[set[str], str]] = {
             "update_task_status",
             "update_task_statuses",
             "remove_task",
+            # They change only the user's own memory, guarded by its provenance (ADR-0095).
+            "remember",
+            "update_memory",
+            "forget",
         )
     },
 }

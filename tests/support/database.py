@@ -33,6 +33,7 @@ PRIVATE_TABLES = (
     "passkey_challenges",
     "folders",
     "user_settings",
+    "memory_items",
     "conversations",
     "conversation_plans",
     "conversation_messages",
