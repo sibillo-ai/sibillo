@@ -215,6 +215,34 @@ can be up to 1 GB (`SIBILLO_UPLOAD_MAX_MB`), and nginx refuses anything over
 client_max_body_size 1g;
 ```
 
+**Passkeys**
+
+Each person can protect their account with passkeys, so that signing in
+needs their phone or laptop, unlocked with a fingerprint, a face or a PIN,
+on top of their password (AUTH-010, ADR-0094). Passkeys belong to the
+address people open, so tell the API what it is, in `deploy/.env`, and run
+`docker compose up --detach --wait` again:
+
+```bash
+SIBILLO_PUBLIC_ORIGIN=https://sibillo.example.org
+```
+
+Use the HTTPS address of your reverse proxy, or `http://localhost:8080` when
+the app is only opened on the server itself. Passkeys work only at that
+address: opened at another one, such as the server's address on your
+network, the app signs in with passwords alone for accounts without
+passkeys, and refuses the others. Then each person adds a passkey in
+**Settings**, then **Security**, once on each device they use.
+
+A passkey that is lost, with the phone it was on, never locks anyone out: a
+household's administrator removes a member's passkeys in **Settings**, then
+**Members**, and the member signs in with their password again. The
+instance administrator's own are removed on the server:
+
+```bash
+docker compose run --rm setup sibillo_server remove-passkeys YOUR-USERNAME
+```
+
 **Web search**
 
 The assistant searches the web through SearXNG, a search engine that runs
