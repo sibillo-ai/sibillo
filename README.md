@@ -263,6 +263,30 @@ where the assistant wrote it, until that chat is deleted; backup archives,
 until they are rotated; and, for remote models, whatever the provider keeps
 of what it was sent.
 
+**Skills**
+
+Skills teach the assistant how to do a kind of task, in the open Agent
+Skills format: a folder with a `SKILL.md` and any scripts or notes it needs
+(AGT-017, ADR-0096). Every chat sees each skill's name and description, and
+the assistant reads the rest only when a task calls for it. Sibillo comes
+with built-in skills for PDF files, office files, images and media, data and
+charts, and for making new skills. In **Settings**, then **Skills**, each
+person turns skills on or off, writes their own, uploads a `.zip` or `.skill`
+file, imports from a GitHub repository (`owner/repo`, or the address of a
+folder of one) or from the address of an archive, and downloads any of
+theirs. They can also ask the assistant to turn work it just did into a
+skill, which it saves after they approve it. A chat's settings turn off
+skills for that chat alone.
+
+A skill's files are in the sandbox, read-only, at `/skills`: the assistant
+runs a skill's scripts there, like any command, and cannot change them. A
+skill someone else wrote, uploaded, imported, or saved by the assistant after
+it read a web page or a command's output, is marked untrusted: using one
+makes the assistant ask before it searches the web or runs commands, until
+its owner reads its files and marks it trusted. Imports are downloaded in a
+sandbox of their own, never by the server. Skills are kept in the database,
+so backups hold them.
+
 **Web search**
 
 The assistant searches the web through SearXNG, a search engine that runs
