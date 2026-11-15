@@ -31,7 +31,7 @@ Tests that need a database use this procedure, once per test session:
 | Role | Used for |
 |---|---|
 | `sibillo_app` | Every assertion about what the application may read or write. Tests set the request context of the database contract themselves, with `set_config(name, value, true)` inside the transaction. |
-| `sibillo_owner` | Nothing. Running services never use it either (TEN-004). |
+| `sibillo_owner` | Nothing but running the operator commands that read it, such as `remove-passkeys` (ADR-0094). Running services never use it either (TEN-004). |
 | Superuser | Inspecting the catalogs in design tests, and arranging test data that the application would otherwise create through flows not under test. Never for an assertion about what `sibillo_app` can do. |
 
 Tests use psycopg 3. Each test creates its own tenants and users with fresh
