@@ -231,10 +231,11 @@ To check the gVisor minimum (SBX-017), a test starts a second driver, with
 the same environment, its own port, and `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`
 newer than the installed release (ADR-0058).
 To check configuration that the driver or the network guard refuses, such as
-a resolver at a local address (SBX-007), a test starts the driver process, or
-a container of the `netguard` image with the same options as above and that
-configuration, and expects it to exit before it is ready; neither installs or
-changes anything before it exits.
+a resolver at a local address (SBX-007), a test starts the driver process
+with another sandbox image, so that it cannot touch the session's sandboxes,
+or a container of the `netguard` image without host networking or
+`NET_ADMIN`, so that it cannot touch the host's table, and expects it to
+exit before it is ready, with an error naming the variable.
 
 Security tests check isolation from inside sandboxes, through the driver's
 `exec`, and may remove the table with `nft` inside the network guard's
