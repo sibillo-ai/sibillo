@@ -2,8 +2,8 @@
 
 Tables, row-level security, policies, privileges and the pre-authentication
 functions (TEN-001 to TEN-004, TEN-006, AUTH-001, AUTH-004, AUTH-006 to
-AUTH-009, MOD-008, MOD-009; ADR-0009, ADR-0046 to ADR-0049, ADR-0052,
-ADR-0068, ADR-0069). Roles and the database itself are created before any
+AUTH-009, AUTH-010, MOD-008, MOD-009; ADR-0009, ADR-0046 to ADR-0049, ADR-0052,
+ADR-0068, ADR-0069, ADR-0094). Roles and the database itself are created before any
 migration, by the initialization of the contract. Until the first release,
 this one migration is rewritten whenever the contract changes (ADR-0071).
 
@@ -25,6 +25,8 @@ CONTRACT_TABLES = (
     "users",
     "device_sessions",
     "login_attempts",
+    "passkeys",
+    "passkey_challenges",
     "connections",
     "connection_models",
     "served_context_windows",
@@ -179,6 +181,39 @@ TABLES = [
     "CREATE INDEX login_attempts_username_idx ON login_attempts (lower(username), created_at)",
     "CREATE INDEX login_attempts_source_idx ON login_attempts (source, created_at)",
     "CREATE INDEX login_attempts_created_at_idx ON login_attempts (created_at)",
+    # The passkeys of each user, a second factor (AUTH-010, ADR-0094).
+    """
+    CREATE TABLE passkeys (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      user_id uuid NOT NULL,
+      credential_id bytea NOT NULL UNIQUE,
+      public_key bytea NOT NULL,
+      sign_count bigint NOT NULL CHECK (sign_count >= 0),
+      transports text[] NOT NULL DEFAULT '{}',
+      name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 100),
+      created_at timestamptz NOT NULL,
+      last_used_at timestamptz,
+      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX passkeys_user_idx ON passkeys (tenant_id, user_id, created_at)",
+    # WebAuthn challenges waiting for their answer, for 5 minutes (ADR-0094).
+    """
+    CREATE TABLE passkey_challenges (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      user_id uuid NOT NULL,
+      purpose text NOT NULL CHECK (purpose IN ('sign_in', 'registration')),
+      token_hash bytea UNIQUE,
+      challenge bytea NOT NULL,
+      created_at timestamptz NOT NULL,
+      expires_at timestamptz NOT NULL,
+      CHECK ((token_hash IS NOT NULL) = (purpose = 'sign_in')),
+      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX passkey_challenges_expires_at_idx ON passkey_challenges (expires_at)",
     # A household's access to one provider (MOD-008, ADR-0069).
     """
     CREATE TABLE connections (
@@ -718,9 +753,12 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     BEGIN
       PERFORM pg_advisory_xact_lock(hashtextextended('sibillo.login_attempts:' || lower($1), 0));
       DELETE FROM public.login_attempts a WHERE a.created_at < window_start;
-      SELECT a.created_at INTO username_limit_since FROM public.login_attempts a
-      WHERE NOT a.success AND lower(a.username) = lower($1)
-      ORDER BY a.created_at DESC OFFSET 4 LIMIT 1;
+      -- An empty username, for a sign-in token nobody holds, counts for the source only (ADR-0094).
+      IF $1 <> '' THEN
+        SELECT a.created_at INTO username_limit_since FROM public.login_attempts a
+        WHERE NOT a.success AND lower(a.username) = lower($1)
+        ORDER BY a.created_at DESC OFFSET 4 LIMIT 1;
+      END IF;
       IF $2 IS NOT NULL THEN
         SELECT a.created_at INTO source_limit_since FROM public.login_attempts a
         WHERE NOT a.success AND a.source = $2
@@ -733,6 +771,54 @@ PRE_AUTHENTICATION_FUNCTIONS = [
       END IF;
       INSERT INTO public.login_attempts (username, source, success, created_at) VALUES ($1, $2, $3, now());
       RETURN QUERY SELECT true, 0;
+    END
+    $$
+    """,
+    # The passkey step of a sign-in (AUTH-010, ADR-0094): the challenge is
+    # deleted as it is taken, so that a token is used once whatever the outcome,
+    # and expired challenges of anyone go with it.
+    """
+    CREATE FUNCTION auth_take_sign_in(token_hash bytea)
+    RETURNS TABLE (user_id uuid, tenant_id uuid, username text, role text, instance_admin boolean,
+                   disabled boolean, challenge bytea, expires_at timestamptz)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    #variable_conflict use_column
+    DECLARE
+      taken public.passkey_challenges%ROWTYPE;
+    BEGIN
+      DELETE FROM public.passkey_challenges c WHERE c.purpose = 'sign_in' AND c.token_hash = $1
+      RETURNING * INTO taken;
+      DELETE FROM public.passkey_challenges c WHERE c.expires_at <= now();
+      IF taken.id IS NULL THEN
+        RETURN;
+      END IF;
+      RETURN QUERY
+        SELECT u.id, u.tenant_id, u.username, u.role, u.instance_admin, u.disabled_at IS NOT NULL,
+               taken.challenge, taken.expires_at
+        FROM public.users u WHERE u.tenant_id = taken.tenant_id AND u.id = taken.user_id;
+    END
+    $$
+    """,
+    # Every passkey of one user, for the operator's `remove-passkeys` (AUTH-010,
+    # ADR-0094). Not executable by sibillo_app.
+    """
+    CREATE FUNCTION remove_passkeys(username text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    DECLARE
+      found_user public.users%ROWTYPE;
+      removed integer;
+    BEGIN
+      SELECT * INTO found_user FROM public.users u WHERE lower(u.username) = lower($1);
+      IF found_user.id IS NULL THEN
+        RAISE EXCEPTION 'no user has this username' USING ERRCODE = 'no_data_found';
+      END IF;
+      DELETE FROM public.passkeys p WHERE p.tenant_id = found_user.tenant_id AND p.user_id = found_user.id;
+      GET DIAGNOSTICS removed = ROW_COUNT;
+      RETURN removed;
     END
     $$
     """,
@@ -790,11 +876,29 @@ APPLICATION_POLICIES = [
     CREATE POLICY users_app_update ON users FOR UPDATE TO sibillo_app
     USING (tenant_id = app_tenant_id() AND (id = app_user_id() OR app_is_tenant_admin()))
     """,
-    """
-    CREATE POLICY device_sessions_app_own ON device_sessions TO sibillo_app
-    USING (tenant_id = app_tenant_id() AND user_id = app_user_id())
-    WITH CHECK (tenant_id = app_tenant_id() AND user_id = app_user_id())
-    """,
+    *(
+        f"""
+        CREATE POLICY {table}_app_own ON {table} TO sibillo_app
+        USING (tenant_id = app_tenant_id() AND user_id = app_user_id())
+        WITH CHECK (tenant_id = app_tenant_id() AND user_id = app_user_id())
+        """
+        for table in ("device_sessions", "passkey_challenges")
+    ),
+    # Users reach their own passkeys; tenant admins also count and remove a
+    # user's, but never add or change one (AUTH-010, ADR-0094).
+    *(
+        f"CREATE POLICY passkeys_app_{operation.lower()} ON passkeys FOR {operation} TO sibillo_app {clause}"
+        for operation, clause in (
+            ("SELECT", "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR app_is_tenant_admin()))"),
+            ("DELETE", "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR app_is_tenant_admin()))"),
+            ("INSERT", "WITH CHECK (tenant_id = app_tenant_id() AND user_id = app_user_id())"),
+            (
+                "UPDATE",
+                "USING (tenant_id = app_tenant_id() AND user_id = app_user_id())"
+                " WITH CHECK (tenant_id = app_tenant_id() AND user_id = app_user_id())",
+            ),
+        )
+    ),
     *(
         f"""
         CREATE POLICY {table}_app_own ON {table} TO sibillo_app
@@ -887,6 +991,10 @@ OWNER_POLICIES = [
     "CREATE POLICY login_attempts_owner_select ON login_attempts FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY login_attempts_owner_insert ON login_attempts FOR INSERT TO sibillo_owner WITH CHECK (true)",
     "CREATE POLICY login_attempts_owner_delete ON login_attempts FOR DELETE TO sibillo_owner USING (true)",
+    "CREATE POLICY passkey_challenges_owner_select ON passkey_challenges FOR SELECT TO sibillo_owner USING (true)",
+    "CREATE POLICY passkey_challenges_owner_delete ON passkey_challenges FOR DELETE TO sibillo_owner USING (true)",
+    "CREATE POLICY passkeys_owner_select ON passkeys FOR SELECT TO sibillo_owner USING (true)",
+    "CREATE POLICY passkeys_owner_delete ON passkeys FOR DELETE TO sibillo_owner USING (true)",
     "CREATE POLICY runs_owner_select ON runs FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY conversations_owner_select ON conversations FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY connections_owner_select ON connections FOR SELECT TO sibillo_owner USING (true)",
@@ -906,6 +1014,9 @@ PRIVILEGES = [
     "GRANT UPDATE (display_name, password_hash, role, disabled_at) ON users TO sibillo_app",
     "GRANT SELECT, INSERT, DELETE ON device_sessions TO sibillo_app",
     "GRANT UPDATE (revoked_at) ON device_sessions TO sibillo_app",
+    "GRANT SELECT, INSERT, DELETE ON passkeys TO sibillo_app",
+    "GRANT UPDATE (sign_count, last_used_at) ON passkeys TO sibillo_app",
+    "GRANT SELECT, INSERT, DELETE ON passkey_challenges TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON folders TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON user_settings TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON conversation_plans TO sibillo_app",
@@ -928,7 +1039,7 @@ PRIVILEGES = [
     """,
     """
     GRANT EXECUTE ON FUNCTION auth_find_login(text), auth_find_session(bytea), auth_touch_session(uuid),
-      auth_record_login_attempt(text, inet, boolean), retention_expired_runs(integer),
+      auth_record_login_attempt(text, inet, boolean), auth_take_sign_in(bytea), retention_expired_runs(integer),
       expired_temporary_conversations(integer), expired_approvals(), default_model_configured()
       TO sibillo_app
     """,
@@ -970,6 +1081,8 @@ def downgrade() -> None:
             "DROP FUNCTION revoke_sessions_of_disabled_user()",
             "DROP FUNCTION connections_guard()",
             "DROP FUNCTION bootstrap_instance(text, text, text, text)",
+            "DROP FUNCTION remove_passkeys(text)",
+            "DROP FUNCTION auth_take_sign_in(bytea)",
             "DROP FUNCTION auth_record_login_attempt(text, inet, boolean)",
             "DROP FUNCTION auth_touch_session(uuid)",
             "DROP FUNCTION auth_find_session(bytea)",

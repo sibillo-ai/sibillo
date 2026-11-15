@@ -77,6 +77,8 @@ services:
       SIBILLO_SECRET_KEY: ${SIBILLO_SECRET_KEY:-}
       SIBILLO_TRUSTED_PROXIES: ${SIBILLO_TRUSTED_PROXIES:-}
       SIBILLO_UPLOAD_MAX_MB: ${SIBILLO_UPLOAD_MAX_MB:-1024}
+      # The origin users open; without it, passkeys are unavailable (ADR-0094).
+      SIBILLO_PUBLIC_ORIGIN: ${SIBILLO_PUBLIC_ORIGIN:-}
       SIBILLO_SANDBOXD_URL: http://sandboxd:8100/v1
       SIBILLO_SANDBOXD_TOKEN: ${SIBILLO_SANDBOXD_TOKEN:-}
       # A failing backup makes the health degraded (OPS-011).

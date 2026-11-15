@@ -1,4 +1,5 @@
-"""The operator's commands: `init`, `setup`, `backup` and `restore` (AUTH-007, OPS-006, ADR-0054, ADR-0077).
+"""The operator's commands: `init`, `setup`, `remove-passkeys`, `backup` and `restore` (AUTH-007, AUTH-010,
+OPS-006, ADR-0054, ADR-0077, ADR-0094).
 
 Nothing is shipped with a default: `init` generates every secret of a
 deployment, and `setup` creates the first administrator with the password
@@ -36,6 +37,8 @@ USERNAME = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 MINIMUM_PASSWORD_LENGTH = 12
 # Raised by bootstrap_instance when users exist.
 ALREADY_SET_UP = "55000"
+# Raised by remove_passkeys when no user has the username.
+NO_SUCH_USER = "P0002"
 
 
 def _fresh_secrets() -> dict[str, str]:
@@ -111,15 +114,51 @@ async def _bootstrap(database_url: str, answers: tuple[str, str, str, str]) -> N
         await engine.dispose()
 
 
+def _owner_database_url(environment: Mapping[str, str]) -> str:
+    """The database URL of the commands that run as `sibillo_owner`, the only variable they read."""
+    unknown = sorted(name for name in environment if name.startswith(PREFIX) and name != "SIBILLO_DATABASE_URL")
+    if unknown:
+        raise ConfigurationError(f"unknown configuration variable {unknown[0]}")
+    database_url = environment.get("SIBILLO_DATABASE_URL", "")
+    if not database_url.startswith(("postgresql://", "postgres://")):
+        raise ConfigurationError("SIBILLO_DATABASE_URL must be a postgresql:// URL, for sibillo_owner")
+    return database_url
+
+
+async def _remove_passkeys(database_url: str, username: str) -> int:
+    engine = create_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            removed = (
+                await connection.execute(text("SELECT remove_passkeys(:username)"), {"username": username})
+            ).scalar_one()
+    finally:
+        await engine.dispose()
+    return int(removed)
+
+
+def remove_passkeys(environment: Mapping[str, str], username: str) -> int:
+    """Remove every passkey of a user, so that a lost one never locks them out (AUTH-010, ADR-0094)."""
+    try:
+        database_url = _owner_database_url(environment)
+    except ConfigurationError as error:
+        print(f"sibillo: remove-passkeys: {error}", file=sys.stderr)
+        return 2
+    try:
+        removed = asyncio.run(_remove_passkeys(database_url, username))
+    except DBAPIError as error:
+        if sqlstate(error) == NO_SUCH_USER:
+            print(f"sibillo: remove-passkeys: no user is named {username!r}; nothing was changed", file=sys.stderr)
+            return 1
+        raise
+    print(f"sibillo: removed {removed} passkey{'' if removed == 1 else 's'} of {username!r}")
+    return 0
+
+
 def setup(environment: Mapping[str, str]) -> int:
     """Create the first tenant and its first administrator, once."""
-    unknown = sorted(name for name in environment if name.startswith(PREFIX) and name != "SIBILLO_DATABASE_URL")
     try:
-        if unknown:
-            raise ConfigurationError(f"unknown configuration variable {unknown[0]}")
-        database_url = environment.get("SIBILLO_DATABASE_URL", "")
-        if not database_url.startswith(("postgresql://", "postgres://")):
-            raise ConfigurationError("SIBILLO_DATABASE_URL must be a postgresql:// URL, for sibillo_owner")
+        database_url = _owner_database_url(environment)
         answers = _answers()
     except (ConfigurationError, ValueError, EOFError) as error:
         print(f"sibillo: setup: {error}", file=sys.stderr)

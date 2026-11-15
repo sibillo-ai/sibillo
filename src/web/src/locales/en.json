@@ -11,7 +11,15 @@
     "submitting": "Signing in…",
     "invalid": "Wrong username or password.",
     "rateLimited": "Too many attempts. Try again in a few minutes.",
-    "failed": "Signing in failed. Try again."
+    "failed": "Signing in failed. Try again.",
+    "passkeysUnavailable": "This account needs a passkey, but this server cannot check passkeys yet. Ask the instance admin.",
+    "passkeyTitle": "Use your passkey",
+    "passkeySubtitle": "Your account is protected by a passkey too.",
+    "usePasskey": "Use a passkey",
+    "waitingForPasskey": "Waiting for your passkey…",
+    "passkeyNotUsed": "Your passkey was not used. Try again, or go back to your password.",
+    "passkeyRefused": "That passkey did not work. Sign in again with your password and a passkey of this account.",
+    "back": "Back"
   },
   "shell": {
     "newChat": "New chat",
@@ -260,7 +268,9 @@
     "dark": "Dark",
     "saved": "Saved.",
     "edit": "Edit",
-    "editLabel": "Edit {{name}}"
+    "editLabel": "Edit {{name}}",
+    "security": "Security",
+    "members": "Members"
   },
   "connection": {
     "title": "Add a connection",
@@ -593,5 +603,37 @@
     "everyone": "Only local models for everyone",
     "forUser": "Only local models",
     "forUserHint": "This user can't use remote models. They can't turn it off; they can choose it themselves."
+  },
+  "passkeys": {
+    "title": "Passkeys",
+    "hint": "A passkey makes signing in need your device too, unlocked with your fingerprint, face or PIN, on top of your password. Add one on each device you use, so that losing one never locks you out.",
+    "unavailable": "Passkeys are not available on this server yet. The instance admin can enable them by setting the address people use to open Sibillo.",
+    "none": "No passkeys yet.",
+    "added": "Added {{date}}",
+    "lastUsed": "last used {{date}}",
+    "neverUsed": "Never used",
+    "add": "Add a passkey",
+    "addHint": "Give it a name you will recognize, such as the device it is on. Your password confirms that it is you.",
+    "name": "Name",
+    "namePlaceholder": "My phone",
+    "confirmAdd": "Add",
+    "addedNotice": "Passkey added",
+    "notMade": "Your device did not make a passkey. Try again.",
+    "rejected": "The passkey could not be added. Try again.",
+    "wrongPassword": "Wrong password.",
+    "remove": "Remove",
+    "removeLabel": "Remove {{name}}",
+    "removeHint": "Your password confirms that it is you. Without passkeys, your password alone signs you in."
+  },
+  "members": {
+    "title": "Members",
+    "hint": "The people of the household. A member who lost the device with their passkey can sign in again once you remove their passkeys.",
+    "noPasskeys": "No passkeys",
+    "onePasskey": "1 passkey",
+    "passkeys": "{{count}} passkeys",
+    "remove": "Remove passkeys",
+    "removeLabel": "Remove the passkeys of {{username}}",
+    "removeTitle": "Remove the passkeys of {{name}}?",
+    "removeBody": "{{username}} will then sign in with their password alone, until they add a passkey again. Their open sessions stay signed in."
   }
 }

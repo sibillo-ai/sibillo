@@ -16,9 +16,11 @@ from sibillo_server import (
     egress,
     folders,
     health,
+    passkeys,
     permissions,
     runs,
     settings,
+    sign_in,
     speech,
     web,
     workspace,
@@ -52,7 +54,9 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
         openapi_url=None,
     )
     app.state.configuration = configuration
+    app.include_router(sign_in.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
+    app.include_router(passkeys.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(connections.router, prefix=API_PREFIX)

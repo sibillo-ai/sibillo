@@ -13,6 +13,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PREFIX = "SIBILLO_"
 # Where the server image puts the built web app (ADR-0067).
@@ -29,6 +30,7 @@ API_VARIABLES = frozenset(
         "SIBILLO_WEB_ROOT",
         "SIBILLO_BACKUP_STATUS",
         "SIBILLO_UPLOAD_MAX_MB",
+        "SIBILLO_PUBLIC_ORIGIN",
     }
 )
 BACKUP_VARIABLES = frozenset(
@@ -81,6 +83,13 @@ class ApiConfiguration:
     backup_status: Path | None = None
     # The largest upload into a workspace, in MiB (CNV-017, ADR-0079).
     upload_max_mb: int = 1024
+    # The origin users open; passkeys are bound to its host, and unavailable without it (ADR-0094).
+    public_origin: str | None = None
+
+    @property
+    def relying_party_id(self) -> str | None:
+        """The WebAuthn relying party ID: the host of the public origin."""
+        return None if self.public_origin is None else urlsplit(self.public_origin).hostname
 
 
 @dataclass(frozen=True)
@@ -204,7 +213,27 @@ def load_api_configuration(environment: Mapping[str, str]) -> ApiConfiguration:
         web_root=Path(environment.get("SIBILLO_WEB_ROOT") or DEFAULT_WEB_ROOT),
         backup_status=Path(status) if (status := environment.get("SIBILLO_BACKUP_STATUS")) else None,
         upload_max_mb=_upload_max_mb(environment),
+        public_origin=_public_origin(environment),
     )
+
+
+def _public_origin(environment: Mapping[str, str]) -> str | None:
+    """`https://HOST[:PORT]`, or `http://localhost[:PORT]`, as browsers write it (ADR-0094)."""
+    value = environment.get("SIBILLO_PUBLIC_ORIGIN", "")
+    if not value:
+        return None
+    problem = "SIBILLO_PUBLIC_ORIGIN must be an origin, https://HOST[:PORT] or http://localhost[:PORT], with no path"
+    try:
+        parts = urlsplit(value)
+        port = parts.port
+    except ValueError:
+        raise ConfigurationError(problem) from None
+    host = parts.hostname
+    secure = parts.scheme == "https" or (parts.scheme == "http" and host == "localhost")
+    if not host or not secure or parts.path or parts.query or parts.fragment or "@" in parts.netloc:
+        raise ConfigurationError(problem)
+    default = 443 if parts.scheme == "https" else 80
+    return f"{parts.scheme}://{host}" + ("" if port in (None, default) else f":{port}")
 
 
 def _upload_max_mb(environment: Mapping[str, str]) -> int:

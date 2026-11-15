@@ -67,6 +67,53 @@ class DeviceSessionList(Response):
     items: list[DeviceSession]
 
 
+# Passkeys, a second factor (AUTH-010, ADR-0094). WebAuthn's own JSON forms
+# pass through as objects, checked by the WebAuthn library.
+
+
+class PasskeyRequired(Response):
+    sign_in_token: str
+    options: dict[str, Any]
+
+
+class PasskeyLoginRequest(Request):
+    sign_in_token: Annotated[str, Field(min_length=1, max_length=256)]
+    credential: dict[str, Any]
+    device_name: Annotated[str, Field(min_length=1, max_length=100)]
+    session_delivery: Literal["token", "cookie"] = "token"
+
+
+class PasswordConfirmation(Request):
+    password: Annotated[str, Field(min_length=1, max_length=1024)]
+
+
+class PasskeyRegistration(Response):
+    registration_id: uuid.UUID
+    options: dict[str, Any]
+
+
+class AddPasskeyRequest(Request):
+    registration_id: uuid.UUID
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    credential: dict[str, Any]
+
+
+class Passkey(Response):
+    id: uuid.UUID
+    name: str
+    created_at: Timestamp
+    last_used_at: Timestamp | None
+
+
+class PasskeyList(Response):
+    available: bool
+    items: list[Passkey]
+
+
+class PasskeyCount(Response):
+    count: int
+
+
 class UserPage(Response):
     items: list[User]
     next_cursor: str | None

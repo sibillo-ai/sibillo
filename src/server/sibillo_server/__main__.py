@@ -1,5 +1,5 @@
 """Command line entry points of the server: `api` (ADR-0050), `worker` (ADR-0052), `init` and `setup` (ADR-0054),
-`backup` and `restore` (ADR-0077)."""
+`backup` and `restore` (ADR-0077), and `remove-passkeys` (ADR-0094)."""
 
 from __future__ import annotations
 
@@ -54,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
     init = commands.add_parser("init", help="write a deployment's .env with fresh secrets")
     init.add_argument("--output", required=True, type=Path, help="the file to write, or to add missing secrets to")
     commands.add_parser("setup", help="create the first tenant and its administrator, once")
+    remove_passkeys = commands.add_parser("remove-passkeys", help="remove every passkey of a user, such as a lost one")
+    remove_passkeys.add_argument("username")
     backup = commands.add_parser("backup", help="write an encrypted archive of the instance")
     backup.add_argument(
         "--schedule", action="store_true", help="back up every day at SIBILLO_BACKUP_TIME, until stopped"
@@ -71,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
         return operator_commands.init(arguments.output)
     if arguments.command == "setup":
         return operator_commands.setup(os.environ)
+    if arguments.command == "remove-passkeys":
+        return operator_commands.remove_passkeys(os.environ, arguments.username)
     if arguments.command == "backup":
         return operator_commands.run_backup(os.environ, scheduled=arguments.schedule)
     if arguments.command == "restore":

@@ -42,6 +42,20 @@ def rate_limited(retry_after_seconds: int) -> ApiError:
     return ApiError(429, "auth.rate_limited", "Too many attempts", {"Retry-After": str(max(1, retry_after_seconds))})
 
 
+def wrong_password() -> ApiError:
+    """The password that confirms a change is wrong; the session stays valid (ADR-0094)."""
+    return ApiError(403, "auth.invalid_credentials", "Invalid credentials")
+
+
+def passkeys_unavailable() -> ApiError:
+    """The instance has no public origin to check passkeys against (ADR-0094)."""
+    return ApiError(503, "auth.passkeys_unavailable", "Passkeys unavailable")
+
+
+def passkey_rejected() -> ApiError:
+    return ApiError(422, "auth.passkey_rejected", "Passkey rejected")
+
+
 def permission_denied() -> ApiError:
     return ApiError(403, "permission.denied", "Forbidden")
 

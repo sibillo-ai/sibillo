@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bot, Check, Cloud, House, Palette, Plug, Plus, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
+import { Activity, Bot, Check, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,6 +11,7 @@ import { type Theme, useTheme } from "../theme";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
+import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
 
 type SpeechSettings = Schemas["SpeechSettings"];
@@ -22,7 +23,7 @@ const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
-type Tab = "models" | "permissions" | "assistant" | "activity" | "appearance";
+type Tab = "models" | "permissions" | "members" | "assistant" | "activity" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
@@ -31,8 +32,8 @@ interface TabItem {
 }
 
 /**
- * The settings: for everyone their assistant (CNV-013, CNV-014) and the theme (UX-011), and, set
- * apart for its admins, the household's models (UX-015, UX-016).
+ * The settings: for everyone their assistant (CNV-013, CNV-014), their passkeys (UX-026) and the
+ * theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
  */
 export function Settings({ me }: { me: User }) {
   const { t } = useTranslation();
@@ -41,12 +42,14 @@ export function Settings({ me }: { me: User }) {
   const yours: TabItem[] = [
     { id: "assistant", label: t("assistant.title"), icon: <Bot className="size-[18px]" aria-hidden="true" /> },
     { id: "activity", label: t("activity.page.title"), icon: <Activity className="size-[18px]" aria-hidden="true" /> },
+    { id: "security", label: t("settings.security"), icon: <KeyRound className="size-[18px]" aria-hidden="true" /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette className="size-[18px]" aria-hidden="true" /> },
   ];
   const household: TabItem[] = admin
     ? [
         { id: "models", label: t("settings.models"), icon: <Plug className="size-[18px]" aria-hidden="true" /> },
         { id: "permissions", label: t("permissions.title"), icon: <ShieldCheck className="size-[18px]" aria-hidden="true" /> },
+        { id: "members", label: t("settings.members"), icon: <UserRound className="size-[18px]" aria-hidden="true" /> },
       ]
     : [];
   return (
@@ -62,6 +65,10 @@ export function Settings({ me }: { me: User }) {
             <ModelsSection />
           ) : tab === "permissions" && admin ? (
             <ToolPermissionsSection />
+          ) : tab === "members" && admin ? (
+            <MembersSection />
+          ) : tab === "security" ? (
+            <PasskeysSection />
           ) : tab === "assistant" ? (
             <AssistantSection />
           ) : tab === "activity" ? (

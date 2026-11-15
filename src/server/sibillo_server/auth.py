@@ -1,23 +1,24 @@
-"""Login, device sessions and logout (AUTH-001, AUTH-004, AUTH-006, ADR-0025, ADR-0049).
+"""Device sessions, logout, and what signing in shares (AUTH-001, AUTH-004, AUTH-006, ADR-0025, ADR-0049).
 
 Before a session is verified there is no request context: the login and the
 token check go through the pre-authentication functions of the database
 contract. Everything after runs with the context of the session's user.
+Signing in itself, with a password and a passkey, is in `sign_in`.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sibillo_server import errors, schemas
-from sibillo_server.credentials import new_token, token_hash, uuid7, verify_password
+from sibillo_server.credentials import new_token, token_hash, verify_password
 from sibillo_server.database import Identity, transaction
-from sibillo_server.network import source_address
+from sibillo_server.network import Address, source_address
 
 router = APIRouter()
 
@@ -96,10 +97,32 @@ def user_response(row: Any) -> schemas.User:
     )
 
 
-@router.post("/auth/login", status_code=status.HTTP_201_CREATED, response_model=schemas.LoginResponse)
-async def login(
-    body: schemas.LoginRequest, request: Request, response: Response, engine: Engine
-) -> schemas.LoginResponse:
+def request_source(request: Request) -> Address | None:
+    """The source address of a request, for rate limits (ADR-0050)."""
+    return source_address(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+        request.app.state.configuration.trusted_proxies,
+    )
+
+
+async def record_attempt(engine: AsyncEngine, username: str, source: Address | None, succeeded: bool) -> None:
+    """Count a sign-in attempt; over the limits it is refused, whatever its outcome (ADR-0047)."""
+    async with transaction(engine, None) as connection:
+        limit = (
+            await connection.execute(
+                text(
+                    "SELECT allowed, retry_after_seconds FROM auth_record_login_attempt(:username, :source, :success)"
+                ),
+                {"username": username, "source": source, "success": succeeded},
+            )
+        ).one()
+    if not limit.allowed:
+        raise errors.rate_limited(limit.retry_after_seconds)
+
+
+async def check_password(engine: AsyncEngine, username: str, password: str) -> Any | None:
+    """The account of `username` when `password` is its own and it is enabled; else `None`, in the same time."""
     async with transaction(engine, None) as connection:
         account = (
             await connection.execute(
@@ -107,35 +130,23 @@ async def login(
                     "SELECT user_id, tenant_id, password_hash, role, instance_admin, disabled"
                     " FROM auth_find_login(:username)"
                 ),
-                {"username": body.username},
+                {"username": username},
             )
         ).one_or_none()
-    password_matches = await verify_password(account.password_hash if account else None, body.password)
-    succeeded = account is not None and password_matches and not account.disabled
+    password_matches = await verify_password(account.password_hash if account else None, password)
+    return account if account is not None and password_matches and not account.disabled else None
 
-    source = source_address(
-        request.client.host if request.client else None,
-        request.headers.get("x-forwarded-for"),
-        request.app.state.configuration.trusted_proxies,
-    )
-    async with transaction(engine, None) as connection:
-        limit = (
-            await connection.execute(
-                text(
-                    "SELECT allowed, retry_after_seconds FROM auth_record_login_attempt(:username, :source, :success)"
-                ),
-                {"username": body.username, "source": source, "success": succeeded},
-            )
-        ).one()
-    # The answer to a refused attempt does not depend on the password (ADR-0047).
-    if not limit.allowed:
-        raise errors.rate_limited(limit.retry_after_seconds)
-    if not succeeded or account is None:
-        raise errors.invalid_credentials()
 
-    identity = Identity(uuid7(), account.user_id, account.tenant_id, account.role, account.instance_admin)
+async def open_session(
+    engine: AsyncEngine,
+    user: Identity,
+    device_name: str,
+    delivery: Literal["token", "cookie"],
+    response: Response,
+) -> schemas.LoginResponse:
+    """A new device session of `user`, delivered by token or cookie (AUTH-004, ADR-0067)."""
     token = new_token()
-    async with transaction(engine, identity) as connection:
+    async with transaction(engine, user) as connection:
         session = (
             await connection.execute(
                 text(
@@ -146,18 +157,18 @@ async def login(
                     " RETURNING id, device_name, created_at, last_used_at, expires_at"
                 ),
                 {
-                    "id": identity.session_id,
-                    "tenant_id": identity.tenant_id,
-                    "user_id": identity.user_id,
+                    "id": user.session_id,
+                    "tenant_id": user.tenant_id,
+                    "user_id": user.user_id,
                     "token_hash": token_hash(token),
-                    "device_name": body.device_name,
+                    "device_name": device_name,
                 },
             )
         ).one()
-        user = (
-            await connection.execute(text(f"SELECT {USER_COLUMNS} FROM users WHERE id = :id"), {"id": identity.user_id})  # noqa: S608
+        row = (
+            await connection.execute(text(f"SELECT {USER_COLUMNS} FROM users WHERE id = :id"), {"id": user.user_id})  # noqa: S608
         ).one()
-    if body.session_delivery == "cookie":
+    if delivery == "cookie":
         response.set_cookie(
             SESSION_COOKIE,
             token,
@@ -168,7 +179,7 @@ async def login(
             samesite="lax",
         )
     return schemas.LoginResponse(
-        token=token if body.session_delivery == "token" else None,
+        token=token if delivery == "token" else None,
         session=schemas.DeviceSession(
             id=session.id,
             device_name=session.device_name,
@@ -177,7 +188,7 @@ async def login(
             expires_at=session.expires_at,
             current=True,
         ),
-        user=user_response(user),
+        user=user_response(row),
     )
 
 
