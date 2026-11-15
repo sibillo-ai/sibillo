@@ -285,3 +285,20 @@ and device files (ADR-0096).
 Rationale: an agent that can change a skill could plant instructions in
 every later conversation (T-36).
 
+## SBX-023: An unreachable sandbox fails the run as such
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration
+
+When a run's sandbox cannot be started or reached, because the driver is
+unavailable or refuses sandboxes while isolation is not verified (SBX-015),
+the run MUST fail with the code `sandbox.unavailable`, never
+`internal.error`, and clients MUST say that the workspace cannot be reached
+and that the user can try again (UX-014).
+
+Rationale: an internal error sends the user, or the household's admin,
+looking for a fault of Sibillo, when the sandbox only needs a moment, or its
+host needs attention.
+
