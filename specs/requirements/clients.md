@@ -469,7 +469,7 @@ Rationale: journey J11.
 
 ## UX-028: Skills in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e

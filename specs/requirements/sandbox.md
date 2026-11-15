@@ -270,7 +270,7 @@ which keeps nothing installed after an answer (ADR-0076).
 
 ## SBX-022: Skills in the sandbox
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security

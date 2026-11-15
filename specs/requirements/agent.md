@@ -244,7 +244,7 @@ Rationale: journeys J7 and J12.
 
 ## AGT-017: Skills
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -359,7 +359,7 @@ gone (ADR-0079).
 
 ## AGT-024: Built-in skills
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, design
@@ -375,7 +375,7 @@ read when needed, and must not drift from the image.
 
 ## AGT-025: Skills from untrusted sources
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -394,7 +394,7 @@ Rationale: threats T-25 and T-36.
 
 ## AGT-026: The assistant saves skills
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
