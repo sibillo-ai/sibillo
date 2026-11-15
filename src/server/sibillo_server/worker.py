@@ -20,7 +20,7 @@ from dataclasses import replace
 from typing import Any, cast, get_args
 
 from dbos import DBOS, DBOSClient, DBOSConfig
-from pydantic_ai import Agent, DeferredToolRequests, DeferredToolResults, RunContext, ToolDenied
+from pydantic_ai import Agent, DeferredToolRequests, DeferredToolResults, RunContext, ToolDenied, UsageLimits
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.durable_exec.dbos import DBOSDurability
 from pydantic_ai.exceptions import (
@@ -30,6 +30,7 @@ from pydantic_ai.exceptions import (
     ModelContextWindowExceededError,
     ModelHTTPError,
     UnexpectedModelBehavior,
+    UsageLimitExceeded,
 )
 from pydantic_ai.messages import (
     AgentStreamEvent,
@@ -159,6 +160,8 @@ WORKSPACE_INSTRUCTIONS = (
     " Work in /scratch. Put in /workspace only what the user will want again: scripts, results and notes,"
     " each piece of work in a folder of its own with a README.md that says what it is and how to make it"
     " again. Do not keep data there that can be fetched again: write down where it comes from instead."
+    " Keep work in progress that takes many steps, such as a skill you are making, in a folder of /workspace"
+    " instead of /scratch, so that it is not lost if your answer stops before it is done; tidy it up when it is."
     " Look in /workspace for earlier work before starting again. Files the user attaches are in"
     " /workspace/uploads/."
 )
@@ -227,6 +230,8 @@ class _Worker:
     sandboxd_url: str = ""
     sandboxd_token: str = ""
     search_url: str = ""
+    # The most model requests one run makes (AGT-027, ADR-0097).
+    run_request_limit: int = 200
     # Queues the runs the worker starts itself, such as those that deny expired approvals (ADR-0090).
     durable: DBOSClient | None = None
 
@@ -390,6 +395,8 @@ async def _history(
 
 
 def _error_code(error: BaseException) -> str:
+    if isinstance(error, UsageLimitExceeded):
+        return "run.step_limit"
     if isinstance(error, EgressRefusedError):
         return "model.egress_refused"
     # A model that cannot go on is not a fault of Sibillo (MOD-017). Pydantic AI raises the same class for
@@ -557,8 +564,10 @@ async def _execute(
             # The conversation's own sandbox, whatever an earlier reference in its history names (ADR-0078).
             workspace=sandbox_ref(str(identity.tenant_id), str(identity.user_id), run.conversation_id),
             deferred_tool_results=_deferred_results(run),
+            # A run stops after its limit of model requests, and says so (AGT-027, ADR-0097).
+            usage_limits=UsageLimits(request_limit=_WORKER.run_request_limit),
         )
-    except (ModelUnavailableError, EgressRefusedError, ModelAPIError, ContentFilterError) as error:
+    except (ModelUnavailableError, EgressRefusedError, ModelAPIError, ContentFilterError, UsageLimitExceeded) as error:
         code = _error_code(error)
         logger.warning("run %s failed: %s", run.run_id, code)
         if run.run_id in _TITLES:
@@ -678,6 +687,8 @@ def _reason(error: BaseException) -> str | None:
     """What the provider said, for a refused request: such as a model that cannot call tools (MOD-014)."""
     if isinstance(error, ContentFilterError):
         return _refusal(error)
+    if isinstance(error, UsageLimitExceeded):
+        return f"the assistant stopped after {_WORKER.run_request_limit} model requests"
     if not isinstance(error, ModelHTTPError):
         return None
     raw: object = error.body
@@ -856,6 +867,7 @@ def run_worker(configuration: WorkerConfiguration) -> None:
     _WORKER.sandboxd_url = configuration.sandboxd_url
     _WORKER.sandboxd_token = configuration.sandboxd_token
     _WORKER.search_url = configuration.search_url
+    _WORKER.run_request_limit = configuration.run_request_limit
     _WORKER.durable = create_client(configuration.database_url)
     DBOS(
         config=DBOSConfig(

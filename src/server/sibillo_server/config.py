@@ -56,6 +56,7 @@ WORKER_VARIABLES = frozenset(
         "SIBILLO_SEARCH_URL",
         "SIBILLO_TEMPORARY_SWEEP_SECONDS",
         "SIBILLO_APPROVAL_SWEEP_SECONDS",
+        "SIBILLO_RUN_REQUEST_LIMIT",
     }
 )
 MINIMUM_DRIVER_TOKEN_LENGTH = 32
@@ -105,6 +106,8 @@ class WorkerConfiguration:
     temporary_sweep_seconds: int = 600
     # Between two sweeps for expired approval requests to deny (AGT-007, ADR-0090).
     approval_sweep_seconds: int = 60
+    # The most model requests one run makes (AGT-027, ADR-0097).
+    run_request_limit: int = 200
 
 
 def _database_url(environment: Mapping[str, str]) -> str:
@@ -180,6 +183,9 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
     approvals = environment.get("SIBILLO_APPROVAL_SWEEP_SECONDS", "60")
     if not approvals.isdigit() or not 1 <= int(approvals) <= 3600:
         raise ConfigurationError("SIBILLO_APPROVAL_SWEEP_SECONDS must be a number of seconds from 1 to 3600")
+    limit = environment.get("SIBILLO_RUN_REQUEST_LIMIT", "200")
+    if not limit.isdigit() or not 10 <= int(limit) <= 10000:
+        raise ConfigurationError("SIBILLO_RUN_REQUEST_LIMIT must be a number of model requests from 10 to 10000")
     url, token = _sandbox_driver(environment)
     search_url = environment.get("SIBILLO_SEARCH_URL", "")
     if search_url and not search_url.startswith(("http://", "https://")):
@@ -193,6 +199,7 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
         search_url=search_url.rstrip("/"),
         temporary_sweep_seconds=int(sweep),
         approval_sweep_seconds=int(approvals),
+        run_request_limit=int(limit),
     )
 
 

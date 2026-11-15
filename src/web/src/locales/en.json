@@ -352,7 +352,8 @@
     "network": "The server can't be reached. Check your connection and try again.",
     "model_egress_refused": "This chat's model runs remotely, and only local models are allowed, so nothing was sent. Choose a local model in the message box.",
     "model_tool_misuse": "The model kept using one of its tools the wrong way, so it couldn't go on. Try again, or choose another model in the message box.",
-    "model_context_exceeded": "The model ran out of room before it could answer: the conversation no longer fits in its context window. Start a new conversation, choose another model, or ask a household admin to give the model's server a larger context window (for Ollama, num_ctx)."
+    "model_context_exceeded": "The model ran out of room before it could answer: the conversation no longer fits in its context window. Start a new conversation, choose another model, or ask a household admin to give the model's server a larger context window (for Ollama, num_ctx).",
+    "run_step_limit": "The assistant stopped after many steps, before it was done. Ask it to continue, and it goes on from where it stopped."
   },
   "usage": {
     "conversation": "This conversation",
