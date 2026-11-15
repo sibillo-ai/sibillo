@@ -78,7 +78,10 @@ accepted today without a word.
    the host's disk. A device the driver did not check since it started is
    never trusted: after a reboot, `/dev/loopN` may back another
    conversation's disk, so the driver removes every workspace volume of its
-   image when it starts, and checks a device before it first uses it.
+   image that mounts a loop device when it starts, and checks a device before
+   it first uses it. A workspace volume without a device is a workspace from
+   before this decision, with the files themselves: it is never removed
+   before point 7 converted it.
 5. **Detaching.** The driver detaches a disk when it removes its workspace
    volume, which Docker refuses while any container uses it: when the
    conversation is deleted, when it was not used for
