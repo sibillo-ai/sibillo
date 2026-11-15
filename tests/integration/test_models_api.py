@@ -344,6 +344,7 @@ TOOLS = frozenset(
         "remember",
         "update_memory",
         "forget",
+        "save_skill",
     }
 )
 NO_DEFAULTS: dict[str, Any] = {

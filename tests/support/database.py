@@ -34,6 +34,8 @@ PRIVATE_TABLES = (
     "folders",
     "user_settings",
     "memory_items",
+    "skills",
+    "skill_files",
     "conversations",
     "conversation_plans",
     "conversation_messages",

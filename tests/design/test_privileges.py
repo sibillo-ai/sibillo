@@ -49,6 +49,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "folders": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "user_settings": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
     "memory_items": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "skills": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "skill_files": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "conversation_plans": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
     "conversations": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "compaction_checkpoints": {"SELECT": EVERY, "INSERT": EVERY},

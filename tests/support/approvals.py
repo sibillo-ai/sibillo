@@ -54,8 +54,12 @@ DECLARED: dict[str, tuple[set[str], str]] = {
             "remember",
             "update_memory",
             "forget",
+            # Loads a skill: its body is untrusted when the skill is, by provenance (AGT-025, ADR-0096).
+            "load_capability",
         )
     },
+    # Saves a skill that reaches later conversations: the user sees it first (AGT-026, ADR-0096).
+    "save_skill": (set[str](), "ask"),
 }
 
 

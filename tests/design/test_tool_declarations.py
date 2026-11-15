@@ -25,9 +25,13 @@ from tests.support.approvals import DECLARED
 CLASSES = {"reads_private_data", "ingests_untrusted", "external_communication", "irreversible", "physical"}
 
 
+# The tool with which the model loads a skill, which Pydantic AI offers while a skill is on (AGT-017, ADR-0096).
+LOAD_CAPABILITY = "load_capability"
+
+
 def _registered_tools() -> set[str]:
-    """Every tool the agent can offer the model: its own, and those of its capabilities."""
-    names = set(worker.agent._function_toolset.tools)  # pyright: ignore[reportPrivateUsage]
+    """Every tool the agent can offer the model: its own, those of its capabilities, and the loading of skills."""
+    names = set(worker.agent._function_toolset.tools) | {LOAD_CAPABILITY}  # pyright: ignore[reportPrivateUsage]
     for capability in worker.agent.root_capability.capabilities:
         toolset: Any = capability.get_toolset()
         if isinstance(toolset, FunctionToolset):
@@ -39,8 +43,9 @@ def _registered_tools() -> set[str]:
 def test_every_registered_tool_has_a_declaration() -> None:
     registered = _registered_tools()
     assert registered == set(tool_policy.DECLARATIONS)
-    # Every one is a tool the user can switch off (ADR-0087), but for the output limits' own (ADR-0090).
-    assert registered - set(get_args(schemas.ToolName.__value__)) == {"read_tool_result"}
+    # Every one is a tool the user can switch off (ADR-0087), but for the output limits' own (ADR-0090), and
+    # the loading of skills, which skills switch (ADR-0096).
+    assert registered - set(get_args(schemas.ToolName.__value__)) == {"read_tool_result", LOAD_CAPABILITY}
 
 
 @pytest.mark.spec("AGT-005", "AGT-006")
@@ -85,6 +90,37 @@ def _result(name: str, call_id: str) -> ModelRequest:
         ([_request(UserPromptPart("Write")), _call("write_file", "a"), _result("write_file", "a")], False),
         # The user's answers to questions are the user's own (AGT-015).
         ([_request(UserPromptPart("Ask")), _call("ask_user_question", "a"), _result("ask_user_question", "a")], False),
+        # Loading a skill brings in its body: untrusted only when the skill is (AGT-025, ADR-0096).
+        (
+            [
+                _request(UserPromptPart("Use it")),
+                _call("load_capability", "a"),
+                _request(
+                    ToolReturnPart(
+                        tool_name="load_capability",
+                        content={"message": "loaded"},
+                        tool_call_id="a",
+                        metadata={tool_policy.SKILL_ORIGIN: {"name": "garden", "untrusted": True}},
+                    )
+                ),
+            ],
+            True,
+        ),
+        (
+            [
+                _request(UserPromptPart("Use it")),
+                _call("load_capability", "a"),
+                _request(
+                    ToolReturnPart(
+                        tool_name="load_capability",
+                        content={"message": "loaded"},
+                        tool_call_id="a",
+                        metadata={tool_policy.SKILL_ORIGIN: {"name": "garden", "untrusted": False}},
+                    )
+                ),
+            ],
+            False,
+        ),
         # Files the user attaches come from elsewhere.
         (
             [
@@ -109,6 +145,8 @@ def _result(name: str, call_id: str) -> ModelRequest:
         "plan",
         "written file",
         "answer",
+        "untrusted skill",
+        "trusted skill",
         "attachment",
     ],
 )

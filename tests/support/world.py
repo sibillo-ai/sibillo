@@ -26,6 +26,8 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "folders": ("id",),
     "user_settings": ("owner_id",),
     "memory_items": ("id",),
+    "skills": ("id",),
+    "skill_files": ("skill_id", "path"),
     "conversations": ("id",),
     "conversation_plans": ("conversation_id",),
     "compaction_checkpoints": ("run_id",),
@@ -83,7 +85,8 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         challenge_id,
         passkey_id,
         memory_id,
-    ) = (uuid7() for _ in range(10))
+        skill_id,
+    ) = (uuid7() for _ in range(11))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -119,6 +122,15 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO memory_items (id, tenant_id, owner_id, text, origin, untrusted, created_at, updated_at)"
         " VALUES (%s, %s, %s, %s, 'user', false, now(), now())",
         (memory_id, tenant_id, user_id, "Test memory item"),
+    )
+    conn.execute(
+        "INSERT INTO skills (id, tenant_id, owner_id, name, description, origin, untrusted, size_bytes,"
+        " created_at, updated_at) VALUES (%s, %s, %s, %s, 'A test skill.', 'user', false, 4, now(), now())",
+        (skill_id, tenant_id, user_id, f"test-{skill_id.hex[:8]}"),
+    )
+    conn.execute(
+        "INSERT INTO skill_files (skill_id, tenant_id, owner_id, path, content) VALUES (%s, %s, %s, 'SKILL.md', %s)",
+        (skill_id, tenant_id, user_id, b"test"),
     )
     conn.execute(
         "INSERT INTO conversations (id, tenant_id, owner_id, title, folder_id, last_message_at, created_at, updated_at)"
@@ -172,6 +184,8 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "folders": (folder_id,),
         "user_settings": (user_id,),
         "memory_items": (memory_id,),
+        "skills": (skill_id,),
+        "skill_files": (skill_id, "SKILL.md"),
         "conversations": (conversation_id,),
         "conversation_plans": (conversation_id,),
         "compaction_checkpoints": (run_id,),

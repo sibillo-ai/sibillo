@@ -29,6 +29,8 @@ ALLOWED_CAPABILITIES = {
     # own state (AGT-015, UX-009, ADR-0083).
     "pydantic_ai_harness.ask_user._capability.AskUser",
     "pydantic_ai_harness.planning._capability.Planning",
+    # Skills, read from the control plane: their catalog, and their bodies when loaded (AGT-017, ADR-0096).
+    "pydantic_ai_harness.skills._capability.Skills",
     "pydantic_ai.durable_exec.dbos._durability.DBOSDurability",
     # Tool permissions, approvals and audit events: it takes tools away, ends the run to ask, and records
     # each call (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).
@@ -37,9 +39,10 @@ ALLOWED_CAPABILITIES = {
 # Tools the provider runs: only the search over the agent's own tools.
 ALLOWED_NATIVE_TOOLS = {"tool_search"}
 # The agent's own tools: web search through the instance's search service,
-# page reading in the sandbox, offering a file to download, and keeping the user's memory, which changes
-# only rows of the database (AGT-020, AGT-021, AGT-023, MEM-007, ADR-0075, ADR-0079, ADR-0095).
-ALLOWED_OWN_TOOLS = {"web_search", "read_page", "offer_download", "remember", "update_memory", "forget"}
+# page reading in the sandbox, offering a file to download, keeping the user's memory, and saving a skill,
+# which change only rows of the database (AGT-020, AGT-021, AGT-023, AGT-026, MEM-007, ADR-0075, ADR-0079,
+# ADR-0095, ADR-0096).
+ALLOWED_OWN_TOOLS = {"web_search", "read_page", "offer_download", "remember", "update_memory", "forget", "save_skill"}
 # The only places a component runs a command on the host, by file and
 # enclosing function. None runs anything a user or the agent chose.
 ALLOWED_HOST_COMMANDS = {

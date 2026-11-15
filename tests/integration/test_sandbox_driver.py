@@ -1,10 +1,12 @@
 """The sandbox driver's API, and the tools its sandboxes hold.
 
-specs/contracts/sandbox-driver.yaml, ADR-0022, ADR-0053 and ADR-0080.
+specs/contracts/sandbox-driver.yaml, ADR-0022, ADR-0053, ADR-0080 and ADR-0096.
 """
 
 from __future__ import annotations
 
+import io
+import tarfile
 import textwrap
 import time
 from typing import Any, cast
@@ -380,3 +382,97 @@ def test_data_tools_and_node_are_there(sandboxes: Driver) -> None:
     for text in ("total 5", "pypdf True", "basil", "42", "application/zip", "node 5", "npm-ok", "/opt/tools"):
         assert text in output, f"no {text!r} in the output"
     assert "/opt/tools" in output.splitlines()[-1]
+
+
+def _tar(
+    entries: dict[str, tuple[bytes, int]], *, links: dict[str, str] | None = None, raw: list[str] | None = None
+) -> bytes:
+    """A tar archive of files, by path, with their content and mode; links, and folders named as they are."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for path, (content, mode) in entries.items():
+            info = tarfile.TarInfo(path)
+            info.size, info.mode = len(content), mode
+            archive.addfile(info, io.BytesIO(content))
+        for path, target in (links or {}).items():
+            info = tarfile.TarInfo(path)
+            info.type, info.linkname = tarfile.SYMTYPE, target
+            archive.addfile(info)
+        for path in raw or []:
+            info = tarfile.TarInfo(path)
+            info.size = 1
+            archive.addfile(info, io.BytesIO(b"x"))
+    return buffer.getvalue()
+
+
+def _set_skills(sandboxes: Driver, sandbox: tuple[str, str, str], archive: bytes) -> httpx.Response:
+    tenant_id, user_id, conversation_id = sandbox
+    with sandboxes.client() as client:
+        return client.put(
+            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/skills",
+            content=archive,
+            headers={"Content-Type": "application/x-tar"},
+        )
+
+
+@pytest.mark.spec("SBX-022")
+def test_skills_are_mounted_read_only_outside_the_workspace(sandboxes: Driver) -> None:
+    sandbox = _sandbox()
+    archive = _tar(
+        {
+            "garden/SKILL.md": (b"---\nname: garden\ndescription: Gardens.\n---\nPlant.\n", 0o644),
+            "garden/scripts/plan.sh": (b"#!/bin/sh\necho planned\n", 0o755),
+        }
+    )
+    response = _set_skills(sandboxes, sandbox, archive)
+    assert response.status_code == 204, response.text
+    result = sandboxes.sh(
+        *sandbox,
+        "cat /skills/garden/SKILL.md; /skills/garden/scripts/plan.sh;"
+        " (touch /skills/garden/planted || echo refused) 2>/dev/null;"
+        " (echo x >> /skills/garden/SKILL.md || echo refused) 2>/dev/null; ls -A /workspace",
+    )
+    assert "Plant." in result.stdout
+    assert "planned" in result.stdout
+    assert result.stdout.count("refused") == 2
+    # Nothing of them is in the workspace, its size or its export.
+    assert "garden" not in result.stdout.split("planned", 1)[1].replace("refused", "")
+    tenant_id, user_id, conversation_id = sandbox
+    with sandboxes.client() as client:
+        exported = client.get(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace")
+    assert exported.status_code == 200
+    with tarfile.open(fileobj=io.BytesIO(exported.content)) as workspace:
+        assert not [name for name in workspace.getnames() if "garden" in name]
+
+
+@pytest.mark.spec("SBX-022")
+def test_skills_are_set_for_the_next_container_and_go_with_it(sandboxes: Driver) -> None:
+    sandbox = _sandbox()
+    first = _tar({"first/SKILL.md": (b"first", 0o644)})
+    assert _set_skills(sandboxes, sandbox, first).status_code == 204
+    assert "first" in sandboxes.sh(*sandbox, "ls /skills").stdout
+    sandboxes.stop(*sandbox)
+    # A new container without skills set has an empty /skills.
+    assert sandboxes.sh(*sandbox, "ls -A /skills | wc -l").stdout.strip() == "0"
+    sandboxes.stop(*sandbox)
+    second = _tar({"second/SKILL.md": (b"second", 0o644)})
+    assert _set_skills(sandboxes, sandbox, second).status_code == 204
+    assert sandboxes.sh(*sandbox, "ls /skills").stdout.split() == ["second"]
+
+
+@pytest.mark.spec("SBX-022")
+@pytest.mark.parametrize(
+    "archive",
+    [
+        _tar({}, raw=["../outside.md"]),
+        _tar({}, raw=["/etc/planted"]),
+        _tar({}, raw=["ok/../../outside.md"]),
+        _tar({"ok/SKILL.md": (b"x", 0o644)}, links={"ok/passwd": "/etc/passwd"}),
+    ],
+    ids=["parent", "absolute", "nested-parent", "link"],
+)
+def test_skill_archives_with_entries_outside_skills_are_refused(sandboxes: Driver, archive: bytes) -> None:
+    sandbox = _sandbox()
+    response = _set_skills(sandboxes, sandbox, archive)
+    assert response.status_code == 422, response.text
+    assert sandboxes.sh(*sandbox, "ls -A /skills | wc -l").stdout.strip() == "0"

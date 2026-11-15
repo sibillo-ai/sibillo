@@ -98,6 +98,18 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " VALUES (%s, %s, %s, 'intruder', 'user', false, now(), now())",
                 (uuid7(), tenant, user),
             )
+        case "skills":
+            return (
+                "INSERT INTO skills (id, tenant_id, owner_id, name, description, origin, untrusted, size_bytes,"
+                " created_at, updated_at) VALUES (%s, %s, %s, 'intruder', 'x', 'user', false, 0, now(), now())",
+                (uuid7(), tenant, user),
+            )
+        case "skill_files":
+            return (
+                "INSERT INTO skill_files (skill_id, tenant_id, owner_id, path, content)"
+                " VALUES (%s, %s, %s, 'intruder.md', ''::bytea)",
+                (owner.rows["skills"][0], tenant, user),
+            )
         case "conversations":
             return (
                 "INSERT INTO conversations (id, tenant_id, owner_id, title, last_message_at, created_at, updated_at)"
