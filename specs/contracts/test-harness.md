@@ -66,7 +66,8 @@ database procedure (ADR-0050):
    sandbox driver below, and `SIBILLO_TEMPORARY_SWEEP_SECONDS` and
    `SIBILLO_APPROVAL_SWEEP_SECONDS` set to `1`, so that tests of temporary
    conversations and of expired approvals need not wait (ADR-0082,
-   ADR-0090). The worker has no readiness signal: tests wait for the
+   ADR-0090), and `SIBILLO_RUN_REQUEST_LIMIT` set to `20`, so that a test
+   reaches it quickly (ADR-0097). The worker has no readiness signal: tests wait for the
    outcome of runs, with a timeout.
 4. Tests call the API over HTTP at `http://127.0.0.1:PORT/v1` and stop both
    processes at the end of the session. To check recovery (AGT-010), a test
@@ -270,8 +271,9 @@ host (ADR-0054).
 
 The eval suite (ADR-0092) is a pytest suite in `evals/` that starts the
 database, the sandbox driver, the network guard, the search service and the
-server with the procedures above, once per session, and runs each scenario
-on them. Its options:
+server with the procedures above, once per session, but with
+`SIBILLO_RUN_REQUEST_LIMIT` at its default, and runs each scenario on
+them. Its options:
 
 | Option | Meaning |
 |---|---|

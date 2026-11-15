@@ -2290,6 +2290,7 @@ components:
         - approval.invalid
         - run.worker_lost
         - run.timeout
+        - run.step_limit
         - model.unavailable
         - model.request_failed
         - model.refused
@@ -3802,7 +3803,9 @@ components:
         stops at the model's length or context limit before it says or
         calls anything with `model.context_exceeded` (MOD-017), as does a
         request whose prompt the server reports reached the model's context
-        window, less one token, since the server cut it (MOD-018).
+        window, less one token, since the server cut it (MOD-018). A run
+        that reaches its limit of model requests fails with
+        `run.step_limit` (AGT-027).
         A run that asks the user a question, or whose tool calls need
         approval, ends with `RUN_FINISHED` whose `outcome` is
         `{type: "interrupt", interrupts}`, each an `Interrupt` (AGT-015,

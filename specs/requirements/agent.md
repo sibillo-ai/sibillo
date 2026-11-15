@@ -406,3 +406,23 @@ and which asks for approval by default. It MUST NOT be offered in temporary
 conversations (CNV-011, ADR-0096).
 
 Rationale: the assistant turns work it did into a skill the user can reuse.
+
+## AGT-027: A run's limit of model requests
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration
+
+A run MUST make at most the number of model requests the instance admin
+configures, 200 by default. A run that reaches it MUST fail with the code
+`run.step_limit`, never `internal.error`, and keep in the conversation what
+it did until then; clients MUST say that the assistant stopped after many
+steps and that the user can ask it to continue (UX-014). The agent's
+working instructions MUST tell it to keep work in progress that takes many
+steps in a folder of `/workspace`, so that a run that stops does not lose
+it (ADR-0097).
+
+Rationale: the first long task a user tried stopped at a default limit
+nobody had chosen, as an internal error, and lost its work.
+
