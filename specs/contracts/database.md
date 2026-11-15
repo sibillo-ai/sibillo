@@ -327,7 +327,24 @@ most one row per user, and none until they set one.
 | `reasoning` | text | `off`, `on` or `deep`; null when unset |
 | `disabled_tools` | text[] | not null, default empty; as in `conversations` |
 | `base_instructions`, `additional_instructions` | text | null when unset |
+| `memory_enabled` | boolean | not null, default true; whether memory is on for the user (MEM-006, ADR-0095); a user without a row has it on |
 | `updated_at` | timestamptz | not null |
+
+### `memory_items` (private)
+
+A user's memory: the only copy of what the assistant remembers about them
+(MEM-001 to MEM-008, ADR-0095).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` on delete cascade |
+| `text` | text | not null; 1 to 500 characters, checked; a user's items hold at most 10,000 characters in all, checked by the application under a lock on the user's items |
+| `origin` | text | not null; `user` when the user wrote or last saved it, `assistant` when a memory tool did |
+| `untrusted` | boolean | not null; true only when a memory tool wrote it in a run with untrusted content (MEM-008); false whenever `origin` is `user`, checked |
+| `conversation_id` | uuid | the conversation of the memory tool call that last wrote it; null when `origin` is `user`; an identifier without a reference, so that the item outlives its conversation |
+| `created_at` | timestamptz | not null |
+| `updated_at` | timestamptz | not null; when it was last written; index on (`tenant_id`, `owner_id`, `updated_at`) |
 
 ### `conversation_messages` (private)
 
@@ -342,7 +359,7 @@ History served to clients is a projection of these rows.
 | `seq` | integer | position within the run, starting at 1, no gaps |
 | `tenant_id`, `owner_id` | uuid | as in `conversations` |
 | `conversation_id` | uuid | (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete cascade |
-| `message` | jsonb | one `ModelMessage`, serialized with Pydantic AI's `ModelMessagesTypeAdapter` |
+| `message` | jsonb | one `ModelMessage`, serialized with Pydantic AI's `ModelMessagesTypeAdapter`; a request is stored without its instructions, which each run builds anew (ADR-0081, ADR-0095) |
 | `text` | text | not null, default empty; the text a person reads in it: the user's prompt or the assistant's answer, never tool calls or results (CNV-009) |
 | `search` | tsvector | generated from `text` with the `simple` configuration, stored; GIN index (ADR-0073) |
 | `created_at` | timestamptz | not null |
@@ -557,7 +574,7 @@ connection.
 
 ### Policies for private tables
 
-`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `conversations`,
+`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `conversations`,
 `conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`
 and `audit_events` use the same policy for every operation:
 
@@ -585,6 +602,7 @@ keys, not by privileges of `sibillo_app`.
 | `passkey_challenges` | `SELECT`, `INSERT`, `DELETE` |
 | `folders` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `user_settings` | `SELECT`, `INSERT`, `UPDATE` |
+| `memory_items` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `conversations` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `conversation_plans` | `SELECT`, `INSERT`, `UPDATE` |
 | `compaction_checkpoints` | `SELECT`, `INSERT`: checkpoints never change (ADR-0041) |
@@ -633,7 +651,7 @@ runs after the turn it rewinds to, and their messages and workflows, the same
 way (CNV-004, ADR-0068); the foreign key from a run to its parent cascades. Its entries in the
 cost ledger are kept, detached from the conversation and its runs, so that
 spending totals stay correct (ADR-0042), and so are its audit events
-(ADR-0090). Deletion is physical;
+(ADR-0090) and the memory items written in it (ADR-0095). Deletion is physical;
 there is no soft delete for user content.
 
 ## Migrations

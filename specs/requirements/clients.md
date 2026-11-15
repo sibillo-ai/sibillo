@@ -445,3 +445,24 @@ confirming that the user will then sign in with their password alone.
 
 Rationale: a second factor that is hard to add, or that locks
 someone out, would be turned off.
+
+## UX-027: Memory in the app
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** e2e
+
+Among the user's own settings, clients MUST offer a Memory page with the
+switch that turns memory on and off (MEM-006), the user's memory items
+newest first, and how much of the limit they use (MEM-007). Each item MUST
+show its text, when it was last written, and where it came from: the user,
+or the conversation it was written in, linked while it exists (MEM-005).
+Untrusted items (MEM-008) MUST be marked, with the explanation that they
+were written after the assistant read content that was not the user's, and
+saving one MUST be offered as the way to confirm it. The page MUST let the
+user add an item, edit one, delete one, and delete all after asking. In a
+conversation, a call to a memory tool MUST show what was remembered,
+changed or forgotten, and lead to the Memory page (ADR-0095).
+
+Rationale: journey J11.

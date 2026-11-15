@@ -39,6 +39,7 @@ tags:
   - name: models
   - name: conversations
   - name: folders
+  - name: memory
   - name: runs
   - name: speech
   - name: health
@@ -220,6 +221,110 @@ paths:
               schema: { $ref: "#/components/schemas/EgressPolicies" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /me/memory:
+    get:
+      tags: [memory]
+      operationId: getMyMemory
+      summary: The user's memory, newest item first.
+      description: |
+        Every memory item the assistant holds about the user, with its
+        provenance; nothing else of it exists (MEM-001, MEM-005, ADR-0095).
+      x-requirements: [MEM-001, MEM-004, MEM-005, MEM-006, MEM-007, TEN-006]
+      responses:
+        "200":
+          description: The user's memory.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    put:
+      tags: [memory]
+      operationId: setMyMemory
+      summary: Turn the user's memory on or off.
+      description: |
+        Applies from the user's next run. While memory is off, runs are given
+        no memory items and no memory tools; the items stay (MEM-006).
+      x-requirements: [MEM-006, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemorySetting" }
+      responses:
+        "200":
+          description: The user's memory.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /me/memory/items:
+    post:
+      tags: [memory]
+      operationId: addMemoryItem
+      summary: Add a memory item written by the user.
+      description: The item is trusted, and given to the assistant from the next run (MEM-002, MEM-008).
+      x-requirements: [MEM-002, MEM-007, MEM-008, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryItemText" }
+      responses:
+        "201":
+          description: The new item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryItem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/MemoryFull" }
+    delete:
+      tags: [memory]
+      operationId: deleteAllMemoryItems
+      summary: Delete every memory item of the user.
+      description: Deletion is physical, and nothing derived from the items remains (MEM-003).
+      x-requirements: [MEM-003, TEN-006]
+      responses:
+        "204": { description: Every item deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/memory/items/{memory_item_id}:
+    parameters:
+      - $ref: "#/components/parameters/MemoryItemId"
+    patch:
+      tags: [memory]
+      operationId: updateMemoryItem
+      summary: Replace the text of a memory item.
+      description: |
+        Saving an item, changed or not, makes it the user's and trusted: it is
+        how a user confirms an untrusted one (MEM-002, MEM-008).
+      x-requirements: [MEM-002, MEM-007, MEM-008, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryItemText" }
+      responses:
+        "200":
+          description: The saved item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryItem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/MemoryFull" }
+    delete:
+      tags: [memory]
+      operationId: deleteMemoryItem
+      summary: Delete a memory item.
+      description: Deletion is physical, and nothing derived from the item remains (MEM-003).
+      x-requirements: [MEM-003, TEN-006]
+      responses:
+        "204": { description: Item deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /me/sessions:
     get:
@@ -1672,6 +1777,11 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Id" }
+    MemoryItemId:
+      name: memory_item_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
     PasskeyId:
       name: passkey_id
       in: path
@@ -1713,6 +1823,14 @@ components:
         The upload is larger than `SIBILLO_UPLOAD_MAX_MB` (`file.too_large`), or
         would take the workspace over its quota (`workspace.quota_exceeded`,
         SBX-019); nothing was written.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    MemoryFull:
+      description: |
+        The request is invalid (`request.validation_failed`), or the item
+        would be over 500 characters or the user's memory over 10,000
+        (`memory.full`, MEM-007); nothing was written.
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -1863,6 +1981,7 @@ components:
         - file.too_large
         - file.not_previewable
         - workspace.quota_exceeded
+        - memory.full
         - connection.test_failed
         - sandbox.unavailable
         - sandbox.command_failed
@@ -2345,6 +2464,9 @@ components:
         - update_task_status
         - update_task_statuses
         - remove_task
+        - remember
+        - update_memory
+        - forget
 
     DisabledTools:
       type: array
@@ -2494,6 +2616,82 @@ components:
     Instructions:
       type: [string, "null"]
       maxLength: 20000
+
+    Memory:
+      type: object
+      description: A user's memory (MEM-001, MEM-006, MEM-007, ADR-0095).
+      required: [enabled, items, used_characters, limit_characters]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          description: Whether memory is on; on until the user turns it off (MEM-006).
+        items:
+          type: array
+          description: Every memory item of the user, the most recently written first.
+          items: { $ref: "#/components/schemas/MemoryItem" }
+        used_characters:
+          type: integer
+          minimum: 0
+          description: The characters the items hold in all.
+        limit_characters:
+          type: integer
+          description: The most the items may hold in all, 10,000 (MEM-007).
+
+    MemorySetting:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+
+    MemoryItemText:
+      type: object
+      required: [text]
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Surrounding whitespace is removed before the limits are checked.
+
+    MemoryItem:
+      type: object
+      description: One memory item, with its provenance (MEM-005, MEM-008).
+      required: [id, text, origin, untrusted, conversation, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        id: { $ref: "#/components/schemas/Id" }
+        text: { type: string }
+        origin:
+          type: string
+          enum: [user, assistant]
+          description: Who wrote it last; the user, in the settings, or the assistant, with a memory tool.
+        untrusted:
+          type: boolean
+          description: |
+            Written by the assistant in a run with untrusted content; given
+            to the model as untrusted content until the user saves it
+            (MEM-008). Always false when `origin` is `user`.
+        conversation:
+          description: |
+            The conversation where the assistant last wrote it; `null` when
+            `origin` is `user`. `title` is `null` and `deleted` true once the
+            conversation is deleted.
+          oneOf:
+            - type: object
+              required: [id, title, deleted]
+              additionalProperties: false
+              properties:
+                id: { $ref: "#/components/schemas/Id" }
+                title: { type: [string, "null"] }
+                deleted: { type: boolean }
+            - type: "null"
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: When it was last written.
 
     UserSettings:
       type: object

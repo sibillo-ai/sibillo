@@ -99,9 +99,10 @@ beyond keeping them configurable and updatable.
 | T-21 | A framework capability fetches URLs, runs commands or reaches MCP servers from the control plane, bypassing the sandbox (SSRF to the LAN or host) | X1 | AGT-013, AGT-020, AGT-021, SBX-009 |
 | T-22 | Active content in an artifact or a workspace file (scripts in a web page or SVG), possibly derived from untrusted content, runs with the user's session and calls the API or reads other data | X1 | ART-003, UX-002, UX-020 |
 | T-23 | Notifications leak conversation content to the push services of browser vendors | — | UX-004 |
-| T-24 | Content the user rewound past, or of a temporary conversation, reaches the model, memory or another conversation | X1 | CNV-002, CNV-004, CNV-011 |
+| T-24 | Content the user rewound past, or of a temporary conversation, reaches the model, memory or another conversation | X1 | CNV-002, CNV-004, CNV-011, MEM-007 |
 | T-25 | An imported skill carries injected instructions or malicious scripts | X1 | AGT-003, AGT-004, AGT-017 |
 | T-26 | A file of one user's library is read by another user or reaches another user's sandbox | X2 | CNV-012, TEN-008 |
+| T-35 | Injected instructions are stored as memory items and reach later conversations as if the user had written them | X1 | AGT-003, AGT-004, MEM-001, MEM-008 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |

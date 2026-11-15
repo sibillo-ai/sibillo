@@ -74,7 +74,7 @@ new entry here first (ADR-0005).
 | Audit event | A content-free record of a tool call and its approval outcome, visible to the user it acted for (AGT-008, ADR-0090). |
 | Activity | The page of a user's settings that lists their audit events (UX-023). |
 | Scheduled task | A run started by a schedule or trigger rather than by a message. |
-| Memory item | A piece of information the assistant retains about a user across conversations. Visible, editable and deletable by the user. |
+| Memory item | A short text the assistant retains about a user across conversations, given to every run while memory is on; written by the user or by the assistant's memory tools, and untrusted when the assistant wrote it from untrusted content. Visible, editable and deletable by the user (MEM-001 to MEM-008, ADR-0095). |
 | Connector | An integration with an external system (calendar, mail, files, home automation), exposed to the agent as mediated tools. Not to be confused with a connection. |
 
 ## Devices and connectors

@@ -42,8 +42,9 @@ AGT-006 for the `irreversible` and `physical` classes, and AGT-018
 Every piece of content entering a run MUST be labeled as trusted (written by
 the user or the system) or untrusted (web content, received messages,
 external files, sandbox output, connector data from third parties). The
-results of tools in the `ingests_untrusted` class, and attachments and files
-of the file library given to a run, MUST be untrusted; the user's messages,
+results of tools in the `ingests_untrusted` class, attachments and files
+of the file library given to a run, and untrusted memory items (MEM-008),
+MUST be untrusted; the user's messages,
 their answers to questions (AGT-015) and the instructions MUST be trusted. A
 run MUST count as having untrusted content when the conversation's active
 path, up to and including that run, holds any, also after compaction and in
