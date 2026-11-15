@@ -22,6 +22,7 @@ ARGON2_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA"
 # Primary key columns of each private table.
 KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "device_sessions": ("id",),
+    "passkey_challenges": ("id",),
     "folders": ("id",),
     "user_settings": ("owner_id",),
     "conversations": ("id",),
@@ -70,7 +71,9 @@ def create_tenant(conn: psycopg.Connection) -> uuid.UUID:
 
 
 def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> User:
-    user_id, conversation_id, run_id, session_id, ledger_id, folder_id, audit_id = (uuid7() for _ in range(7))
+    user_id, conversation_id, run_id, session_id, ledger_id, folder_id, audit_id, challenge_id, passkey_id = (
+        uuid7() for _ in range(9)
+    )
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -81,6 +84,16 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO device_sessions (id, tenant_id, user_id, token_hash, device_name, created_at, last_used_at,"
         " expires_at) VALUES (%s, %s, %s, %s, %s, now(), now(), now() + interval '1 day')",
         (session_id, tenant_id, user_id, token_hash, "test device"),
+    )
+    conn.execute(
+        "INSERT INTO passkeys (id, tenant_id, user_id, credential_id, public_key, sign_count, name, created_at)"
+        " VALUES (%s, %s, %s, %s, %s, 0, 'Test passkey', now())",
+        (passkey_id, tenant_id, user_id, user_id.bytes, b"test key"),
+    )
+    conn.execute(
+        "INSERT INTO passkey_challenges (id, tenant_id, user_id, purpose, token_hash, challenge, created_at,"
+        " expires_at) VALUES (%s, %s, %s, 'sign_in', %s, %s, now(), now() + interval '5 minutes')",
+        (challenge_id, tenant_id, user_id, challenge_id.bytes * 2, challenge_id.bytes * 2),
     )
     conn.execute(
         "INSERT INTO folders (id, tenant_id, owner_id, name, created_at, updated_at)"
@@ -140,6 +153,7 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
     )
     rows: dict[str, tuple[object, ...]] = {
         "device_sessions": (session_id,),
+        "passkey_challenges": (challenge_id,),
         "folders": (folder_id,),
         "user_settings": (user_id,),
         "conversations": (conversation_id,),

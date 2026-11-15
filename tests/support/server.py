@@ -94,6 +94,8 @@ class Server:
     api_environment: Mapping[str, str] = field(repr=False, default_factory=dict[str, str])
     # Where the API and the worker record their outbound connections (OBS-006).
     outbound_log: Path | None = None
+    # The origin the API is given for passkeys (ADR-0094): the API's port on `localhost`.
+    public_origin: str | None = None
 
     def outbound(self) -> list[dict[str, Any]]:
         """Every connection and name lookup the API and the worker made so far."""
@@ -110,13 +112,18 @@ class Server:
             base_url=self.base_url, headers=headers, timeout=30, event_hooks={"response": [response_hook]}
         )
 
-    def start_twin_api(self, **overrides: str) -> tuple[Process, str]:
+    def start_twin_api(
+        self, *, port: int | None = None, without: tuple[str, ...] = (), **overrides: str
+    ) -> tuple[Process, str]:
         """Another API process on the same database, driver and secret key, with `overrides`.
 
-        Returns the process, already serving, and its origin; the caller closes it.
+        It listens on `port`, or on a free port; the variables named in
+        `without` are left out of its environment. Returns the process,
+        already serving, and its origin; the caller closes it.
         """
-        port = _free_port()
-        api = Process("api-twin", {**self.api_environment, "SIBILLO_HTTP_PORT": str(port), **overrides}, command="api")
+        port = port or free_port()
+        environment = {name: value for name, value in self.api_environment.items() if name not in without}
+        api = Process("api-twin", {**environment, "SIBILLO_HTTP_PORT": str(port), **overrides}, command="api")
         origin = f"http://127.0.0.1:{port}"
         deadline = time.monotonic() + 30
         while True:
@@ -141,7 +148,7 @@ def fresh_source() -> str:
     return str(ipaddress.IPv6Address(int(ipaddress.IPv6Address("2001:db8::")) + uuid7().int % (1 << 96)))
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
@@ -177,7 +184,7 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
     if cached is not None:
         return cached
 
-    port = _free_port()
+    port = free_port()
     # Only the variables of the harness: the server refuses unknown SIBILLO_* ones.
     base = {name: value for name, value in os.environ.items() if not name.startswith("SIBILLO_")}
     # Record outbound connections (tests/support/outbound/sitecustomize.py).
@@ -199,7 +206,12 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
         api_environment = (
             base
             | shared
-            | {"SIBILLO_HTTP_HOST": "127.0.0.1", "SIBILLO_HTTP_PORT": str(port), "SIBILLO_TRUSTED_PROXIES": "127.0.0.1"}
+            | {
+                "SIBILLO_HTTP_HOST": "127.0.0.1",
+                "SIBILLO_HTTP_PORT": str(port),
+                "SIBILLO_TRUSTED_PROXIES": "127.0.0.1",
+                "SIBILLO_PUBLIC_ORIGIN": f"http://localhost:{port}",
+            }
         )
         api = Process("api", api_environment, command="api")
         config.add_cleanup(api.close)
@@ -218,6 +230,7 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
             worker=worker,
             api_environment=api_environment,
             outbound_log=outbound_log,
+            public_origin=f"http://localhost:{port}",
         )
         _wait_until_ready(api, worker, server.base_url)
     except BaseException as exc:

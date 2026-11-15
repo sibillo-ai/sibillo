@@ -73,6 +73,12 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " last_used_at, expires_at) VALUES (%s, %s, %s, %s, 'intruder', now(), now(), now())",
                 (uuid7(), tenant, user, uuid.uuid4().bytes * 2),
             )
+        case "passkey_challenges":
+            return (
+                "INSERT INTO passkey_challenges (id, tenant_id, user_id, purpose, challenge, created_at, expires_at)"
+                " VALUES (%s, %s, %s, 'registration', %s, now(), now())",
+                (uuid7(), tenant, user, uuid.uuid4().bytes * 2),
+            )
         case "folders":
             return (
                 "INSERT INTO folders (id, tenant_id, owner_id, name, created_at, updated_at)"

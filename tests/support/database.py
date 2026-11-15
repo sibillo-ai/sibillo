@@ -30,6 +30,7 @@ MIGRATION_TIMEOUT_SECONDS = 300
 # Tables of the database contract, by kind.
 PRIVATE_TABLES = (
     "device_sessions",
+    "passkey_challenges",
     "folders",
     "user_settings",
     "conversations",
@@ -50,10 +51,13 @@ TENANT_TABLES = (
     "served_context_windows",
     "tool_permissions",
     "egress_policies",
+    "passkeys",
 )
 CONTRACT_TABLES = ("tenants", "login_attempts", *TENANT_TABLES, *PRIVATE_TABLES)
 # Column holding the owning user of each private table.
-OWNER_COLUMN = {table: "user_id" if table == "device_sessions" else "owner_id" for table in PRIVATE_TABLES}
+OWNER_COLUMN = {
+    table: "user_id" if table in ("device_sessions", "passkey_challenges") else "owner_id" for table in PRIVATE_TABLES
+}
 # Schemas that are not part of the application schema.
 SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
 DURABLE_EXECUTION_SCHEMA = "dbos"
@@ -63,7 +67,9 @@ SECURITY_DEFINER_FUNCTIONS = (
     "auth_find_session",
     "auth_touch_session",
     "auth_record_login_attempt",
+    "auth_take_sign_in",
     "bootstrap_instance",
+    "remove_passkeys",
     "revoke_sessions_of_disabled_user",
     "retention_expired_runs",
     "expired_temporary_conversations",
@@ -78,6 +84,8 @@ class Database:
     port: int
     superuser_url: str
     app_url: str
+    # Only for operator commands that tests run, such as `remove-passkeys` (test-harness.md).
+    owner_url: str = ""
 
     def superuser(self) -> psycopg.Connection:
         """Connection for catalog inspection and arranging data, never for assertions on `sibillo_app`."""
@@ -156,6 +164,7 @@ def start_database(config: pytest.Config) -> Database:
             port=port,
             superuser_url=f"postgresql://{container.username}:{container.password}@{host}:{port}/{DATABASE_NAME}",
             app_url=f"postgresql://sibillo_app:{app_password}@{host}:{port}/{DATABASE_NAME}",
+            owner_url=f"postgresql://sibillo_owner:{owner_password}@{host}:{port}/{DATABASE_NAME}",
         )
     except BaseException as exc:
         config.stash[_DATABASE] = exc

@@ -1,4 +1,5 @@
-"""The operator's `init` command: fresh secrets, never defaults (AUTH-007, ADR-0054, ADR-0077)."""
+"""The operator's commands: `init` writes fresh secrets, never defaults (AUTH-007, ADR-0054, ADR-0077), and
+`remove-passkeys` lets an admin who lost their passkeys back in (AUTH-010, ADR-0094)."""
 
 from __future__ import annotations
 
@@ -10,7 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from tests.support.database import ROOT
+from tests.support.accounts import Account, create_account, create_tenant
+from tests.support.database import ROOT, Database, uuid7
+from tests.support.passkeys import arrange_passkey
 
 SECRETS = (
     "SIBILLO_POSTGRES_PASSWORD",
@@ -69,3 +72,42 @@ def test_init_only_adds_the_secrets_a_configuration_lacks(tmp_path: Path) -> Non
     # A complete configuration is left as it is.
     assert _init(existing).returncode == 0
     assert existing.read_text() == text
+
+
+def _remove_passkeys(database: Database, username: str) -> subprocess.CompletedProcess[str]:
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("SIBILLO_")}
+    return subprocess.run(  # noqa: S603 - the server's entry point
+        [sys.executable, "-m", "sibillo_server", "remove-passkeys", username],
+        cwd=ROOT,
+        env=environment | {"SIBILLO_DATABASE_URL": database.owner_url},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def _passkeys_of(database: Database, account: Account) -> int:
+    with database.superuser() as conn:
+        (count,) = conn.execute("SELECT count(*) FROM passkeys WHERE user_id = %s", (account.id,)).fetchone() or (0,)
+    return int(count)
+
+
+@pytest.mark.spec("AUTH-010")
+def test_the_operator_removes_the_passkeys_of_the_instance_admin(database: Database) -> None:
+    admin = create_account(database, create_tenant(database), "tenant_admin", instance_admin=True)
+    other = create_account(database, admin.tenant_id)
+    for name in ("Phone", "Laptop"):
+        arrange_passkey(database, admin, name)
+    arrange_passkey(database, other)
+    result = _remove_passkeys(database, admin.username.upper())
+    assert result.returncode == 0, result.stderr
+    assert "2" in result.stdout
+    assert _passkeys_of(database, admin) == 0
+    assert _passkeys_of(database, other) == 1
+
+
+@pytest.mark.spec("AUTH-010")
+def test_removing_the_passkeys_of_nobody_fails(database: Database) -> None:
+    result = _remove_passkeys(database, f"nobody-{uuid7()}")
+    assert result.returncode != 0

@@ -9,6 +9,7 @@ every request.
 from __future__ import annotations
 
 import datetime
+import uuid
 
 import psycopg
 import pytest
@@ -109,3 +110,48 @@ def test_login_attempts_are_recorded(database: Database) -> None:
             "SELECT host(source), success FROM login_attempts WHERE username = %s", (username,)
         ).fetchall()
     assert recorded == [("192.0.2.1", False)]
+
+
+@pytest.mark.spec("AUTH-010")
+def test_taking_a_sign_in_returns_it_once(database: Database, world: World) -> None:
+    alice = world.alice
+    (challenge_id,) = alice.rows["passkey_challenges"]
+    assert isinstance(challenge_id, uuid.UUID)
+    token_hash = challenge_id.bytes * 2  # as the world arranges it
+    query = (
+        "SELECT user_id, tenant_id, username, role, instance_admin, disabled, challenge, expires_at > now()"
+        " FROM auth_take_sign_in(%s)"
+    )
+    with database.app() as conn:
+        first = conn.execute(query, (token_hash,)).fetchall()
+        conn.commit()
+        second = conn.execute(query, (token_hash,)).fetchall()
+    assert first == [(alice.id, alice.tenant_id, alice.username, "member", False, False, token_hash, True)]
+    assert second == []
+    with database.superuser() as conn:
+        assert conn.execute("SELECT 1 FROM passkey_challenges WHERE id = %s", (challenge_id,)).fetchall() == []
+
+
+@pytest.mark.spec("AUTH-010")
+def test_taking_a_sign_in_deletes_expired_challenges(database: Database, world: World) -> None:
+    expired = uuid7()
+    with database.superuser() as conn:
+        conn.execute(
+            "INSERT INTO passkey_challenges (id, tenant_id, user_id, purpose, challenge, created_at, expires_at)"
+            " VALUES (%s, %s, %s, 'registration', %s, now() - interval '10 minutes', now() - interval '5 minutes')",
+            (expired, world.bob.tenant_id, world.bob.id, expired.bytes * 2),
+        )
+    with database.app() as conn:
+        assert conn.execute("SELECT 1 FROM auth_take_sign_in(%s)", (uuid7().bytes * 2,)).fetchall() == []
+        conn.commit()
+    with database.superuser() as conn:
+        assert conn.execute("SELECT 1 FROM passkey_challenges WHERE id = %s", (expired,)).fetchall() == []
+        # Challenges still valid are kept.
+        (bobs,) = world.bob.rows["passkey_challenges"]
+        assert conn.execute("SELECT 1 FROM passkey_challenges WHERE id = %s", (bobs,)).fetchall() == [(1,)]
+
+
+@pytest.mark.spec("AUTH-010", "TEN-004")
+def test_the_application_cannot_remove_passkeys_as_the_operator(database: Database, world: World) -> None:
+    with database.app() as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute("SELECT remove_passkeys(%s)", (world.alice.username,))
