@@ -76,7 +76,7 @@ A sandbox MUST NOT be able to reach any other sandbox over the network.
 
 ## SBX-007: Isolated name resolution
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** security
@@ -186,7 +186,7 @@ sandbox driver MUST stop those sandboxes.
 
 ## SBX-016: Workspace disk limit
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
