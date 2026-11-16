@@ -115,7 +115,7 @@ def test_a_member_connects_a_token_and_switches_the_server(
     assert accessibility_violations(page) == []
     # The server is among the tool switches, as one group with its tools.
     page.goto("/settings?section=assistant")
-    group = page.get_by_role("checkbox", name=added["name"])
+    group = page.get_by_role("switch", name=added["name"])
     expect(group).to_be_checked()
     expect(page.get_by_role("main")).to_contain_text("Turn on")
     group.uncheck()
