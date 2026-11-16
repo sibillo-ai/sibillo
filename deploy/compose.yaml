@@ -133,6 +133,8 @@ services:
       SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS: ${SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS:-300}
       SIBILLO_SANDBOX_MAX_OUTPUT_BYTES: ${SIBILLO_SANDBOX_MAX_OUTPUT_BYTES:-1048576}
       SIBILLO_SANDBOX_IDLE_MINUTES: ${SIBILLO_SANDBOX_IDLE_MINUTES:-5}
+      SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB: ${SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB:-2048}
+      SIBILLO_SANDBOX_DISK_MB: ${SIBILLO_SANDBOX_DISK_MB:-4096}
     # The only service with the container runtime (SBX-009).
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -220,6 +222,9 @@ services:
     container_name: sibillo-netguard
     network_mode: host
     cap_add: [NET_ADMIN]
+    # DNS from sandboxes reaches only this resolver, as the driver's (SBX-007, ADR-0098).
+    environment:
+      SIBILLO_SANDBOX_RESOLVER: ${SIBILLO_SANDBOX_RESOLVER:-9.9.9.9}
     stop_grace_period: 15s
     restart: unless-stopped
 

@@ -29,6 +29,7 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 from sibillo_sandboxd.config import DriverConfiguration
+from sibillo_sandboxd.disks import DiskError, Disks
 from sibillo_sandboxd.files import (
     HELPER,
     FileOperationError,
@@ -58,6 +59,9 @@ TIMEOUT_GRACE_SECONDS = 10
 KILLED_EXIT_CODES = frozenset({124, 137})
 NOT_FOUND = 404
 ARCHIVE_CHUNK_BYTES = 1024 * 1024
+# Deleting a workspace waits this long for a file operation that still uses it.
+DELETE_ATTEMPTS = 20
+DELETE_PAUSE_SECONDS = 0.5
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,9 @@ class Sandboxes:
         self.configuration = configuration
         self._locks: dict[str, asyncio.Lock] = {}
         self._last_used: dict[str, float] = {}
+        # The sandbox of each name in _last_used, whose disk the idle sweep releases (ADR-0098).
+        self._known: dict[str, SandboxId] = {}
+        self.disks = Disks(docker, configuration)
         # The skills each sandbox's next container gets, as archives of the driver's own (SBX-022).
         self._skills_folder = Path(tempfile.mkdtemp(prefix="sibillo-skills-"))
         self._skills: dict[str, Path] = {}
@@ -100,12 +107,11 @@ class Sandboxes:
     async def start_container(
         self, name: str, volume: str | None, labels: dict[str, str], *, skills: str | None = None
     ) -> Any:
-        """Create and start a container with the fixed policy, then point it at the instance's resolver."""
+        """Create and start a container with the fixed policy, then point it at the instance's resolver.
+
+        `volume` is a workspace whose disk is attached (ADR-0098).
+        """
         await self.ensure_network()
-        if volume is not None:
-            # Labelled with the image too, so that what a driver created can be told from another's.
-            image = {f"{LABEL}.image": self.configuration.image}
-            await self.docker.volumes.create({"Name": volume, "Labels": {LABEL: "workspace"} | labels | image})
         config = container_config(self.configuration, volume, labels, skills=skills)
         container = await self.docker.containers.create(config, name=name)
         await container.start()
@@ -167,17 +173,22 @@ class Sandboxes:
                 raise
         started = container is None
         if started:
+            await self.disks.attach(sandbox)
             skills = await self._fill_skills(sandbox)
             container = await self.start_container(name, sandbox.volume, sandbox.labels, skills=skills)
-        self._last_used[name] = time.monotonic()
+        self._used(sandbox)
         return container, started
 
+    def _used(self, sandbox: SandboxId) -> None:
+        self._last_used[sandbox.container] = time.monotonic()
+        self._known[sandbox.container] = sandbox
+
     async def stop(self, sandbox: SandboxId) -> None:
+        """Remove the sandbox's container; its disk stays attached until the sandbox is idle (ADR-0098)."""
         name = sandbox.container
         lock = self._locks.setdefault(name, asyncio.Lock())
         async with lock:
             await self._remove(name)
-        self._last_used.pop(name, None)
 
     async def _remove(self, name: str) -> None:
         """Stop a sandbox and remove its container, keeping its workspace (SBX-018); its skills go with it."""
@@ -262,18 +273,49 @@ class Sandboxes:
         await asyncio.gather(
             *(self._delete_volume(volume["Name"]) for volume in volumes.get("Volumes") or []), return_exceptions=True
         )
-        self._last_used.clear()
         return len(containers)
 
+    async def start(self) -> None:
+        """As the driver starts: no sandbox, and no device, from before is trusted (SBX-018, ADR-0098)."""
+        removed = await self.stop_all()
+        if removed:
+            logger.info("removed %d sandboxes left from before the driver started", removed)
+        forgotten = await self.disks.forget_devices()
+        if forgotten:
+            logger.info("removed %d workspace volumes of devices from before the driver started", forgotten)
+
+    async def shutdown(self) -> None:
+        """As the driver stops: its sandboxes are removed and its disks detached (ADR-0098 point 5)."""
+        await self.stop_all()
+        try:
+            await self.disks.release_all()
+        except (DockerError, DiskError):
+            logger.exception("the disks could not all be detached")
+
     async def stop_idle(self) -> None:
+        """Remove idle sandboxes, and detach their disks once nothing uses them (ADR-0098 point 5)."""
         limit = self.configuration.idle_minutes * 60
         now = time.monotonic()
         for name, last in list(self._last_used.items()):
-            if now - last > limit:
+            if now - last <= limit:
+                continue
+            async with self._locks.setdefault(name, asyncio.Lock()):
+                if self._last_used.get(name) != last:
+                    continue
                 with contextlib.suppress(DockerError):
                     await self._remove(name)
-                self._last_used.pop(name, None)
                 logger.info("stopped idle sandbox %s", name)
+                sandbox = self._known.get(name)
+                released = True
+                if sandbox is not None:
+                    try:
+                        released = await self.disks.release(sandbox)
+                    except (DockerError, DiskError):
+                        logger.exception("the disk of %s could not be detached", name)
+                        released = False
+                if released:
+                    self._last_used.pop(name, None)
+                    self._known.pop(name, None)
 
     async def execute(
         self,
@@ -335,7 +377,7 @@ class Sandboxes:
             exit_code = (await execute.inspect()).get("ExitCode")
         elapsed = time.monotonic() - started
         timed_out = not finished_in_time or (exit_code in KILLED_EXIT_CODES and elapsed >= timeout)
-        self._last_used[sandbox.container] = time.monotonic()
+        self._used(sandbox)
         yield Exit(
             exit_code=None if timed_out else exit_code,
             timed_out=timed_out,
@@ -388,13 +430,21 @@ class Sandboxes:
             await self.stop(sandbox)
 
     async def delete_workspace(self, sandbox: SandboxId) -> None:
-        """Remove the conversation's sandbox and delete its workspace, as the conversation is deleted (SBX-010)."""
-        await self.stop(sandbox)
-        try:
-            await (await self.docker.volumes.get(sandbox.volume)).delete()
-        except DockerError as error:
-            if error.status != NOT_FOUND:
-                raise
+        """Remove the conversation's sandbox and delete its workspace and disk, as it is deleted (SBX-010)."""
+        name = sandbox.container
+        async with self._locks.setdefault(name, asyncio.Lock()):
+            await self._remove(name)
+            # A file operation may still be ending in a container of its own.
+            for _ in range(DELETE_ATTEMPTS):
+                try:
+                    await self.disks.delete(sandbox)
+                    break
+                except DiskError:
+                    await asyncio.sleep(DELETE_PAUSE_SECONDS)
+            else:
+                await self.disks.delete(sandbox)
+            self._last_used.pop(name, None)
+            self._known.pop(name, None)
 
     async def copy_workspace(self, sandbox: SandboxId, source: SandboxId, folder: Path) -> None:
         """Replace the conversation's workspace with a copy of `source`'s, for a fork (SBX-010, CNV-005)."""
@@ -430,17 +480,15 @@ class Sandboxes:
                 await container.delete(force=True)
 
     async def _files_container(self, sandbox: SandboxId) -> Any:
-        await self.docker.volumes.create(
-            {
-                "Name": sandbox.volume,
-                "Labels": {LABEL: "workspace"} | sandbox.labels | {f"{LABEL}.image": self.configuration.image},
-            }
-        )
         config = container_config(self.configuration, sandbox.volume, sandbox.labels | {f"{LABEL}.files": "true"})
         # File operations need no network at all.
         config["HostConfig"] = {**config["HostConfig"], "NetworkMode": "none", "Dns": []}
         name = f"sibillo-files-{sandbox.conversation_id}-{uuid.uuid4().hex[:8]}"
-        container = await self.docker.containers.create(config, name=name)
+        # Attached and mounted under the sandbox's lock, so that the idle sweep cannot detach it in between.
+        async with self._locks.setdefault(sandbox.container, asyncio.Lock()):
+            await self.disks.attach(sandbox)
+            container = await self.docker.containers.create(config, name=name)
+            self._used(sandbox)
         await container.start()
         return container
 

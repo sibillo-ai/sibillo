@@ -25,7 +25,8 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 from sibillo_sandboxd.config import DriverConfiguration, release_key
-from sibillo_sandboxd.policy import LABEL
+from sibillo_sandboxd.disks import DiskError
+from sibillo_sandboxd.policy import LABEL, MIB
 from sibillo_sandboxd.sandboxes import Sandboxes
 
 logger = logging.getLogger("sibillo.sandboxd")
@@ -66,10 +67,12 @@ class IsolationState:
     release: Check = field(default_factory=Check)
     egress_table: Check = field(default_factory=Check)
     canary: Check = field(default_factory=Check)
+    # Workspaces' disks can be attached (SBX-016, ADR-0098).
+    disks: Check = field(default_factory=Check)
 
     @property
     def ready(self) -> bool:
-        checks = (self.platform, self.isolation_runtime, self.release, self.egress_table, self.canary)
+        checks = (self.platform, self.isolation_runtime, self.release, self.egress_table, self.canary, self.disks)
         return all(check.ok for check in checks)
 
     def refusal_code(self) -> str:
@@ -89,6 +92,7 @@ class IsolationState:
                 "runtime_version": self.release.as_dict(),
                 "egress_table": self.egress_table.as_dict(),
                 "canary": self.canary.as_dict(),
+                "disks": self.disks.as_dict(),
             },
         }
 
@@ -227,12 +231,31 @@ class Isolation:
                     if "blocked" not in probe:
                         self.state.canary = Check(False, f"the canary reaches {host}: {probe.strip()}")
                         return
+                # The disk outside the workspace has the configured size (SBX-016, ADR-0098).
+                size = await self._output(container, ["sh", "-c", "df -B1 --output=size / | tail -n 1"])
+                expected = self.configuration.disk_mb * MIB
+                if not size.strip().isdigit() or abs(int(size.strip()) - expected) > MIB:
+                    self.state.canary = Check(False, f"the canary's disk is {size.strip()} bytes, not {expected}")
+                    return
             finally:
                 await container.delete(force=True)
         except (DockerError, KeyError, IndexError) as error:
             self.state.canary = Check(False, f"the canary failed: {error}")
             return
-        self.state.canary = Check(True, "gVisor, and the host and private addresses are unreachable")
+        self.state.canary = Check(
+            True, "gVisor, the host and private addresses are unreachable, and the disk is limited"
+        )
+
+    async def check_disks(self) -> None:
+        """The disk helper runs and finds a free loop device (ADR-0098 point 10)."""
+        try:
+            await self.sandboxes.disks.check()
+        except (DockerError, DiskError) as error:
+            self.state.disks = Check(
+                False, f"workspace disks cannot be attached: {error}; the host must provide loop devices"
+            )
+            return
+        self.state.disks = Check(True, "the disk helper found a free loop device")
 
     async def _output(self, container: Any, argv: list[str]) -> str:
         execute = await container.exec(cmd=argv, stdout=True, stderr=True, stdin=False, user="root")
@@ -243,14 +266,13 @@ class Isolation:
         return b"".join(chunks).decode(errors="replace")
 
     async def startup(self) -> None:
-        # Sandboxes from before this start are not tracked: none is kept (SBX-018, ADR-0078).
-        removed = await self.sandboxes.stop_all()
-        if removed:
-            logger.info("removed %d sandboxes left from before the driver started", removed)
+        # Sandboxes and devices from before this start are not tracked: none is kept (SBX-018, ADR-0078, ADR-0098).
+        await self.sandboxes.start()
         await self.check_platform()
         await self.check_runtime()
         await self.check_egress()
         await self.run_canary()
+        await self.check_disks()
         logger.info("isolation: %s", json.dumps(self.state.health()))
 
     async def monitor(self) -> None:

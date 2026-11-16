@@ -28,6 +28,7 @@ VARIABLES = frozenset(
         "SIBILLO_SANDBOX_MAX_OUTPUT_BYTES",
         "SIBILLO_SANDBOX_IDLE_MINUTES",
         "SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB",
+        "SIBILLO_SANDBOX_DISK_MB",
         "SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE",
     }
 )
@@ -59,6 +60,8 @@ class DriverConfiguration:
     idle_minutes: int
     # The workspace quota (SBX-019).
     workspace_quota_mb: int = 2048
+    # The disk a sandbox may use outside its workspace (SBX-016).
+    disk_mb: int = 4096
     minimum_release: str = BUILT_IN_MINIMUM_RELEASE
 
 
@@ -96,6 +99,37 @@ def _minimum_release(environment: Mapping[str, str]) -> str:
     return value
 
 
+# The local ranges sandboxes cannot reach (SBX-005): a resolver there would not work (SBX-007, ADR-0098).
+LOCAL_RANGES = tuple(
+    ipaddress.IPv4Network(network)
+    for network in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+    )
+)
+
+
+def _resolver(environment: Mapping[str, str]) -> str:
+    name = "SIBILLO_SANDBOX_RESOLVER"
+    resolver = environment.get(name, "9.9.9.9")
+    try:
+        address = ipaddress.ip_address(resolver)
+    except ValueError:
+        raise ConfigurationError(f"{name} must be an IPv4 address") from None
+    if not isinstance(address, ipaddress.IPv4Address):
+        raise ConfigurationError(f"{name} must be an IPv4 address")
+    if any(address in network for network in LOCAL_RANGES):
+        raise ConfigurationError(f"{name} must be a public address: sandboxes cannot reach {resolver} (SBX-005)")
+    return resolver
+
+
 def _required(environment: Mapping[str, str], name: str) -> str:
     value = environment.get(name, "")
     if not value:
@@ -110,12 +144,7 @@ def load_configuration(environment: Mapping[str, str]) -> DriverConfiguration:
     token = _required(environment, "SIBILLO_SANDBOXD_TOKEN")
     if len(token) < MINIMUM_TOKEN_LENGTH:
         raise ConfigurationError(f"SIBILLO_SANDBOXD_TOKEN must be at least {MINIMUM_TOKEN_LENGTH} characters")
-    resolver = environment.get("SIBILLO_SANDBOX_RESOLVER", "9.9.9.9")
-    try:
-        if not isinstance(ipaddress.ip_address(resolver), ipaddress.IPv4Address):
-            raise ValueError(resolver)
-    except ValueError:
-        raise ConfigurationError("SIBILLO_SANDBOX_RESOLVER must be an IPv4 address") from None
+    resolver = _resolver(environment)
     return DriverConfiguration(
         host=environment.get("SIBILLO_SANDBOXD_HOST", "0.0.0.0"),  # noqa: S104 - the internal network only (OPS-003)
         port=_integer(environment, "SIBILLO_SANDBOXD_PORT", 8100, 1, 65535),
@@ -131,5 +160,6 @@ def load_configuration(environment: Mapping[str, str]) -> DriverConfiguration:
         max_output_bytes=_integer(environment, "SIBILLO_SANDBOX_MAX_OUTPUT_BYTES", 1048576, 1024, 67108864),
         idle_minutes=_integer(environment, "SIBILLO_SANDBOX_IDLE_MINUTES", 5, 1, 10080),
         workspace_quota_mb=_integer(environment, "SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB", 2048, 1, 1048576),
+        disk_mb=_integer(environment, "SIBILLO_SANDBOX_DISK_MB", 4096, 64, 1048576),
         minimum_release=_minimum_release(environment),
     )

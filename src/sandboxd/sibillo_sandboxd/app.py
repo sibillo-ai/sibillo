@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import hmac
 import json
+import logging
 import shutil
 import tarfile
 import tempfile
@@ -28,11 +29,14 @@ from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sibillo_sandboxd.config import DriverConfiguration
+from sibillo_sandboxd.disks import DiskError
 from sibillo_sandboxd.files import FileOperationError, PathRefusedError
 from sibillo_sandboxd.isolation import Isolation
 from sibillo_sandboxd.policy import SandboxId
 from sibillo_sandboxd.sandboxes import Exit, Output, Sandboxes
 from sibillo_sandboxd.workspaces import UnsafeArchiveError
+
+logger = logging.getLogger("sibillo.sandboxd")
 
 API_PREFIX = "/v1"
 # A conversation's sandbox (SBX-001, ADR-0078).
@@ -146,6 +150,9 @@ def create_app(configuration: DriverConfiguration) -> FastAPI:
             yield
         finally:
             monitor.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await monitor
+            await sandboxes.shutdown()
             await docker.close()
 
     app = FastAPI(
@@ -163,6 +170,11 @@ def create_app(configuration: DriverConfiguration) -> FastAPI:
     async def file_error(request: Request, error: FileOperationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         codes = {404: "driver.not_found", 409: "driver.conflict", 413: "driver.too_large"}
         return _problem(error.status, codes.get(error.status, "driver.validation_failed"), str(error))
+
+    @app.exception_handler(DiskError)
+    async def disk_error(request: Request, error: DiskError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        logger.warning("%s", error)
+        return _problem(503, "driver.isolation_unavailable", "The workspace's disk is not available")
 
     @app.exception_handler(PathRefusedError)
     async def path_refused(request: Request, error: PathRefusedError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]

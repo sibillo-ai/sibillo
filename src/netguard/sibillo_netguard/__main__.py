@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
-from sibillo_netguard.guard import healthy, run
+from sibillo_netguard.guard import ConfigurationError, healthy, resolver_from, run
 
 
 def main(argv: list[str]) -> int:
@@ -13,7 +14,12 @@ def main(argv: list[str]) -> int:
     if argv:
         print(f"usage: python -m sibillo_netguard [check], not {' '.join(argv)}", file=sys.stderr)
         return 2
-    run()
+    try:
+        resolver = resolver_from(dict(os.environ))
+    except ConfigurationError as error:
+        print(f"sibillo-netguard: configuration error: {error}", file=sys.stderr)
+        return 2
+    run(resolver)
     return 0
 
 

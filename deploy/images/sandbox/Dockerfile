@@ -79,6 +79,13 @@ RUN python3 -m venv /opt/reader \
     && rm /opt/reader-requirements.txt
 COPY --chmod=0755 deploy/images/sandbox/sibillo-read-page /usr/local/bin/sibillo-read-page
 
+# The disk helper's tools (ADR-0098): the driver makes, checks and grows
+# workspaces' disks with them, in a privileged container of its own that runs
+# no user content. A sandbox has no block device to use them on.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends e2fsprogs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Commands start in the scratch folder; only /workspace persists (ADR-0076); skills are mounted at /skills
 # (ADR-0096).
 RUN mkdir -p /scratch /workspace /skills

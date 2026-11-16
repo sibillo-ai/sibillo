@@ -16,6 +16,8 @@ SCRATCH = "/scratch"
 # The skills given to a run, read-only and outside the workspace (SBX-022, ADR-0096).
 SKILLS = "/skills"
 LABEL = "dev.sibillo.sandbox"
+# The gVisor flag that bounds the overlay of a sandbox's root filesystem (SBX-016, ADR-0098).
+DISK_ANNOTATION = "dev.gvisor.flag.overlay2"
 MIB = 1024 * 1024
 
 
@@ -34,6 +36,11 @@ class SandboxId:
     @property
     def volume(self) -> str:
         return f"sibillo-workspace-{self.tenant_id}-{self.user_id}-{self.conversation_id}"
+
+    @property
+    def disk_volume(self) -> str:
+        """The volume holding the workspace's disk, `workspace.ext4`; never mounted in a sandbox (ADR-0098)."""
+        return f"sibillo-disk-{self.tenant_id}-{self.user_id}-{self.conversation_id}"
 
     @property
     def skills_volume(self) -> str:
@@ -106,5 +113,7 @@ def container_config(
             "Privileged": False,
             "SecurityOpt": ["no-new-privileges"],
             "RestartPolicy": {"Name": "no"},
+            # gVisor bounds everything outside the workspace, without a runtime of its own (SBX-016, ADR-0098).
+            "Annotations": {DISK_ANNOTATION: f"root:self,size={configuration.disk_mb}m"},
         },
     }

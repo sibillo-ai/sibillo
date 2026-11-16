@@ -3,12 +3,14 @@
 The table matches only traffic entering from the sandbox bridge. It drops
 forwarded traffic to every local range of SBX-005, all IPv6 (SBX-013), and
 everything addressed to the host itself; the rest is left to the host's
-normal processing, so sandboxes reach public addresses (SBX-004). It never
-touches other tables.
+normal processing, so sandboxes reach public addresses (SBX-004). DNS, on
+ports 53 and 853, reaches only the instance's resolver (SBX-007, ADR-0098).
+It never touches other tables.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import signal
 import subprocess
@@ -38,12 +40,42 @@ BLOCKED_IPV4 = (
     "240.0.0.0/4",
 )
 
-RULES = f"""
+RESOLVER_VARIABLE = "SIBILLO_SANDBOX_RESOLVER"
+DEFAULT_RESOLVER = "9.9.9.9"
+DNS_PORTS = (53, 853)
+
+
+class ConfigurationError(Exception):
+    """The configuration is invalid or unknown; the message names the variable."""
+
+
+def resolver_from(environment: dict[str, str]) -> str:
+    """The instance's resolver: a public IPv4 address, which sandboxes can reach (SBX-005, SBX-007)."""
+    unknown = sorted(name for name in environment if name.startswith("SIBILLO_") and name != RESOLVER_VARIABLE)
+    if unknown:
+        raise ConfigurationError(f"unknown configuration variable {unknown[0]}")
+    value = environment.get(RESOLVER_VARIABLE, DEFAULT_RESOLVER) or DEFAULT_RESOLVER
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise ConfigurationError(f"{RESOLVER_VARIABLE} must be an IPv4 address") from None
+    if not isinstance(address, ipaddress.IPv4Address):
+        raise ConfigurationError(f"{RESOLVER_VARIABLE} must be an IPv4 address")
+    if any(address in ipaddress.IPv4Network(network) for network in BLOCKED_IPV4):
+        raise ConfigurationError(f"{RESOLVER_VARIABLE} must be a public address: sandboxes cannot reach {value}")
+    return value
+
+
+def rules(resolver: str) -> str:
+    """The table: no IPv6, no local ranges, nothing to the host, and DNS only to the resolver."""
+    ports = ", ".join(str(port) for port in DNS_PORTS)
+    return f"""
 table {TABLE_FAMILY} {TABLE_NAME} {{
   chain forward {{
     type filter hook forward priority -10; policy accept;
     iifname "{BRIDGE_INTERFACE}" meta nfproto ipv6 drop
     iifname "{BRIDGE_INTERFACE}" ip daddr {{ {", ".join(BLOCKED_IPV4)} }} drop
+    iifname "{BRIDGE_INTERFACE}" meta l4proto {{ tcp, udp }} th dport {{ {ports} }} ip daddr != {resolver} drop
   }}
   chain input {{
     type filter hook input priority -10; policy accept;
@@ -70,9 +102,9 @@ def table_present() -> bool:
     return listed.returncode == 0 and "chain forward" in listed.stdout and "chain input" in listed.stdout
 
 
-def install() -> None:
+def install(resolver: str) -> None:
     """Install the table, replacing any previous version of it atomically."""
-    script = f"table {TABLE_FAMILY} {TABLE_NAME}\ndelete table {TABLE_FAMILY} {TABLE_NAME}\n{RULES}"
+    script = f"table {TABLE_FAMILY} {TABLE_NAME}\ndelete table {TABLE_FAMILY} {TABLE_NAME}\n{rules(resolver)}"
     result = _nft("-f", "-", stdin=script)
     if result.returncode != 0:
         raise RuntimeError(f"nft refused the egress table: {result.stderr.strip()}")
@@ -98,7 +130,7 @@ def healthy() -> bool:
     return time.time() - last_missing > UNHEALTHY_AFTER_MISSING_SECONDS
 
 
-def run() -> None:
+def run(resolver: str) -> None:
     """Install the table, keep it in place, and remove it on shutdown."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     stopping = False
@@ -109,7 +141,7 @@ def run() -> None:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    install()
+    install(resolver)
     logger.info("egress table %s %s installed for %s", TABLE_FAMILY, TABLE_NAME, BRIDGE_INTERFACE)
     try:
         while not stopping:
@@ -117,7 +149,7 @@ def run() -> None:
             if not table_present():
                 logger.warning("egress table missing: reinstalling it")
                 _mark_missing()
-                install()
+                install(resolver)
     finally:
         remove()
         logger.info("egress table removed")
