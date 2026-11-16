@@ -66,7 +66,8 @@ def add(
 ) -> dict[str, Any]:
     """Add the scripted server to the household: the server as the API answers."""
     request = {
-        "name": f"Server {mcp.id}",
+        # Names are unique in a household, and a test may add one server twice.
+        "name": f"Server {mcp.id} {secrets.token_hex(2)}",
         "prefix": prefix or _prefix(),
         "url": mcp.url,
         "auth": auth or mcp.auth,
