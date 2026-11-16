@@ -491,7 +491,7 @@ Rationale: journey J13.
 
 ## UX-029: Remote MCP servers in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** e2e

@@ -271,7 +271,7 @@ Rationale: journey J13.
 
 ## AGT-018: Every call to a device or an MCP server is approved
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -285,7 +285,7 @@ AGT-006 alone (ADR-0063, ADR-0064, ADR-0099).
 
 ## AGT-019: Remote MCP servers of a household
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -434,7 +434,7 @@ nobody had chosen, as an internal error, and lost its work.
 
 ## AGT-028: Tools of an MCP server are reviewed
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -455,7 +455,7 @@ can change them at any time (T-29).
 
 ## AGT-029: Remote MCP servers for each user
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -472,7 +472,7 @@ Rationale: a household may want a server for some of its members only.
 
 ## AGT-030: Each user's own credential for an MCP server
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -495,7 +495,7 @@ one user act on a service as another (T-37).
 
 ## AGT-031: Signing in to an MCP server with OAuth
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
