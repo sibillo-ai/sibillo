@@ -36,6 +36,9 @@ ALLOWED_CAPABILITIES = {
     # Tool permissions, approvals and audit events: it takes tools away, ends the run to ask, and records
     # each call (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).
     "sibillo_server.approvals.Approvals",
+    # The accepted tools of the household's remote MCP servers, each call approved: the one exception of
+    # AGT-013, a client of remote servers at checked addresses, never a program (AGT-018, AGT-019, ADR-0099).
+    "sibillo_server.mcp_runs.McpServers",
 }
 # Tools the provider runs: only the search over the agent's own tools.
 ALLOWED_NATIVE_TOOLS = {"tool_search"}
