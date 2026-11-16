@@ -37,6 +37,8 @@ from sibillo_server.mcp_oauth import (
     OAuthError,
     OAuthSettings,
     authorization_url,
+    client_metadata,
+    client_metadata_url,
     exchange,
     new_verifier,
     renew,
@@ -804,6 +806,15 @@ async def delete_mcp_credential(server_id: uuid.UUID, identity: Authenticated, e
         # The tokens are forgotten, not revoked at the service (ADR-0100, point 8).
         await connection.execute(text("DELETE FROM mcp_credentials WHERE server_id = :id"), {"id": server_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/mcp-client", response_model=schemas.McpClientMetadata)
+async def get_mcp_client_metadata(request: Request) -> schemas.McpClientMetadata:
+    """Sibillo's Client ID Metadata Document, without authentication: it holds nothing secret (ADR-0100)."""
+    origin = _public_origin(request)
+    if origin is None or client_metadata_url(origin) is None:
+        raise errors.not_found()
+    return schemas.McpClientMetadata.model_validate(client_metadata(origin))
 
 
 def _state_hash(state: str) -> bytes:

@@ -26,6 +26,8 @@ from sibillo_server.mcp_http import mcp_http_client
 SECONDS = 15
 # The page of the web app the redirect lands on (ADR-0100, point 4).
 REDIRECT_PATH = "/mcp-sign-in"
+# Where the API serves Sibillo's Client ID Metadata Document (ADR-0100, point 3).
+CLIENT_METADATA_PATH = "/v1/mcp-client"
 CLIENT_NAME = "Sibillo"
 DETAIL_CHARS = 300
 # How a client authenticates to the token endpoint with a secret (RFC 6749).
@@ -74,6 +76,8 @@ class Discovered:
     iss_parameter_supported: bool
     auth_methods: tuple[str, ...]
     scope: str | None
+    # The authorization server reads Client ID Metadata Documents.
+    metadata_documents: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,27 @@ def same_address(first: str, second: str) -> bool:
 
 def redirect_uri(public_origin: str) -> str:
     return public_origin.rstrip("/") + REDIRECT_PATH
+
+
+def client_metadata_url(public_origin: str) -> str | None:
+    """The address of Sibillo's Client ID Metadata Document, which is its client ID; none without `https`."""
+    if urlsplit(public_origin).scheme != "https":
+        return None
+    return public_origin.rstrip("/") + CLIENT_METADATA_PATH
+
+
+def client_metadata(public_origin: str) -> dict[str, Any]:
+    """Sibillo as an OAuth client (RFC 7591): what registration sends, and what its document says."""
+    metadata: dict[str, Any] = {
+        "client_name": CLIENT_NAME,
+        "client_uri": public_origin.rstrip("/"),
+        "redirect_uris": [redirect_uri(public_origin)],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+    }
+    document = client_metadata_url(public_origin)
+    return metadata if document is None else {"client_id": document, **metadata}
 
 
 def challenge_of(verifier: str) -> str:
@@ -228,6 +253,7 @@ async def discover(url: str, private_network: bool) -> Discovered:
         if isinstance(methods, list)
         else ("client_secret_basic",),
         scope=scope or None,
+        metadata_documents=metadata.get("client_id_metadata_document_supported") is True,
     )
 
 
@@ -248,6 +274,9 @@ async def settings_for(
         else:
             method = "client_secret_post"
         registration, secret = "given", client_secret
+    elif found.metadata_documents and (document := client_metadata_url(public_origin)) is not None:
+        # The authorization server fetches Sibillo's document: nothing to register (ADR-0100, point 3).
+        client_id, secret, method, registration = document, None, "none", "metadata_document"
     else:
         if found.registration_endpoint is None:
             raise OAuthError("register", "the authorization server registers no clients: give a client ID")
@@ -272,13 +301,7 @@ async def _register(endpoint: str, private_network: bool, public_origin: str) ->
         try:
             response = await client.post(
                 endpoint,
-                json={
-                    "client_name": CLIENT_NAME,
-                    "redirect_uris": [redirect_uri(public_origin)],
-                    "grant_types": ["authorization_code", "refresh_token"],
-                    "response_types": ["code"],
-                    "token_endpoint_auth_method": "none",
-                },
+                json={name: value for name, value in client_metadata(public_origin).items() if name != "client_id"},
             )
         except httpx2.HTTPError as error:
             raise OAuthError("register", str(error)[:DETAIL_CHARS]) from None

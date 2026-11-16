@@ -770,7 +770,7 @@
         "oauth": "Each person signs in to the service with their own account."
       },
       "clientId": "Client ID (optional)",
-      "clientIdHint": "Only for a service that does not register clients by itself, such as GitHub: create an OAuth app there, with this site's sign-in address.",
+      "clientIdHint": "Usually leave it empty: the service reads Sibillo's own description, as Home Assistant does, or Sibillo registers itself. Some services, such as GitHub, need an OAuth app created there, with this site's address followed by /mcp-sign-in as its callback.",
       "clientSecret": "Client secret (optional)",
       "addButton": "Add",
       "connecting": "Connecting to the server…",

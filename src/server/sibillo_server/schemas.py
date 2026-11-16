@@ -852,7 +852,7 @@ class McpServerInfo(Response):
 class McpOAuth(Response):
     issuer: str
     client_id: str
-    client_registration: Literal["given", "dynamic"]
+    client_registration: Literal["given", "metadata_document", "dynamic"]
     has_client_secret: bool
     scope: str | None
 
@@ -947,6 +947,16 @@ class McpServerSummaryList(Response):
 
 class McpCredentialRequest(Request):
     token: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
+class McpClientMetadata(Response):
+    client_id: str
+    client_name: str
+    client_uri: str
+    redirect_uris: list[str]
+    grant_types: list[Literal["authorization_code", "refresh_token"]]
+    response_types: list[Literal["code"]]
+    token_endpoint_auth_method: Literal["none"]
 
 
 class McpSignInStarted(Response):
