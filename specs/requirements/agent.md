@@ -504,8 +504,9 @@ A user MUST be able to obtain their credential for a remote MCP server by
 signing in to the service in their browser, with OAuth 2.1's authorization
 code flow and PKCE (`S256`), as the MCP authorization specification
 describes. The control plane MUST find the server's authorization server
-from its metadata, and use a client given by a tenant admin or registered
-dynamically. Each sign-in MUST be bound to the user who started it, used
+from its metadata, and use a client given by a tenant admin, its own Client
+ID Metadata Document when the authorization server reads them, or a client
+registered dynamically. Each sign-in MUST be bound to the user who started it, used
 once, and expire after 10 minutes; its `state` MUST be checked, and the
 issuer when the authorization server returns it. Tokens MUST be asked for
 the server alone (`resource`), and renewed once at a time per credential. The

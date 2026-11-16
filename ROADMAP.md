@@ -113,7 +113,7 @@ Ideas kept for after these phases, not planned yet:
 - personal remote MCP servers that a user adds for themselves (ADR-0064,
   ADR-0099);
 - a credential of the household for remote MCP servers reached through one
-  shared account, Client ID Metadata Documents, and revoking a server's
+  shared account, and revoking a server's
   tokens when a user removes them (ADR-0099, ADR-0100);
 - sessions of external coding agents shown as Sibillo conversations.
 

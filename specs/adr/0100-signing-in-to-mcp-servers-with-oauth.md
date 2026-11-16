@@ -52,20 +52,24 @@ process.
    answer, or else the `scopes_supported` of the resource metadata, or else
    none. When anything is missing or does not match, the server is refused
    with `mcp_server.oauth_unsupported`, saying which step failed.
-3. **One client per server.** A tenant admin may give a client ID, and a
-   client secret, registered with the service by hand, as GitHub requires;
-   Home Assistant takes `SIBILLO_PUBLIC_ORIGIN` itself as a client ID,
-   without registration. Otherwise Sibillo registers dynamically, when the
-   authorization server offers it, as client "Sibillo" with its redirect
-   address, the grants `authorization_code` and `refresh_token`, and no
-   client authentication. Neither is refused with
-   `mcp_server.oauth_unsupported`. The client serves every user of the
+3. **One client per server,** chosen in the order of the MCP authorization
+   specification. A tenant admin may give a client ID, and a client secret,
+   registered with the service by hand, as GitHub requires. Otherwise, when
+   the authorization server's metadata says
+   `client_id_metadata_document_supported` and `SIBILLO_PUBLIC_ORIGIN` is
+   `https`, the client ID is the address of Sibillo's own Client ID Metadata
+   Document, `SIBILLO_PUBLIC_ORIGIN` followed by `/v1/mcp-client`, which the
+   authorization server fetches, as Home Assistant does. The document, served
+   without authentication, names the client "Sibillo" and gives its
+   `client_id`, its redirect address, the grants `authorization_code` and
+   `refresh_token`, and no client authentication (`none`); it holds nothing
+   secret. Otherwise Sibillo registers dynamically, when the authorization
+   server offers it, with the same metadata. None of the three is refused
+   with `mcp_server.oauth_unsupported`. The client serves every user of the
    household. A client secret is encrypted like a token (ADR-0099 point 3),
    with the server's ID as associated data, and never returned; with one,
    Sibillo authenticates to the token endpoint with `client_secret_basic`,
-   or with `client_secret_post` when only that is offered. Client ID
-   Metadata Documents are not used, since an authorization server often
-   cannot reach Sibillo.
+   or with `client_secret_post` when only that is offered.
 4. **The redirect lands in the web app.** The redirect address is
    `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in`, a page of the web
    app that sends what it received to the API with the user's session, and
@@ -127,8 +131,13 @@ process.
   `SIBILLO_PUBLIC_ORIGIN`; a native client finishes it in the web app.
 - Tokens stay valid at the service after a user removes them, until they
   expire or the user revokes them there; the app says so.
-- Servers that need a Client ID Metadata Document, or a scope granted step
-  by step, cannot be signed in to yet. Servers of the earlier protocol
+- A household's admin adds Home Assistant, or another service that reads
+  Client ID Metadata Documents, with its address alone: the service fetches
+  Sibillo's document, so it must reach `SIBILLO_PUBLIC_ORIGIN`, which a
+  service on the household's network usually does. An instance opened only
+  at `http://localhost` cannot use them, since a client ID must be `https`.
+- Servers that need a scope granted step by step cannot be signed in to
+  yet. Servers of the earlier protocol
   revision, without protected resource metadata, can be used with `token`.
 
 ## Alternatives considered
@@ -139,10 +148,12 @@ process.
 - **A redirect to an API endpoint, authenticated by the session cookie:**
   works for the web app only, and turns a `GET` into a change of state;
   posting from the web app works for every client and keeps the API's rules.
-- **Client ID Metadata Documents:** the specification's preferred way, but
-  the authorization server must fetch the document from Sibillo, which a
-  household instance often does not expose. They can be added beside the
-  other two.
+- **Client ID Metadata Documents only:** the specification's preferred way,
+  and Home Assistant's, but a hosted service must fetch the document from
+  Sibillo, which a household instance often does not expose to the
+  internet; registration and given clients remain beside it.
+- **The origin itself as Home Assistant's client ID, given by hand:** works
+  with its IndieAuth sign-in, but asks the admin to know it.
 - **Signing in once for the household:** the shared credential ADR-0099
   rejects.
 - **Revoking tokens when a user removes them (RFC 7009):** worth adding, but

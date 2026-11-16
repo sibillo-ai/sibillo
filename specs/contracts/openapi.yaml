@@ -2088,6 +2088,26 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /mcp-client:
+    get:
+      tags: [conversations]
+      operationId: getMcpClientMetadata
+      summary: Sibillo's Client ID Metadata Document, for the authorization servers of remote MCP servers.
+      description: |
+        Its address is the client ID of sign-ins to an authorization server
+        that reads Client ID Metadata Documents (ADR-0100, point 3). Served
+        without authentication; it holds nothing secret. Not found when
+        `SIBILLO_PUBLIC_ORIGIN` is not an `https` origin.
+      security: []
+      x-requirements: [AGT-031]
+      responses:
+        "200":
+          description: The document.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpClientMetadata" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /mcp-sign-in:
     post:
       tags: [conversations]
@@ -3167,8 +3187,10 @@ components:
                 client_id: { type: string }
                 client_registration:
                   type: string
-                  enum: [given, dynamic]
-                  description: Whether the client was given by a tenant admin or registered by Sibillo.
+                  enum: [given, metadata_document, dynamic]
+                  description: |
+                    Whether the client was given by a tenant admin, is Sibillo's
+                    Client ID Metadata Document, or was registered by Sibillo.
                 has_client_secret: { type: boolean }
                 scope: { type: [string, "null"], description: "The scope sign-ins ask for." }
             - type: "null"
@@ -3297,6 +3319,25 @@ components:
       additionalProperties: false
       properties:
         token: { type: string, minLength: 1, maxLength: 4000, writeOnly: true, description: "Sent to the server as a bearer token." }
+
+    McpClientMetadata:
+      type: object
+      description: OAuth client metadata (RFC 7591), as the Client ID Metadata Document draft describes it.
+      required: [client_id, client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method]
+      properties:
+        client_id: { type: string, format: uri, description: "The document's own address." }
+        client_name: { type: string }
+        client_uri: { type: string, format: uri }
+        redirect_uris:
+          type: array
+          items: { type: string, format: uri }
+        grant_types:
+          type: array
+          items: { type: string, enum: [authorization_code, refresh_token] }
+        response_types:
+          type: array
+          items: { type: string, enum: [code] }
+        token_endpoint_auth_method: { type: string, enum: [none] }
 
     McpSignInStarted:
       type: object

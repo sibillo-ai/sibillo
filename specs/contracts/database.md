@@ -603,7 +603,7 @@ A household's remote MCP servers (AGT-019, ADR-0064, ADR-0099).
 | `url` | text | not null; the address of its Streamable HTTP endpoint |
 | `auth` | text | not null; `none`, `token` or `oauth` (AGT-030, AGT-031) |
 | `generation` | uuid | not null; a new random value whenever `url`, `auth` or the OAuth client changes; credentials and sign-ins of another generation are not used (ADR-0099) |
-| `oauth` | jsonb | for `oauth`, what discovery found and the client (ADR-0100): `{issuer, authorization_endpoint, token_endpoint, iss_parameter_supported, scope, client_id, client_registration, token_endpoint_auth_method}`, where `client_registration` is `given` or `dynamic` and `token_endpoint_auth_method` is `none`, `client_secret_basic` or `client_secret_post`; null otherwise |
+| `oauth` | jsonb | for `oauth`, what discovery found and the client (ADR-0100): `{issuer, authorization_endpoint, token_endpoint, iss_parameter_supported, scope, client_id, client_registration, token_endpoint_auth_method}`, where `client_registration` is `given`, `metadata_document` or `dynamic` and `token_endpoint_auth_method` is `none`, `client_secret_basic` or `client_secret_post`; null otherwise |
 | `oauth_client_secret_ciphertext` | bytea | the OAuth client's secret, encrypted with AES-256-GCM under `SIBILLO_SECRET_KEY` with the server's ID as associated data (MOD-002); null when the client has none |
 | `private_network` | boolean | not null, default false; true when `url` was set by a user who is the instance admin, as in `connections` |
 | `enabled` | boolean | not null, default true; false when a tenant admin switched it off for everyone |
