@@ -228,6 +228,7 @@ async def create_run(
             "scope": decision.scope,
             "reason": decision.reason,
             "expired": expired,
+            "tool": decision.tool,
         }
         if decision.scope == "turn":
             turn = True
@@ -295,6 +296,7 @@ async def create_run(
         reasoning=conversation.reasoning,
         disabled_tools=list(conversation.disabled_tools),
         disabled_skills=list(conversation.disabled_skills),
+        disabled_servers=[str(server) for server in conversation.disabled_servers],
         base_instructions=base,
         additional_instructions=additional,
         temporary=conversation.temporary,

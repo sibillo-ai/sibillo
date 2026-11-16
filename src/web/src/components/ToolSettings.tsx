@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { api, unwrap, type AuditEvent, type CapabilityClass, type PermissionSetting, type ToolInfo, type ToolName, type ToolPermissions } from "../api/client";
+import { useHouseholdMcpServers } from "../mcp";
 import { useNotify } from "../notices";
 import { outcomeLabel, toolLabel, useTools } from "../tools";
 import { UserEgressSwitch } from "./EgressSettings";
@@ -172,6 +173,14 @@ function PermissionsForm({ userId, stored, tools }: { userId: string; stored: To
     setSaved(false);
   }
 
+  function setServer(id: string, denied: boolean) {
+    const next = { ...(permissions.servers ?? {}) };
+    if (denied) next[id] = "deny";
+    else delete next[id];
+    setPermissions({ ...permissions, servers: next });
+    setSaved(false);
+  }
+
   async function save() {
     try {
       unwrap(await api.PUT("/tenant/users/{user_id}/tool-permissions", { params: { path: { user_id: userId } }, body: permissions }));
@@ -229,6 +238,7 @@ function PermissionsForm({ userId, stored, tools }: { userId: string; stored: To
           </tbody>
         </table>
       </div>
+      <ServerPermissions denied={permissions.servers ?? {}} onChange={setServer} />
       <div className="flex items-center gap-3">
         <button type="button" className={PRIMARY} onClick={() => void save()}>
           {t("permissions.save")}
@@ -236,6 +246,30 @@ function PermissionsForm({ userId, stored, tools }: { userId: string; stored: To
         <span role="status" className="text-sm text-muted">
           {saved ? t("settings.saved") : ""}
         </span>
+      </div>
+    </div>
+  );
+}
+
+/** The household's remote MCP servers, each of which the admin can deny the user (AGT-029, ADR-0099). */
+function ServerPermissions({ denied, onChange }: { denied: Record<string, "deny">; onChange: (id: string, denied: boolean) => void }) {
+  const { t } = useTranslation();
+  const servers = useHouseholdMcpServers();
+  if (!servers.data || servers.data.length === 0) return null;
+  return (
+    <div>
+      <h3 className="mb-1 text-sm font-bold">{t("mcp.permissions.title")}</h3>
+      <p className="mb-2.5 max-w-[62ch] text-sm text-muted">{t("mcp.permissions.hint")}</p>
+      <div className="flex max-w-[460px] flex-col gap-1.5">
+        {servers.data.map((server) => (
+          <label key={server.id} className="flex items-center justify-between gap-3 text-sm">
+            <span>{server.name}</span>
+            <span className="flex items-center gap-2">
+              <input type="checkbox" checked={denied[server.id] === "deny"} onChange={(event) => onChange(server.id, event.target.checked)} />
+              {t("mcp.permissions.deny")}
+            </span>
+          </label>
+        ))}
       </div>
     </div>
   );

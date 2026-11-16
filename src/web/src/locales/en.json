@@ -217,7 +217,8 @@
       "repeated": "May have run twice",
       "deletedChat": "In a deleted chat",
       "untitled": "Untitled chat"
-    }
+    },
+    "usedOf": "Used {{name}} of {{server}}"
   },
   "rewind": {
     "title": "Send the edited message?",
@@ -743,5 +744,117 @@
     "skillMd": "SKILL.md",
     "urlPlaceholder": "owner/repo",
     "pathPlaceholder": "references/notes.md"
+  },
+  "mcp": {
+    "auth": {
+      "none": "No sign-in",
+      "token": "Each person's own token",
+      "oauth": "Each person signs in"
+    },
+    "admin": {
+      "title": "MCP servers",
+      "hint": "Services the assistant can use through the Model Context Protocol, such as Home Assistant or GitHub. You choose which of each server's tools the household may use; the assistant asks before every call. People who need an account connect their own.",
+      "none": "No server yet.",
+      "add": "Add a server",
+      "addTitle": "Add an MCP server",
+      "addHint": "Its address speaks Streamable HTTP. You review its tools after adding it.",
+      "name": "Name",
+      "prefix": "Prefix",
+      "prefixHint": "Lowercase letters, digits and single underscores, such as home. The model sees its tools as prefix__tool. It cannot be changed later.",
+      "address": "Address",
+      "addressHint": "Such as https://api.example.com/mcp, or http://homeassistant.local:8123/api/mcp on the household's network.",
+      "signIn": "Sign-in",
+      "authHints": {
+        "none": "The server needs no account.",
+        "token": "Each person enters a token of their own, created at the service.",
+        "oauth": "Each person signs in to the service with their own account."
+      },
+      "clientId": "Client ID (optional)",
+      "clientIdHint": "Only for a service that does not register clients by itself, such as GitHub: create an OAuth app there, with this site's sign-in address.",
+      "clientSecret": "Client secret (optional)",
+      "addButton": "Add",
+      "connecting": "Connecting to the server…",
+      "notAdded": "The server could not be added.",
+      "taken": "A server with this name or prefix already exists, or the household has 20 servers.",
+      "accepted": "{{accepted}} of {{total}} tools accepted",
+      "changedCount": "Tools changed since accepted: {{count}}",
+      "connectToList": "Connect your own account under Services to list its tools.",
+      "off": "Off for everyone",
+      "review": "Review tools",
+      "reviewLabel": "Review the tools of {{name}}",
+      "refresh": "Refresh",
+      "refreshLabel": "Refresh {{name}}",
+      "refreshing": "Refreshing…",
+      "refreshed": "{{name}}: tools listed again",
+      "notRefreshed": "The tools could not be listed",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "removeLabel": "Remove {{name}}",
+      "removeTitle": "Remove {{name}}?",
+      "removeBody": "Its tools leave every conversation, and everyone's account connections to it are forgotten."
+    },
+    "review": {
+      "title": "Tools of {{name}}",
+      "hint": "Accept only the tools whose description you are happy for the assistant to read: the model reads every word of it. A tool that changes is not used until you accept it again.",
+      "accept": "Accept {{name}}",
+      "noTools": "The server lists no tools yet.",
+      "noDescription": "No description.",
+      "schema": "Input",
+      "hints": "Hints from the server, which grant nothing:",
+      "whenAccepted": "When you accepted it:",
+      "now": "Now:",
+      "goneHint": "The server no longer lists this tool.",
+      "notSaved": "Not saved",
+      "listedAgain": "The server's tools changed since you saw them: look at them again.",
+      "status": {
+        "accepted": "Accepted",
+        "changed": "Changed",
+        "gone": "Gone",
+        "unusable": "Can't be used"
+      },
+      "problems": {
+        "name": "Its name is too long or has characters a model can't use.",
+        "description_too_long": "Its description is longer than 4,000 characters.",
+        "schema_too_large": "Its input is described in more than 16 KB.",
+        "too_many_tools": "The server lists more than 100 tools.",
+        "requires_tasks": "It works only as a background task, which Sibillo does not support."
+      }
+    },
+    "services": {
+      "title": "Services",
+      "hint": "Services your household connected the assistant to. For those that need an account, connect your own: nobody else uses it, and the assistant asks you before every call.",
+      "none": "Your household has connected no service yet.",
+      "tools": "Tools: {{tools}}",
+      "noAccount": "No account needed.",
+      "state": {
+        "not_needed": "No account needed",
+        "missing": "Not connected",
+        "valid": "Connected",
+        "expired": "Sign-in expired"
+      },
+      "token": "Token",
+      "connect": "Connect",
+      "leastRights": "Give the token the least rights it needs, such as read-only access, or access to some repositories only.",
+      "signIn": "Sign in",
+      "disconnect": "Disconnect",
+      "revokeHint": "Sibillo forgets your sign-in; the service may still list Sibillo among your connected apps, where you can remove it.",
+      "notConnectedError": "Not connected",
+      "signingIn": "Signing in",
+      "completing": "Finishing the sign-in…",
+      "signInFailed": "The sign-in did not work.",
+      "signedIn": "Connected to {{name}}",
+      "back": "Back to Services"
+    },
+    "switches": {
+      "title": "Services",
+      "hint": "Each service connected by your household, with the tools its admin accepted. The assistant asks before every call to one.",
+      "noTools": "No tools yet",
+      "notConnected": "Your account is not connected: connect it in Settings, under Services."
+    },
+    "permissions": {
+      "title": "Services",
+      "hint": "Deny a service to take all of its tools away from this user.",
+      "deny": "Deny"
+    }
   }
 }

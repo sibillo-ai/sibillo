@@ -30,6 +30,8 @@ CONTRACT_TABLES = (
     "connections",
     "connection_models",
     "served_context_windows",
+    "mcp_servers",
+    "mcp_server_tools",
     "folders",
     "user_settings",
     "memory_items",
@@ -44,6 +46,8 @@ CONTRACT_TABLES = (
     "tool_permissions",
     "egress_policies",
     "audit_events",
+    "mcp_credentials",
+    "mcp_sign_ins",
 )
 # Who may write a row of `egress_policies`: an admin what admins set, a user their own choice (MOD-003).
 EGRESS_WRITER = (
@@ -51,7 +55,7 @@ EGRESS_WRITER = (
     " OR (set_by = 'user' AND user_id = app_user_id()))"
 )
 # Tables of a tenant that every user of it reads and its tenant admins change (ADR-0069).
-TENANT_TABLES = ("connections", "connection_models")
+TENANT_TABLES = ("connections", "connection_models", "mcp_servers", "mcp_server_tools")
 PRIVATE_TABLES = (
     "folders",
     "user_settings",
@@ -65,6 +69,8 @@ PRIVATE_TABLES = (
     "compaction_checkpoints",
     "usage_ledger",
     "audit_events",
+    "mcp_credentials",
+    "mcp_sign_ins",
 )
 # The tools a user can switch off, every tool by its name (CNV-013, ADR-0081, ADR-0087).
 TOOL_NAMES = (
@@ -296,6 +302,49 @@ TABLES = [
       FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE CASCADE
     )
     """,
+    # A household's remote MCP servers (AGT-019, ADR-0064, ADR-0099, ADR-0100).
+    """
+    CREATE TABLE mcp_servers (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL REFERENCES tenants (id),
+      name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 100),
+      prefix text NOT NULL CHECK (char_length(prefix) <= 20 AND prefix ~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'),
+      url text NOT NULL,
+      auth text NOT NULL CHECK (auth IN ('none', 'token', 'oauth')),
+      -- A new address, authentication or OAuth client starts a new generation (ADR-0099).
+      generation uuid NOT NULL,
+      oauth jsonb,
+      oauth_client_secret_ciphertext bytea,
+      private_network boolean NOT NULL DEFAULT false,
+      enabled boolean NOT NULL DEFAULT true,
+      server_name text,
+      server_version text,
+      listed_at timestamptz,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      UNIQUE (tenant_id, name),
+      UNIQUE (tenant_id, prefix),
+      UNIQUE (tenant_id, id),
+      CHECK ((oauth IS NOT NULL) = (auth = 'oauth'))
+    )
+    """,
+    # The tools of a remote MCP server, as last listed and as accepted (AGT-028, ADR-0099).
+    """
+    CREATE TABLE mcp_server_tools (
+      tenant_id uuid NOT NULL,
+      server_id uuid NOT NULL,
+      name text NOT NULL CHECK (name <> ''),
+      listed jsonb,
+      accepted jsonb,
+      problem text CHECK (
+        problem IN ('name', 'description_too_long', 'schema_too_large', 'too_many_tools', 'requires_tasks')
+      ),
+      accepted_at timestamptz,
+      PRIMARY KEY (server_id, name),
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE,
+      CHECK ((accepted IS NULL) = (accepted_at IS NULL))
+    )
+    """,
     # A user's memory: the only copy of what the assistant remembers about them (MEM-001 to MEM-008, ADR-0095).
     """
     CREATE TABLE memory_items (
@@ -377,6 +426,8 @@ TABLES = [
       model text CHECK (model <> ''),
       reasoning text CHECK (reasoning IN ('off', 'on', 'deep')),
       disabled_tools text[] NOT NULL DEFAULT '{{}}' CHECK (disabled_tools <@ {TOOL_NAMES}),
+      -- The remote MCP servers that are off, without a reference (AGT-029, ADR-0099).
+      disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
       base_instructions text,
       additional_instructions text,
       memory_enabled boolean NOT NULL DEFAULT true,
@@ -407,6 +458,8 @@ TABLES = [
       disabled_tools text[] NOT NULL DEFAULT '{{}}' CHECK (disabled_tools <@ {TOOL_NAMES}),
       -- The skills off in it, by name (AGT-017, ADR-0096).
       disabled_skills text[] NOT NULL DEFAULT '{{}}',
+      -- The remote MCP servers off in it, without a reference (AGT-029, ADR-0099).
+      disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
       -- What its user allowed by answering approval requests (AGT-004, AGT-006, ADR-0090).
       allowed_web_and_commands boolean NOT NULL DEFAULT false,
       allowed_tools text[] NOT NULL DEFAULT '{{}}' CHECK (allowed_tools <@ {TOOL_NAMES}),
@@ -556,17 +609,57 @@ TABLES = [
     "CREATE INDEX usage_ledger_owner_created_at_idx ON usage_ledger (owner_id, created_at)",
     "CREATE INDEX usage_ledger_conversation_idx ON usage_ledger (conversation_id)",
     "CREATE INDEX usage_ledger_run_idx ON usage_ledger (run_id)",
+    # Each user's own credential for a remote MCP server (AGT-030, AGT-031, ADR-0099, ADR-0100).
+    """
+    CREATE TABLE mcp_credentials (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      server_id uuid NOT NULL,
+      server_generation uuid NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('token', 'oauth')),
+      access_token_ciphertext bytea NOT NULL,
+      refresh_token_ciphertext bytea,
+      expires_at timestamptz,
+      status text NOT NULL CHECK (status IN ('valid', 'expired')),
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      UNIQUE (server_id, owner_id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    # OAuth sign-ins waiting for their redirect (AGT-031, ADR-0100).
+    """
+    CREATE TABLE mcp_sign_ins (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      server_id uuid NOT NULL,
+      server_generation uuid NOT NULL,
+      state_hash bytea NOT NULL UNIQUE,
+      code_verifier text NOT NULL,
+      created_at timestamptz NOT NULL,
+      expires_at timestamptz NOT NULL,
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
     # A tenant admin's settings of tools for each user (AGT-002, ADR-0090).
     f"""
     CREATE TABLE tool_permissions (
       tenant_id uuid NOT NULL,
       user_id uuid NOT NULL,
-      subject_kind text NOT NULL CHECK (subject_kind IN ('tool', 'class')),
+      subject_kind text NOT NULL CHECK (subject_kind IN ('tool', 'class', 'server')),
       subject text NOT NULL CHECK (
         (subject_kind = 'tool' AND subject = ANY({TOOL_NAMES}))
         OR (subject_kind = 'class' AND subject = ANY({CAPABILITY_CLASSES}))
+        OR (subject_kind = 'server' AND subject ~ '^[0-9a-f-]{{36}}$')
       ),
-      setting text NOT NULL CHECK (setting IN ('allow', 'ask', 'deny')),
+      -- A server is only ever denied (AGT-029, ADR-0099).
+      setting text NOT NULL CHECK (
+        setting IN ('allow', 'ask', 'deny') AND (subject_kind <> 'server' OR setting = 'deny')
+      ),
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (tenant_id, user_id, subject_kind, subject),
       FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id)
@@ -658,6 +751,34 @@ TRIGGERS = [
     """
     CREATE TRIGGER connections_guard BEFORE INSERT OR UPDATE ON connections
     FOR EACH ROW EXECUTE FUNCTION connections_guard()
+    """,
+    # The same rule for remote MCP servers (AGT-019, ADR-0099).
+    """
+    CREATE FUNCTION mcp_servers_guard() RETURNS trigger LANGUAGE plpgsql
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    BEGIN
+      IF public.app_is_instance_admin() THEN
+        RETURN NEW;
+      END IF;
+      IF TG_OP = 'INSERT' THEN
+        IF NEW.private_network THEN
+          RAISE EXCEPTION 'only the instance admin sets a private address'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
+      ELSIF NEW.url IS DISTINCT FROM OLD.url THEN
+        NEW.private_network := false;
+      ELSIF NEW.private_network AND NOT OLD.private_network THEN
+        RAISE EXCEPTION 'only the instance admin sets a private address'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      RETURN NEW;
+    END
+    $$
+    """,
+    """
+    CREATE TRIGGER mcp_servers_guard BEFORE INSERT OR UPDATE ON mcp_servers
+    FOR EACH ROW EXECUTE FUNCTION mcp_servers_guard()
     """,
     # Disabling an account revokes its sessions (AUTH-009, ADR-0048). It runs
     # as sibillo_owner: row-level security keeps a tenant admin from reaching
@@ -1101,6 +1222,8 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, UPDATE, DELETE ON runs TO sibillo_app",
     "GRANT SELECT, INSERT ON usage_ledger TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON connections, connection_models TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON mcp_servers, mcp_server_tools, mcp_credentials TO sibillo_app",
+    "GRANT SELECT, INSERT, DELETE ON mcp_sign_ins TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON served_context_windows TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON tool_permissions TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON egress_policies TO sibillo_app",
@@ -1154,6 +1277,7 @@ def downgrade() -> None:
             "DROP FUNCTION expired_approvals()",
             "DROP FUNCTION revoke_sessions_of_disabled_user()",
             "DROP FUNCTION connections_guard()",
+            "DROP FUNCTION mcp_servers_guard()",
             "DROP FUNCTION bootstrap_instance(text, text, text, text)",
             "DROP FUNCTION remove_passkeys(text)",
             "DROP FUNCTION auth_take_sign_in(bytea)",

@@ -38,13 +38,21 @@ async def permissions_of(connection: AsyncConnection, user_id: uuid.UUID) -> Per
     ).all()
     tools: dict[str, Setting] = {}
     classes: dict[str, Setting] = {}
+    servers: set[str] = set()
     for row in rows:
-        (tools if row.subject_kind == "tool" else classes)[str(row.subject)] = row.setting
-    return Permissions(tools=tools, classes=classes)
+        if row.subject_kind == "server":
+            servers.add(str(row.subject))
+        else:
+            (tools if row.subject_kind == "tool" else classes)[str(row.subject)] = row.setting
+    return Permissions(tools=tools, classes=classes, servers=frozenset(servers))
 
 
 def _permissions_out(permissions: Permissions) -> schemas.ToolPermissionsOut:
-    return schemas.ToolPermissionsOut(tools=dict(permissions.tools), classes=dict(permissions.classes))
+    return schemas.ToolPermissionsOut(
+        tools=dict(permissions.tools),
+        classes=dict(permissions.classes),
+        servers=dict.fromkeys(sorted(permissions.servers), "deny"),
+    )
 
 
 async def _tenant_user(connection: AsyncConnection, user_id: uuid.UUID) -> None:
@@ -54,7 +62,11 @@ async def _tenant_user(connection: AsyncConnection, user_id: uuid.UUID) -> None:
         raise errors.not_found()
 
 
-@router.get("/tenant/users/{user_id}/tool-permissions", response_model=schemas.ToolPermissionsOut)
+@router.get(
+    "/tenant/users/{user_id}/tool-permissions",
+    response_model=schemas.ToolPermissionsOut,
+    response_model_exclude_defaults=True,
+)
 async def get_tool_permissions(
     user_id: uuid.UUID, identity: Authenticated, engine: Engine
 ) -> schemas.ToolPermissionsOut:
@@ -65,7 +77,11 @@ async def get_tool_permissions(
         return _permissions_out(await permissions_of(connection, user_id))
 
 
-@router.put("/tenant/users/{user_id}/tool-permissions", response_model=schemas.ToolPermissionsOut)
+@router.put(
+    "/tenant/users/{user_id}/tool-permissions",
+    response_model=schemas.ToolPermissionsOut,
+    response_model_exclude_defaults=True,
+)
 async def set_tool_permissions(
     user_id: uuid.UUID, body: schemas.ToolPermissions, identity: Authenticated, engine: Engine
 ) -> schemas.ToolPermissionsOut:
@@ -73,10 +89,21 @@ async def set_tool_permissions(
         raise errors.permission_denied()
     async with transaction(engine, identity) as connection:
         await _tenant_user(connection, user_id)
+        # A server of the household; others' are not found (AGT-029).
+        known = {
+            row[0]
+            for row in await connection.execute(
+                text("SELECT id FROM mcp_servers WHERE id = ANY(:ids)"), {"ids": list(body.servers)}
+            )
+        }
+        if unknown := set(body.servers) - known:
+            raise errors.invalid(f"/servers/{sorted(unknown)[0]}", "not_a_server")
         await connection.execute(text("DELETE FROM tool_permissions WHERE user_id = :user"), {"user": user_id})
-        settings = [("tool", name, setting) for name, setting in body.tools.items()] + [
-            ("class", name, setting) for name, setting in body.classes.items()
-        ]
+        settings = (
+            [("tool", name, setting) for name, setting in body.tools.items()]
+            + [("class", name, setting) for name, setting in body.classes.items()]
+            + [("server", str(server), setting) for server, setting in body.servers.items()]
+        )
         for kind, subject, setting in settings:
             await connection.execute(
                 text(

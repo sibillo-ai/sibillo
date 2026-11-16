@@ -124,6 +124,10 @@ class RunDeps:
     prepare_sandbox: Callable[[], Awaitable[None]] | None = None
     # The run this one continues: for a run that answers an interrupt, the run that asked (ADR-0033).
     parent_run_id: uuid.UUID | None = None
+    # The tools of the household's remote MCP servers this run offers, as `mcp_runs.RunServers`; typed loosely,
+    # as memory is. And how long a call to one may take (AGT-019, ADR-0099).
+    mcp: Any = None
+    mcp_call_seconds: float = 120
     location: str = "remote"
     prices: dict[str, Any] = field(default_factory=dict[str, Any])
     # The model's context window, and what the run used so far (MOD-007, ADR-0073).

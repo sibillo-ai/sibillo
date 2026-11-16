@@ -10,6 +10,7 @@ import type { ResumeEntry } from "../api/stream";
 import { forkConversation, rewindConversation, updateConversation, useRefreshConversations } from "../conversations";
 import { formatMoney, isPaid, USAGE } from "../costs";
 import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
+import { useServerTool } from "../mcp";
 import { useNotify } from "../notices";
 import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
@@ -793,6 +794,8 @@ function CallState({ done, running }: { done: boolean; running: boolean }) {
 /** Tool activity as a compact summary that expands to its full details, running or done (UX-003, ADR-0085). */
 function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind: "tool" }>; running: boolean; decision?: PathRun["approvals"][number] | undefined }) {
   const { t } = useTranslation();
+  // A remote MCP server's tool, by its title and its server's name (UX-029).
+  const serverTool = useServerTool(part.name);
   const activity = toolActivity(part.name);
   const args = argumentsOf(part.args);
   const command = activity === "running" && typeof args.command === "string" ? args.command : null;
@@ -812,7 +815,9 @@ function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind:
               ? t("activity.read")
               : activity === "searching"
                 ? t("activity.searched")
-                : t("activity.used", { name: part.name });
+                : serverTool
+                  ? t("activity.usedOf", { name: serverTool.title, server: serverTool.server })
+                  : t("activity.used", { name: part.name });
   // A command's first line, under what it is for; other tools show their first argument beside the label.
   const preview = command !== null ? (command.split("\n")[0] ?? "") : argumentPreview(part.args);
   // A call that never ran, denied or refused, is not done: its outcome says what became of it (UX-023).

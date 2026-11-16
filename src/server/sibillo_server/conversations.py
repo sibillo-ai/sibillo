@@ -39,7 +39,7 @@ router = APIRouter()
 
 CONVERSATION_COLUMNS = (
     "id, title, archived_at IS NOT NULL AS archived, temporary, active_run_id, connection_id, model, reasoning,"
-    " disabled_tools, disabled_skills, allowed_web_and_commands, allowed_tools, base_instructions,"
+    " disabled_tools, disabled_skills, disabled_servers, allowed_web_and_commands, allowed_tools, base_instructions,"
     " additional_instructions, folder_id,"
     " pinned_at IS NOT NULL AS pinned, forked_from_conversation_id, forked_from_run_id, last_message_at,"
     f" pending_interrupts, approvals_expire_at, {CONVERSATION_PLAN}, created_at, updated_at, {CONVERSATION_COST}"
@@ -75,6 +75,7 @@ def conversation_response(row: Any) -> schemas.Conversation:
         reasoning=row.reasoning,
         disabled_tools=list(row.disabled_tools),
         disabled_skills=list(row.disabled_skills),
+        disabled_servers=list(row.disabled_servers),
         allowances=schemas.Allowances(web_and_commands=row.allowed_web_and_commands, tools=list(row.allowed_tools)),
         base_instructions=row.base_instructions,
         additional_instructions=row.additional_instructions,
@@ -129,13 +130,14 @@ async def create_conversation(
         model = choice or defaults.model
         reasoning = body.reasoning if body is not None and body.reasoning is not None else defaults.reasoning
         disabled = body.disabled_tools if body is not None and body.disabled_tools is not None else None
+        servers_off = body.disabled_servers if body is not None and body.disabled_servers is not None else None
         row = (
             await connection.execute(
                 text(
                     "INSERT INTO conversations (id, tenant_id, owner_id, title, connection_id, model, reasoning,"  # noqa: S608
-                    " disabled_tools, temporary, last_message_at, created_at, updated_at) VALUES (:id, :tenant_id,"
-                    " :owner_id, :title, :connection_id, :model, :reasoning, :disabled_tools, :temporary, now(), now(),"
-                    " now())"
+                    " disabled_tools, disabled_servers, temporary, last_message_at, created_at, updated_at) VALUES"
+                    " (:id, :tenant_id, :owner_id, :title, :connection_id, :model, :reasoning, :disabled_tools,"
+                    " :disabled_servers, :temporary, now(), now(), now())"
                     f" RETURNING {CONVERSATION_COLUMNS}"
                 ),
                 {
@@ -148,6 +150,7 @@ async def create_conversation(
                     "model": None if model is None else model.model,
                     "reasoning": reasoning,
                     "disabled_tools": defaults.disabled_tools if disabled is None else disabled,
+                    "disabled_servers": defaults.disabled_servers if servers_off is None else servers_off,
                     "temporary": body is not None and body.temporary,
                 },
             )
@@ -216,7 +219,7 @@ async def update_conversation(
             raise errors.invalid("/model", "not_offered")
         if body.folder_id is not None and not await _owns_folder(connection, body.folder_id):
             raise errors.invalid("/folder_id", "not_a_folder")
-        for name in ("pinned", "reasoning", "disabled_tools", "disabled_skills", "allowances"):
+        for name in ("pinned", "reasoning", "disabled_tools", "disabled_skills", "disabled_servers", "allowances"):
             if name in present and getattr(body, name) is None:
                 raise errors.invalid(f"/{name}", "null")
         # Allowances are only withdrawn here; only an answered approval request creates one (AGT-006, AGT-012).
@@ -237,6 +240,7 @@ async def update_conversation(
             "reasoning": body.reasoning,
             "disabled_tools": body.disabled_tools,
             "disabled_skills": body.disabled_skills,
+            "disabled_servers": body.disabled_servers,
             "allowed_web_and_commands": None if allowances is None else allowances.web_and_commands,
             "allowed_tools": None if allowances is None else list(allowances.tools),
             # Present and null uses the user's defaults again (CNV-014).
@@ -260,6 +264,7 @@ async def update_conversation(
                     " reasoning = coalesce(CAST(:reasoning AS text), reasoning),"
                     " disabled_tools = coalesce(CAST(:disabled_tools AS text[]), disabled_tools),"
                     " disabled_skills = coalesce(CAST(:disabled_skills AS text[]), disabled_skills),"
+                    " disabled_servers = coalesce(CAST(:disabled_servers AS uuid[]), disabled_servers),"
                     " allowed_web_and_commands = coalesce(CAST(:allowed_web_and_commands AS boolean),"
                     " allowed_web_and_commands),"
                     " allowed_tools = coalesce(CAST(:allowed_tools AS text[]), allowed_tools),"
@@ -369,10 +374,10 @@ async def fork_conversation(
         await connection.execute(
             text(
                 "INSERT INTO conversations (id, tenant_id, owner_id, title, connection_id, model, reasoning,"
-                " disabled_tools, disabled_skills, base_instructions, additional_instructions, folder_id,"
-                " forked_from_conversation_id, forked_from_run_id, active_run_id, last_message_at, created_at,"
-                " updated_at) SELECT :fork, tenant_id, owner_id, title, connection_id, model, reasoning,"
-                " disabled_tools, disabled_skills, base_instructions,"
+                " disabled_tools, disabled_skills, disabled_servers, base_instructions, additional_instructions,"
+                " folder_id, forked_from_conversation_id, forked_from_run_id, active_run_id, last_message_at,"
+                " created_at, updated_at) SELECT :fork, tenant_id, owner_id, title, connection_id, model, reasoning,"
+                " disabled_tools, disabled_skills, disabled_servers, base_instructions,"
                 " additional_instructions, folder_id, id, :run, NULL, now(), now(), now() FROM conversations"
                 " WHERE id = :id"
             ),

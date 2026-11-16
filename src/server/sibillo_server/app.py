@@ -16,6 +16,7 @@ from sibillo_server import (
     egress,
     folders,
     health,
+    mcp_servers,
     memory,
     passkeys,
     permissions,
@@ -64,6 +65,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(skills.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     app.include_router(connections.router, prefix=API_PREFIX)
+    app.include_router(mcp_servers.router, prefix=API_PREFIX)
     app.include_router(conversations.router, prefix=API_PREFIX)
     app.include_router(folders.router, prefix=API_PREFIX)
     app.include_router(costs.router, prefix=API_PREFIX)

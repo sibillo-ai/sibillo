@@ -12,6 +12,7 @@ import { skillsOn, useSkills } from "../skills";
 import { useNotify } from "../notices";
 import { toolLabel, useLockedTools } from "../tools";
 import { OwnEgressSwitch } from "./EgressSettings";
+import { ServerSwitches } from "./McpSettings";
 import { ModelSelect } from "./ModelPicker";
 
 export const SETTINGS = ["me", "settings"] as const;
@@ -293,6 +294,7 @@ function AssistantForm({ view }: { view: UserSettingsView }) {
       <OwnEgressSwitch />
       <ReasoningField value={settings.reasoning ?? "on"} onChange={(reasoning) => void save({ reasoning })} reasons={reasons} />
       <ToolSwitches disabled={settings.disabled_tools} onChange={(disabled_tools) => void save({ disabled_tools })} />
+      <ServerSwitches off={settings.disabled_servers ?? []} onChange={(disabled_servers) => void save({ disabled_servers })} />
       <AdditionalPrompt
         value={additional}
         onChange={(text) => {
@@ -350,6 +352,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
   const [reasoning, setReasoning] = useState(conversation.reasoning);
   const [disabled, setDisabled] = useState(conversation.disabled_tools);
   const [skillsOff, setSkillsOff] = useState(conversation.disabled_skills);
+  const [serversOff, setServersOff] = useState(conversation.disabled_servers);
   const [base, setBase] = useState(conversation.base_instructions ?? inheritedBase);
   const [additional, setAdditional] = useState(conversation.additional_instructions ?? inheritedAdditional);
   const [allowances, setAllowances] = useState<Allowances>(conversation.allowances);
@@ -361,6 +364,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
         reasoning,
         disabled_tools: disabled,
         disabled_skills: skillsOff,
+        disabled_servers: serversOff,
         ...(withdrawn ? { allowances } : {}),
         base_instructions: own(base, inheritedBase),
         additional_instructions: own(additional, inheritedAdditional),
@@ -386,6 +390,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
       <div className="flex min-h-0 flex-col gap-6 overflow-y-auto px-[22px] py-4">
         <ReasoningField value={reasoning} onChange={setReasoning} reasons={reasons} />
         <ToolSwitches disabled={disabled} onChange={setDisabled} />
+        <ServerSwitches off={serversOff} onChange={setServersOff} />
         <SkillSwitches off={skillsOff} onChange={setSkillsOff} />
         <AllowedInChat allowances={allowances} onChange={setAllowances} />
         <AdditionalPrompt value={additional} onChange={setAdditional} placeholder={t("assistant.none")} />

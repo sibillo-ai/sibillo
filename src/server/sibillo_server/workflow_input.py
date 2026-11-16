@@ -33,6 +33,8 @@ class RunWorkflowInput:
     disabled_tools: list[str] = field(default_factory=list[str])
     # The skills off in the conversation, by name (AGT-017, ADR-0096); the skills themselves are read by the run.
     disabled_skills: list[str] = field(default_factory=list[str])
+    # The remote MCP servers off in the conversation, by ID (AGT-029, ADR-0099).
+    disabled_servers: list[str] = field(default_factory=list[str])
     base_instructions: str | None = None
     additional_instructions: str | None = None
     # A temporary conversation gets no title (CNV-011, ADR-0082).
@@ -40,7 +42,7 @@ class RunWorkflowInput:
     # For a run that answers questions: what the model receives, by tool call ID (AGT-015, ADR-0083).
     answers: dict[str, Any] | None = None
     # For a run that answers approval requests: the decision on each call, by tool call ID, as
-    # `{approved, scope, reason, expired}` (AGT-007, ADR-0090).
+    # `{approved, scope, reason, expired, tool}` (AGT-007, ADR-0090).
     approvals: dict[str, Any] = field(default_factory=dict[str, Any])
     # How the message came, when it was not typed: `dictated` or `hands_free` (UX-005, ADR-0088).
     voice: str | None = None

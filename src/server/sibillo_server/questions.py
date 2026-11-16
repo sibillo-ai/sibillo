@@ -51,6 +51,12 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
     metadata: dict[str, Any] = requests.metadata.get(call.tool_call_id) or {}
     arguments = call.args_as_dict()
     action, data, destination = describe(call.tool_name, arguments)
+    # What the tool itself says of the call, such as a remote MCP server's tool and its host (ADR-0099).
+    shown: Any = metadata.get("approval")
+    if isinstance(shown, dict):
+        described = cast(dict[str, Any], shown)
+        action = str(described.get("action") or action)
+        destination = str(described.get("destination") or destination)
     return {
         "tool": call.tool_name,
         "arguments": arguments,

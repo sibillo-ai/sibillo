@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
 from sibillo_server.gateway import RunDeps
+from sibillo_server.mcp_runs import shown
 from sibillo_server.tool_policy import (
     decide,
     denied,
@@ -127,9 +128,11 @@ class Approvals(AbstractCapability[RunDeps]):
             untrusted = deps.untrusted or has_untrusted_content(ctx.messages)
             decision = decide(call.tool_name, deps.permissions, untrusted, deps.allowances)
             if decision.request is not None:
-                raise ApprovalRequired(
-                    metadata={"reason": decision.request.reason, "scopes": list(decision.request.scopes)}
-                )
+                metadata: dict[str, Any] = {"reason": decision.request.reason, "scopes": list(decision.request.scopes)}
+                # A remote MCP server's tool says what it is and where the call goes (AGT-018, ADR-0099).
+                if (described := shown(deps, call.tool_name)) is not None:
+                    metadata["approval"] = described
+                raise ApprovalRequired(metadata=metadata)
             outcome = "not_needed" if decision.allowed is None else "allowed"
             scope, reason = decision.allowed, None
         async with transaction(deps.engine, deps.identity) as connection:

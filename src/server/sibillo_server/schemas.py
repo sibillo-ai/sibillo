@@ -364,6 +364,8 @@ def _unique[T](tools: list[T]) -> list[T]:
 
 
 type DisabledTools = Annotated[list[ToolName], AfterValidator(_unique)]
+# The remote MCP servers that are off, by ID; an ID of no server is ignored (AGT-029, ADR-0099).
+type DisabledServers = Annotated[list[uuid.UUID], Field(max_length=200), AfterValidator(_unique)]
 # A skill's name by the Agent Skills rules, in ASCII; the API checks Unicode names by those rules (ADR-0096).
 type SkillName = Annotated[str, Field(min_length=1, max_length=64)]
 type DisabledSkills = Annotated[list[SkillName], Field(max_length=200), AfterValidator(_unique)]
@@ -381,11 +383,15 @@ type ApprovalReason = Literal["untrusted_content", "tool_default", "permission",
 class ToolPermissions(Request):
     tools: dict[ToolName, PermissionSetting]
     classes: dict[CapabilityClass, PermissionSetting]
+    # Remote MCP servers denied to the user (AGT-029, ADR-0099).
+    servers: dict[uuid.UUID, Literal["deny"]] = Field(default_factory=dict[uuid.UUID, Literal["deny"]])
 
 
 class ToolPermissionsOut(Response):
     tools: dict[str, PermissionSetting]
     classes: dict[str, PermissionSetting]
+    # Left out when no server is denied (AGT-029).
+    servers: dict[str, Literal["deny"]] = Field(default_factory=dict[str, Literal["deny"]])
 
 
 class PermissionSource(Response):
@@ -451,6 +457,8 @@ class UserSettings(Request):
     model: ModelChoice | None
     reasoning: Reasoning | None
     disabled_tools: DisabledTools
+    # Optional: leaving it out keeps none off (AGT-029).
+    disabled_servers: DisabledServers = Field(default_factory=list[uuid.UUID])
     base_instructions: Instructions | None
     additional_instructions: Instructions | None
 
@@ -459,6 +467,7 @@ class UserSettingsOut(Response):
     model: ModelChoiceOut | None
     reasoning: Reasoning | None
     disabled_tools: list[ToolName]
+    disabled_servers: list[uuid.UUID]
     base_instructions: str | None
     additional_instructions: str | None
     built_in_base_instructions: str
@@ -469,6 +478,7 @@ class CreateConversationRequest(Request):
     model: ModelChoice | None = None
     reasoning: Reasoning | None = None
     disabled_tools: DisabledTools | None = None
+    disabled_servers: DisabledServers | None = None
     temporary: bool = False
 
 
@@ -482,6 +492,7 @@ class UpdateConversationRequest(Request):
     reasoning: Reasoning | None = None
     disabled_tools: DisabledTools | None = None
     disabled_skills: DisabledSkills | None = None
+    disabled_servers: DisabledServers | None = None
     # Only withdraws what the user allowed (AGT-006, ADR-0090).
     allowances: AllowancesUpdate | None = None
     # Present and null uses the user's defaults again (CNV-014).
@@ -560,6 +571,7 @@ class Conversation(Response):
     reasoning: Reasoning
     disabled_tools: list[ToolName]
     disabled_skills: list[str]
+    disabled_servers: list[uuid.UUID]
     allowances: Allowances
     base_instructions: str | None
     additional_instructions: str | None
@@ -818,3 +830,133 @@ class FoundSkill(Response):
 class SkillImport(Response):
     imported: list[Skill]
     found: list[FoundSkill]
+
+
+# --- Remote MCP servers (AGT-019, AGT-028 to AGT-031, ADR-0099, ADR-0100) ---
+
+type McpServerPrefix = Annotated[str, Field(min_length=1, max_length=20, pattern=r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")]
+type McpServerAuth = Literal["none", "token", "oauth"]
+type McpCredentialState = Literal["not_needed", "missing", "valid", "expired"]
+type McpToolStatus = Literal["accepted", "changed", "gone", "not_accepted", "unusable"]
+type McpToolProblem = Literal["name", "description_too_long", "schema_too_large", "too_many_tools", "requires_tasks"]
+type McpServerName = Annotated[str, Field(min_length=1, max_length=100)]
+type OAuthClientId = Annotated[str, Field(min_length=1, max_length=2000)]
+type OAuthClientSecret = Annotated[str, Field(min_length=1, max_length=4000)]
+
+
+class McpServerInfo(Response):
+    name: str
+    version: str
+
+
+class McpOAuth(Response):
+    issuer: str
+    client_id: str
+    client_registration: Literal["given", "dynamic"]
+    has_client_secret: bool
+    scope: str | None
+
+
+class McpToolDefinition(Response):
+    title: str | None
+    description: str | None
+    input_schema: dict[str, Any]
+    annotations: dict[str, Any] | None
+
+
+class McpServerTool(Response):
+    name: str
+    model_name: str
+    status: McpToolStatus
+    listed: McpToolDefinition | None
+    accepted: McpToolDefinition | None
+    digest: str | None
+    problem: McpToolProblem | None
+    accepted_at: Timestamp | None
+
+
+class McpServer(Response):
+    id: uuid.UUID
+    name: str
+    prefix: str
+    url: str
+    auth: McpServerAuth
+    oauth: McpOAuth | None
+    credential: McpCredentialState
+    private_network: bool
+    enabled: bool
+    server: McpServerInfo | None
+    tools: list[McpServerTool]
+    listed_at: Timestamp | None
+    created_at: Timestamp
+    updated_at: Timestamp
+
+
+class McpServerList(Response):
+    items: list[McpServer]
+
+
+class CreateMcpServerRequest(Request):
+    name: McpServerName
+    prefix: McpServerPrefix
+    url: Address
+    auth: McpServerAuth
+    oauth_client_id: OAuthClientId | None = None
+    oauth_client_secret: OAuthClientSecret | None = None
+
+
+class UpdateMcpServerRequest(Request):
+    name: McpServerName | None = None
+    url: Address | None = None
+    auth: McpServerAuth | None = None
+    # Present and null: Sibillo registers a client itself, or the client has no secret (ADR-0100).
+    oauth_client_id: OAuthClientId | None = None
+    oauth_client_secret: OAuthClientSecret | None = None
+    enabled: bool | None = None
+
+
+class AcceptedMcpTool(Request):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class AcceptedMcpToolsRequest(Request):
+    tools: Annotated[list[AcceptedMcpTool], Field(max_length=100)]
+
+
+class McpSummaryTool(Response):
+    model_name: str
+    title: str | None
+    description: str | None
+
+
+class McpServerSummary(Response):
+    id: uuid.UUID
+    name: str
+    prefix: str
+    host: str
+    auth: McpServerAuth
+    credential: McpCredentialState
+    denied: bool
+    tools: list[McpSummaryTool]
+
+
+class McpServerSummaryList(Response):
+    items: list[McpServerSummary]
+
+
+class McpCredentialRequest(Request):
+    token: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
+class McpSignInStarted(Response):
+    authorization_url: str
+    expires_at: Timestamp
+
+
+class CompleteMcpSignInRequest(Request):
+    state: Annotated[str, Field(min_length=1, max_length=200)]
+    code: Annotated[str, Field(min_length=1, max_length=4000)] | None = None
+    iss: Annotated[str, Field(max_length=2000)] | None = None
+    error: Annotated[str, Field(max_length=200)] | None = None
+    error_description: Annotated[str, Field(max_length=2000)] | None = None

@@ -8,6 +8,7 @@ reasoning on and every tool.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,7 +29,9 @@ BUILT_IN_BASE_INSTRUCTIONS = (
     "You are Sibillo, an assistant for the people of a household. "
     "Answer helpfully, clearly and briefly, in the language the user writes in."
 )
-SETTINGS_COLUMNS = "connection_id, model, reasoning, disabled_tools, base_instructions, additional_instructions"
+SETTINGS_COLUMNS = (
+    "connection_id, model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions"
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,8 @@ class NewConversation:
     model: schemas.ModelChoiceOut | None
     reasoning: schemas.Reasoning = DEFAULT_REASONING
     disabled_tools: list[schemas.ToolName] = field(default_factory=list[schemas.ToolName])
+    # The remote MCP servers off by default (AGT-029, ADR-0099).
+    disabled_servers: list[uuid.UUID] = field(default_factory=list[uuid.UUID])
 
 
 async def _stored(connection: AsyncConnection) -> Any:
@@ -51,6 +56,7 @@ def _response(row: Any) -> schemas.UserSettingsOut:
             model=None,
             reasoning=None,
             disabled_tools=[],
+            disabled_servers=[],
             base_instructions=None,
             additional_instructions=None,
             built_in_base_instructions=BUILT_IN_BASE_INSTRUCTIONS,
@@ -61,6 +67,7 @@ def _response(row: Any) -> schemas.UserSettingsOut:
         else schemas.ModelChoiceOut(connection_id=row.connection_id, model=row.model),
         reasoning=row.reasoning,
         disabled_tools=list(row.disabled_tools),
+        disabled_servers=list(row.disabled_servers),
         base_instructions=row.base_instructions,
         additional_instructions=row.additional_instructions,
         built_in_base_instructions=BUILT_IN_BASE_INSTRUCTIONS,
@@ -80,7 +87,9 @@ async def new_conversation(connection: AsyncConnection) -> NewConversation:
         model = await default_model(connection)
         if model is not None and not await allowed(connection, model):
             model = None
-    return NewConversation(model, settings.reasoning or DEFAULT_REASONING, settings.disabled_tools)
+    return NewConversation(
+        model, settings.reasoning or DEFAULT_REASONING, settings.disabled_tools, settings.disabled_servers
+    )
 
 
 @router.get("/me/settings", response_model=schemas.UserSettingsOut)
@@ -99,10 +108,11 @@ async def set_settings(body: schemas.UserSettings, identity: Authenticated, engi
                 text(
                     f"INSERT INTO user_settings (tenant_id, owner_id, {SETTINGS_COLUMNS}, updated_at)"  # noqa: S608
                     " VALUES (:tenant_id, :owner_id, :connection_id, :model, :reasoning, :disabled_tools,"
-                    " :base_instructions, :additional_instructions, now())"
+                    " :disabled_servers, :base_instructions, :additional_instructions, now())"
                     " ON CONFLICT (tenant_id, owner_id) DO UPDATE SET connection_id = excluded.connection_id,"
                     " model = excluded.model, reasoning = excluded.reasoning,"
-                    " disabled_tools = excluded.disabled_tools, base_instructions = excluded.base_instructions,"
+                    " disabled_tools = excluded.disabled_tools, disabled_servers = excluded.disabled_servers,"
+                    " base_instructions = excluded.base_instructions,"
                     " additional_instructions = excluded.additional_instructions, updated_at = now()"
                     f" RETURNING {SETTINGS_COLUMNS}"
                 ),
@@ -113,6 +123,7 @@ async def set_settings(body: schemas.UserSettings, identity: Authenticated, engi
                     "model": None if body.model is None else body.model.model,
                     "reasoning": body.reasoning,
                     "disabled_tools": body.disabled_tools,
+                    "disabled_servers": body.disabled_servers,
                     "base_instructions": body.base_instructions,
                     "additional_instructions": body.additional_instructions,
                 },

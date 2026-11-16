@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bot, Brain, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { Activity, Blocks, Bot, Brain, Cable, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
@@ -12,6 +12,7 @@ import { type Theme, useTheme } from "../theme";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
+import { McpServersSection, ServicesSection } from "./McpSettings";
 import { MemorySection } from "./MemorySettings";
 import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
@@ -26,7 +27,7 @@ const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
-type Tab = "models" | "permissions" | "members" | "assistant" | "memory" | "skills" | "activity" | "security" | "appearance";
+type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "memory" | "skills" | "services" | "activity" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
@@ -45,6 +46,7 @@ export function Settings({ me }: { me: User }) {
     { id: "assistant", label: t("assistant.title"), icon: <Bot className="size-[18px]" aria-hidden="true" /> },
     { id: "memory", label: t("settings.memory"), icon: <Brain className="size-[18px]" aria-hidden="true" /> },
     { id: "skills", label: t("settings.skills"), icon: <Sparkles className="size-[18px]" aria-hidden="true" /> },
+    { id: "services", label: t("mcp.services.title"), icon: <Cable className="size-[18px]" aria-hidden="true" /> },
     { id: "activity", label: t("activity.page.title"), icon: <Activity className="size-[18px]" aria-hidden="true" /> },
     { id: "security", label: t("settings.security"), icon: <KeyRound className="size-[18px]" aria-hidden="true" /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette className="size-[18px]" aria-hidden="true" /> },
@@ -52,6 +54,7 @@ export function Settings({ me }: { me: User }) {
   const household: TabItem[] = admin
     ? [
         { id: "models", label: t("settings.models"), icon: <Plug className="size-[18px]" aria-hidden="true" /> },
+        { id: "mcp-servers", label: t("mcp.admin.title"), icon: <Blocks className="size-[18px]" aria-hidden="true" /> },
         { id: "permissions", label: t("permissions.title"), icon: <ShieldCheck className="size-[18px]" aria-hidden="true" /> },
         { id: "members", label: t("settings.members"), icon: <UserRound className="size-[18px]" aria-hidden="true" /> },
       ]
@@ -72,6 +75,8 @@ export function Settings({ me }: { me: User }) {
         <div className="flex min-w-0 flex-col gap-[34px]">
           {tab === "models" && admin ? (
             <ModelsSection />
+          ) : tab === "mcp-servers" && admin ? (
+            <McpServersSection />
           ) : tab === "permissions" && admin ? (
             <ToolPermissionsSection />
           ) : tab === "members" && admin ? (
@@ -84,6 +89,8 @@ export function Settings({ me }: { me: User }) {
             <MemorySection />
           ) : tab === "skills" ? (
             <SkillsSection />
+          ) : tab === "services" ? (
+            <ServicesSection />
           ) : tab === "activity" ? (
             <ActivitySection />
           ) : (

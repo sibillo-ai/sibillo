@@ -83,6 +83,8 @@ from sibillo_server.gateway import (
     record_usage,
     store_messages,
 )
+from sibillo_server.mcp_runs import CHANGED, McpServers, offered_names
+from sibillo_server.mcp_runs import prepare as prepare_servers
 from sibillo_server.memory import MEMORY_INSTRUCTIONS, MEMORY_TOOLS, memory_section, run_memory
 from sibillo_server.memory import TOOLS as MEMORY_TOOL_LIST
 from sibillo_server.offers import TOOLS as OFFER_TOOLS
@@ -95,7 +97,7 @@ from sibillo_server.settings import BUILT_IN_BASE_INSTRUCTIONS
 from sibillo_server.skills import TOOLS as SKILL_TOOLS
 from sibillo_server.skills import RunSkills, run_skills, sandbox_preparer
 from sibillo_server.tool_policy import ATTACHMENTS_ORIGIN as POLICY_ATTACHMENTS_ORIGIN
-from sibillo_server.tool_policy import DENIED, EXPIRED, Allowances, has_untrusted_content
+from sibillo_server.tool_policy import DENIED, EXPIRED, Allowances, has_untrusted_content, is_server_tool
 from sibillo_server.web_tools import TOOLS as WEB_TOOLS
 from sibillo_server.workflow_input import RunWorkflowInput
 
@@ -233,6 +235,8 @@ class _Worker:
     search_url: str = ""
     # The most model requests one run makes (AGT-027, ADR-0097).
     run_request_limit: int = 200
+    # How long a call to a remote MCP server's tool may take (AGT-019, ADR-0099).
+    mcp_call_seconds: int = 120
     # Queues the runs the worker starts itself, such as those that deny expired approvals (ADR-0090).
     durable: DBOSClient | None = None
 
@@ -327,6 +331,8 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
         _instructions_while_on(Planning[RunDeps](store_resolver=_plan_store)),
         # The skills that are on, offered by name and description and loaded when needed (AGT-017, ADR-0096).
         RunSkills(),
+        # The accepted tools of the household's remote MCP servers, each call asked (AGT-018, ADR-0099).
+        McpServers(),
         # Tool permissions, approvals and audit events (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).
         Approvals(),
         DBOSDurability(event_stream_handler=_handle_events),
@@ -457,6 +463,10 @@ async def run_workflow(serialized_input: str) -> None:
         memory = await run_memory(connection, temporary=run.temporary)
         # Read for each run too (AGT-017, ADR-0096).
         skills = await run_skills(connection, run.disabled_skills)
+    # Listed again for each run, resumed or not, with the user's own credentials (ADR-0099, point 6).
+    servers = await prepare_servers(
+        _engine(), identity, _WORKER.secret_key, frozenset(run.disabled_servers), permissions
+    )
     deps = RunDeps(
         engine=_engine(),
         identity=identity,
@@ -487,6 +497,8 @@ async def run_workflow(serialized_input: str) -> None:
         skills=skills,
         temporary=run.temporary,
         parent_run_id=parent_run_id,
+        mcp=servers,
+        mcp_call_seconds=_WORKER.mcp_call_seconds,
     )
     deps = replace(deps, prepare_sandbox=sandbox_preparer(deps))
     encoder: AGUIEventStream[Any, Any] = AGUIEventStream(thread_id=run.conversation_id, run_id=run.run_id)
@@ -567,7 +579,7 @@ async def _execute(
             conversation_id=run.conversation_id,
             # The conversation's own sandbox, whatever an earlier reference in its history names (ADR-0078).
             workspace=sandbox_ref(str(identity.tenant_id), str(identity.user_id), run.conversation_id),
-            deferred_tool_results=_deferred_results(run),
+            deferred_tool_results=_deferred_results(run, offered_names(deps)),
             # A run stops after its limit of model requests, and says so (AGT-027, ADR-0097).
             usage_limits=UsageLimits(request_limit=_WORKER.run_request_limit),
         )
@@ -624,14 +636,21 @@ async def _execute(
 APPROVAL_HOURS = 24
 
 
-def _deferred_results(run: RunWorkflowInput) -> DeferredToolResults | None:
-    """The answers a resume run brings: to questions, and the user's decision on each approval request."""
+def _deferred_results(run: RunWorkflowInput, offered: frozenset[str] = frozenset()) -> DeferredToolResults | None:
+    """The answers a resume run brings: to questions, and the user's decision on each approval request.
+
+    An approved call to a remote MCP server's tool that the run no longer offers as accepted does not run:
+    the tool changed since (ADR-0099, point 6).
+    """
     if run.answers is None and not run.approvals:
         return None
     approvals: dict[str, bool | ToolDenied] = {}
     metadata: dict[str, dict[str, Any]] = {}
     for tool_call_id, decision in run.approvals.items():
-        if decision.get("approved"):
+        tool = str(decision.get("tool") or "")
+        if decision.get("approved") and is_server_tool(tool) and tool not in offered:
+            approvals[tool_call_id] = ToolDenied(CHANGED)
+        elif decision.get("approved"):
             approvals[tool_call_id] = True
             metadata[tool_call_id] = {"scope": decision.get("scope"), "reason": decision.get("reason")}
         else:
@@ -872,6 +891,7 @@ def run_worker(configuration: WorkerConfiguration) -> None:
     _WORKER.sandboxd_token = configuration.sandboxd_token
     _WORKER.search_url = configuration.search_url
     _WORKER.run_request_limit = configuration.run_request_limit
+    _WORKER.mcp_call_seconds = configuration.mcp_call_seconds
     _WORKER.durable = create_client(configuration.database_url)
     DBOS(
         config=DBOSConfig(

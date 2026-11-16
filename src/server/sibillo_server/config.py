@@ -57,6 +57,7 @@ WORKER_VARIABLES = frozenset(
         "SIBILLO_TEMPORARY_SWEEP_SECONDS",
         "SIBILLO_APPROVAL_SWEEP_SECONDS",
         "SIBILLO_RUN_REQUEST_LIMIT",
+        "SIBILLO_MCP_CALL_SECONDS",
     }
 )
 MINIMUM_DRIVER_TOKEN_LENGTH = 32
@@ -108,6 +109,8 @@ class WorkerConfiguration:
     approval_sweep_seconds: int = 60
     # The most model requests one run makes (AGT-027, ADR-0097).
     run_request_limit: int = 200
+    # How long a call to a remote MCP server's tool may take (AGT-019, ADR-0099).
+    mcp_call_seconds: int = 120
 
 
 def _database_url(environment: Mapping[str, str]) -> str:
@@ -186,6 +189,9 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
     limit = environment.get("SIBILLO_RUN_REQUEST_LIMIT", "200")
     if not limit.isdigit() or not 10 <= int(limit) <= 10000:
         raise ConfigurationError("SIBILLO_RUN_REQUEST_LIMIT must be a number of model requests from 10 to 10000")
+    mcp_seconds = environment.get("SIBILLO_MCP_CALL_SECONDS", "120")
+    if not mcp_seconds.isdigit() or not 1 <= int(mcp_seconds) <= 3600:
+        raise ConfigurationError("SIBILLO_MCP_CALL_SECONDS must be a number of seconds from 1 to 3600")
     url, token = _sandbox_driver(environment)
     search_url = environment.get("SIBILLO_SEARCH_URL", "")
     if search_url and not search_url.startswith(("http://", "https://")):
@@ -200,6 +206,7 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
         temporary_sweep_seconds=int(sweep),
         approval_sweep_seconds=int(approvals),
         run_request_limit=int(limit),
+        mcp_call_seconds=int(mcp_seconds),
     )
 
 

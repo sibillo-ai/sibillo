@@ -39,6 +39,12 @@ CONSEQUENTIAL: frozenset[CapabilityClass] = frozenset({"irreversible", "physical
 EXTERNAL_EFFECTS: frozenset[CapabilityClass] = frozenset({"external_communication", "irreversible", "physical"})
 # The tools that one approval covers together under the trifecta rule (AGT-004, ADR-0090).
 WEB_AND_COMMANDS = frozenset({"web_search", "read_page", "run_command", "start_command"})
+# The classes of every tool of a remote MCP server (AGT-005, ADR-0099).
+SERVER_CLASSES: frozenset[CapabilityClass] = frozenset(
+    {"reads_private_data", "ingests_untrusted", "external_communication"}
+)
+# Separates a server's prefix from its tool's name; no tool of Sibillo has it (ADR-0099).
+SERVER_SEPARATOR = "__"
 # Labels the part of a user's message that lists its attachments (CNV-017).
 ATTACHMENTS_ORIGIN = "sibillo.attachments"
 # Labels the result of loading a skill with the skill's name and whether it is untrusted (AGT-025, ADR-0096).
@@ -104,6 +110,11 @@ DECLARATIONS: Mapping[str, Declaration] = {
 }
 
 
+def is_server_tool(tool: str) -> bool:
+    """Whether the name is of a remote MCP server's tool, `<prefix>__<tool>` (ADR-0099)."""
+    return SERVER_SEPARATOR in tool
+
+
 def ingests_untrusted(tool: str) -> bool:
     declaration = DECLARATIONS.get(tool)
     # A tool without a declaration is treated as the most cautious one would be.
@@ -148,14 +159,24 @@ class Permissions:
 
     tools: Mapping[str, Setting] = field(default_factory=dict[str, Setting])
     classes: Mapping[str, Setting] = field(default_factory=dict[str, Setting])
+    # The IDs of the remote MCP servers denied to the user (AGT-029, ADR-0099).
+    servers: frozenset[str] = frozenset()
 
-    def to_json(self) -> dict[str, dict[str, str]]:
-        return {"tools": dict(self.tools), "classes": dict(self.classes)}
+    def to_json(self) -> dict[str, Any]:
+        return {"tools": dict(self.tools), "classes": dict(self.classes), "servers": sorted(self.servers)}
 
     @classmethod
     def from_json(cls, value: Any) -> Permissions:
-        data = cast(dict[str, dict[str, Setting]], value or {})
-        return cls(tools=dict(data.get("tools") or {}), classes=dict(data.get("classes") or {}))
+        data = cast(dict[str, Any], value or {})
+        return cls(
+            tools=dict(data.get("tools") or {}),
+            classes=dict(data.get("classes") or {}),
+            servers=frozenset(data.get("servers") or ()),
+        )
+
+    def denies_server(self, server_id: str) -> bool:
+        """Whether the server is denied, or a class of every server's tools is (AGT-029, ADR-0099)."""
+        return server_id in self.servers or any(self.classes.get(name) == "deny" for name in SERVER_CLASSES)
 
 
 @dataclass(frozen=True)
@@ -214,6 +235,9 @@ class Decision:
 
 def decide(tool: str, permissions: Permissions, untrusted: bool, allowances: Allowances) -> Decision:
     """Whether a call of `tool`, in a run with or without untrusted content, needs approval."""
+    if is_server_tool(tool):
+        # Every call to a server is approved, once, and nothing lifts it (AGT-018, ADR-0099).
+        return Decision(Request("device", ("once",)))
     declaration = DECLARATIONS.get(tool)
     if declaration is None:
         return Decision(Request("consequential", ("once",)))
