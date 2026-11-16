@@ -104,10 +104,12 @@ beyond keeping them configurable and updatable.
 | T-26 | A file of one user's library is read by another user or reaches another user's sandbox | X2 | CNV-012, TEN-008 |
 | T-35 | Injected instructions are stored as memory items and reach later conversations as if the user had written them | X1 | AGT-003, AGT-004, MEM-001, MEM-008 |
 | T-36 | Injected instructions are saved as a skill, or planted in a skill's files, and reach later conversations | X1 | AGT-003, AGT-004, AGT-025, AGT-026, SBX-022 |
+| T-37 | A user's credential for a remote MCP server is used in another user's runs, or read by a tenant admin, so that one person acts on a service as another | X2 | AGT-030, TEN-007 |
+| T-38 | A sign-in to a remote MCP server is subverted: an attacker's authorization is bound to a victim's account, a code is intercepted or replayed, a token is obtained for another server or sent to one, or the server's OAuth metadata leads the control plane to the household's network | X1, X2, X4 | AGT-031, MOD-009 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |
-| T-29 | A remote MCP server, malicious or compromised, injects instructions through its tool descriptions or results | X1, X5 | AGT-003, AGT-018, AGT-019 |
+| T-29 | A remote MCP server, malicious or compromised, injects instructions through its tool descriptions or results, or changes its tools after they were reviewed | X1, X5 | AGT-003, AGT-018, AGT-019, AGT-028 |
 | T-30 | A stolen device credential lets an attacker pose as the device, receive its tool calls and return forged results | X4 | DEV-001, DEV-002 |
 | T-31 | A tenant admin uses connection tests to probe the household's network, or to read what internal services answer, through the details of failed steps | X2 | MOD-009, MOD-013 |
 | T-32 | A dependency or an asset of the web app contacts a third party at run time, telling it who uses the instance and when, or making the instance depend on it | X5 | OBS-001, OBS-006 |

@@ -4,7 +4,7 @@ The PostgreSQL schema for phase 0. The schema is a contract (ADR-0003): it
 changes only through `spec/*` pull requests, and migrations in `migrations/`
 implement it. Background: ADR-0009, ADR-0025, ADR-0031, ADR-0033, ADR-0034,
 ADR-0037, ADR-0042, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0051,
-ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073, ADR-0094.
+ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073, ADR-0094, ADR-0099, ADR-0100.
 
 ## Roles
 
@@ -298,6 +298,7 @@ A user's groups of conversations (CNV-007, ADR-0073).
 | `reasoning` | text | not null, default `on`; `off`, `on` or `deep` (CNV-013, ADR-0081) |
 | `disabled_tools` | text[] | not null, default empty; the tools that are off, each one of the names of `ToolName` in the API contract (CNV-013, ADR-0087) |
 | `disabled_skills` | text[] | not null, default empty; the names of skills turned off in this conversation, built-in or the user's (AGT-017, ADR-0096); not copied from the user's settings, so that a skill turned on or added later is on; a name of no skill is ignored; copied into a fork |
+| `disabled_servers` | uuid[] | not null, default empty; the remote MCP servers that are off (AGT-029, ADR-0099), without a reference: an ID of no server is ignored; copied from the user's settings on creation, and into a fork |
 | `base_instructions`, `additional_instructions` | text | the conversation's own instructions; null to use the user's defaults (CNV-014) |
 | `temporary` | boolean | not null, default false; set on creation and never changed (CNV-011, ADR-0082) |
 | `archived_at` | timestamptz | null when active |
@@ -327,6 +328,7 @@ most one row per user, and none until they set one.
 | `connection_id`, `model` | uuid, text | the default model, both null when none; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`), and a model without a connection is not offered |
 | `reasoning` | text | `off`, `on` or `deep`; null when unset |
 | `disabled_tools` | text[] | not null, default empty; as in `conversations` |
+| `disabled_servers` | uuid[] | not null, default empty; as in `conversations` |
 | `base_instructions`, `additional_instructions` | text | null when unset |
 | `memory_enabled` | boolean | not null, default true; whether memory is on for the user (MEM-006, ADR-0095); a user without a row has it on |
 | `disabled_builtin_skills` | text[] | not null, default empty; the built-in skills the user turned off (AGT-024, ADR-0096) |
@@ -472,12 +474,13 @@ row means the tool or class follows its approval default.
 | Column | Type | Notes |
 |---|---|---|
 | `tenant_id`, `user_id` | uuid | not null; (`tenant_id`, `user_id`) references `users` |
-| `subject_kind` | text | `tool` or `class` |
-| `subject` | text | a name of `ToolName`, or a `CapabilityClass`, of the API contract |
-| `setting` | text | `allow`, `ask` or `deny` |
+| `subject_kind` | text | `tool`, `class` or `server` |
+| `subject` | text | a name of `ToolName`, a `CapabilityClass` of the API contract, or the ID of a row of `mcp_servers` (AGT-029, ADR-0099) |
+| `setting` | text | `allow`, `ask` or `deny`; only `deny` for a server |
 | `updated_at` | timestamptz | not null |
 
 Primary key (`tenant_id`, `user_id`, `subject_kind`, `subject`).
+Removing a server deletes the rows whose subject is that server.
 
 Policies:
 - `SELECT` where `tenant_id = app_tenant_id()` and (`user_id = app_user_id()`
@@ -587,6 +590,91 @@ ADR-0069).
 Primary key (`connection_id`, `model`). Policies as for `connections`;
 listing the models again replaces the rows of the connection.
 
+### `mcp_servers`
+
+A household's remote MCP servers (AGT-019, ADR-0064, ADR-0099).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id` | uuid | not null, references `tenants` |
+| `name` | text | not null; unique within the tenant; from 1 to 100 characters |
+| `prefix` | text | not null; unique within the tenant; from 1 to 20 lowercase letters, digits and single underscores, starting with a letter; never changed |
+| `url` | text | not null; the address of its Streamable HTTP endpoint |
+| `auth` | text | not null; `none`, `token` or `oauth` (AGT-030, AGT-031) |
+| `generation` | uuid | not null; a new random value whenever `url`, `auth` or the OAuth client changes; credentials and sign-ins of another generation are not used (ADR-0099) |
+| `oauth` | jsonb | for `oauth`, what discovery found and the client (ADR-0100): `{issuer, authorization_endpoint, token_endpoint, iss_parameter_supported, scope, client_id, client_registration, token_endpoint_auth_method}`, where `client_registration` is `given` or `dynamic` and `token_endpoint_auth_method` is `none`, `client_secret_basic` or `client_secret_post`; null otherwise |
+| `oauth_client_secret_ciphertext` | bytea | the OAuth client's secret, encrypted with AES-256-GCM under `SIBILLO_SECRET_KEY` with the server's ID as associated data (MOD-002); null when the client has none |
+| `private_network` | boolean | not null, default false; true when `url` was set by a user who is the instance admin, as in `connections` |
+| `enabled` | boolean | not null, default true; false when a tenant admin switched it off for everyone |
+| `server_name`, `server_version` | text | what the server said of itself when last listed; null before |
+| `listed_at` | timestamptz | when its tools were last listed |
+| `created_at`, `updated_at` | timestamptz | not null |
+
+At most 20 rows per tenant. Policies as for `connections`, and the same
+trigger keeps `private_network` honest, with `url` for `base_url`. `oauth`
+is not null exactly when `auth` is `oauth`.
+
+### `mcp_server_tools`
+
+The tools of a remote MCP server, as last listed and as accepted (AGT-028,
+ADR-0099).
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id` | uuid | not null |
+| `server_id` | uuid | not null; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade |
+| `name` | text | not null; the server's name for the tool, without the prefix |
+| `listed` | jsonb | the tool as last listed, `{title, description, inputSchema, annotations}`; null when the last listing did not have it |
+| `accepted` | jsonb | the tool as a tenant admin accepted it, `{title, description, inputSchema}`; null when not accepted |
+| `problem` | text | why the listed tool cannot be accepted: `name`, `description_too_long`, `schema_too_large`, `too_many_tools` or `requires_tasks`; else null |
+| `accepted_at` | timestamptz | set exactly when `accepted` is |
+
+Primary key (`server_id`, `name`). Policies as for `connections`. Listing
+the tools again sets `listed` and `problem` for every tool, and deletes the
+rows that end with neither `listed` nor `accepted`; a new `url` sets
+`accepted` to null in every row of the server.
+
+### `mcp_credentials` (private)
+
+Each user's own credential for a remote MCP server (AGT-030, AGT-031,
+ADR-0099, ADR-0100). Tenant admins cannot read them.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` on delete cascade |
+| `server_id` | uuid | not null; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade |
+| `server_generation` | uuid | not null; the server's `generation` when the credential was given; a credential of another generation is not used, and is deleted when its owner's requests or runs meet it |
+| `kind` | text | not null; `token` when entered by the user, `oauth` when obtained by signing in |
+| `access_token_ciphertext` | bytea | not null; encrypted with AES-256-GCM under `SIBILLO_SECRET_KEY`, with the row's ID followed by `:access` as associated data (MOD-002) |
+| `refresh_token_ciphertext` | bytea | the OAuth refresh token, encrypted likewise with the row's ID followed by `:refresh`; null when there is none |
+| `expires_at` | timestamptz | when the access token expires; null when unknown |
+| `status` | text | not null; `valid`, or `expired` once the server refused it or renewing it failed |
+| `created_at`, `updated_at` | timestamptz | not null |
+
+Unique (`server_id`, `owner_id`). Renewing a token locks its row (`SELECT …
+FOR UPDATE`) until the new tokens are stored.
+
+### `mcp_sign_ins` (private)
+
+OAuth sign-ins to remote MCP servers waiting for their redirect, each valid
+for 10 minutes and deleted when used (AGT-031, ADR-0100).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` on delete cascade |
+| `server_id` | uuid | not null; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade |
+| `server_generation` | uuid | not null; the server's `generation` when the sign-in started |
+| `state_hash` | bytea | not null; unique; SHA-256 of the `state` |
+| `code_verifier` | text | not null; the PKCE code verifier |
+| `created_at` | timestamptz | not null |
+| `expires_at` | timestamptz | not null; 10 minutes after `created_at` |
+
+Expired rows of a user are deleted when that user starts or completes a
+sign-in.
+
 ### `served_context_windows`
 
 The window each model of a recognized Ollama server last said it runs with
@@ -610,8 +698,9 @@ connection.
 ### Policies for private tables
 
 `device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
-`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`
-and `audit_events` use the same policy for every operation:
+`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`,
+`audit_events`, `mcp_credentials` and `mcp_sign_ins` use the same policy for
+every operation:
 
 ```sql
 USING      (tenant_id = app_tenant_id() AND owner_id = app_user_id())
@@ -651,6 +740,10 @@ keys, not by privileges of `sibillo_app`.
 | `audit_events` | `SELECT`, `INSERT`; `UPDATE` of `outcome`, `scope`, `reason` and `attempts`: an event is written when the call is decided and completed as it runs |
 | `connections` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `connection_models` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `mcp_servers` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `mcp_server_tools` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `mcp_credentials` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `mcp_sign_ins` | `SELECT`, `INSERT`, `DELETE` |
 | `served_context_windows` | `SELECT`, `INSERT`, `UPDATE` |
 | Helper functions | `EXECUTE` on `app_tenant_id()`, `app_user_id()`, `app_is_tenant_admin()`, `app_is_instance_admin()` |
 | Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` and `remove_passkeys` |

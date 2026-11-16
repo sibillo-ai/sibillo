@@ -151,8 +151,8 @@ paths:
       operationId: getMySettings
       summary: The user's defaults for their conversations.
       description: |
-        Every field is `null`, or empty for `disabled_tools`, until the user
-        sets it (ADR-0081).
+        Every field is `null`, or empty for `disabled_tools` and
+        `disabled_servers`, until the user sets it (ADR-0081).
       x-requirements: [CNV-013, CNV-014, TEN-006]
       responses:
         "200":
@@ -166,7 +166,7 @@ paths:
       operationId: setMySettings
       summary: Replace the user's defaults for their conversations.
       description: |
-        New conversations copy the model, reasoning and tools; conversations
+        New conversations copy the model, reasoning, tools and servers; conversations
         without instructions of their own use the instructions from their
         next run (ADR-0081).
       x-requirements: [CNV-013, CNV-014, TEN-006]
@@ -1075,6 +1075,181 @@ paths:
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /tenant/mcp-servers:
+    post:
+      tags: [administration]
+      operationId: createMcpServer
+      summary: Add a remote MCP server to the current tenant (tenant admin only).
+      description: |
+        For `auth` `none`, Sibillo connects to the server and lists its tools
+        first; when it cannot, the server is not saved and the answer is
+        `mcp_server.unreachable`, with the step that failed. For `oauth`, it
+        finds the server's authorization server and registers with it, unless
+        a client is given; when it cannot, the answer is
+        `mcp_server.oauth_unsupported` (ADR-0100). A `token` or `oauth` server
+        is listed once the admin has given their own credential and refreshes
+        it. No tool is accepted yet (AGT-028). Only a user who is also the
+        instance admin may use a private address or `http` (AGT-019,
+        ADR-0099). A tenant has at most 20 servers. Connecting to servers and
+        their authorization servers outside runs is limited to 20 times a
+        minute per tenant (T-31).
+      x-requirements: [AGT-019, AGT-028, AGT-031, MOD-002, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMcpServerRequest" }
+      responses:
+        "201":
+          description: Server added, with its tools as listed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/McpServerRefused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    get:
+      tags: [administration]
+      operationId: listMcpServers
+      summary: List the remote MCP servers of the current tenant (tenant admin only).
+      x-requirements: [AGT-019, AGT-028, MOD-002, TEN-006]
+      responses:
+        "200":
+          description: Every server of the tenant, by name, with its tools.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tenant/mcp-servers/{server_id}:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    get:
+      tags: [administration]
+      operationId: getMcpServer
+      summary: A remote MCP server, with its tools (tenant admin only).
+      x-requirements: [AGT-019, AGT-028, TEN-006]
+      responses:
+        "200":
+          description: The server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [administration]
+      operationId: updateMcpServer
+      summary: Change a remote MCP server (tenant admin only).
+      description: |
+        A new address, authentication or OAuth client is tried first, as when
+        adding a server, and starts a new generation of the server: every
+        user's credential given before is no longer used (AGT-030). A new
+        address clears every accepted tool, and one set by a user who is not
+        the instance admin must be public (AGT-019, AGT-028). The prefix
+        never changes.
+      x-requirements: [AGT-019, AGT-028, AGT-030, AGT-031, MOD-002, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMcpServerRequest" }
+      responses:
+        "200":
+          description: The updated server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/McpServerRefused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [administration]
+      operationId: deleteMcpServer
+      summary: Remove a remote MCP server (tenant admin only).
+      description: |
+        Its tools are no longer offered from the next run, and the tool
+        permissions that deny it and every user's credential for it are
+        removed with it (AGT-019, AGT-029, AGT-030).
+      x-requirements: [AGT-019, AGT-029, AGT-030, TEN-006]
+      responses:
+        "204": { description: Server removed. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tenant/mcp-servers/{server_id}/refresh:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    post:
+      tags: [administration]
+      operationId: refreshMcpServer
+      summary: List a remote MCP server's tools again (tenant admin only).
+      description: |
+        Shows which accepted tools changed or are gone, and which are new;
+        accepting none of them changes nothing (AGT-028). A `token` or
+        `oauth` server is listed with the admin's own credential, and
+        answers `mcp_server.credential_missing` when they have none, or
+        `mcp_server.unauthorized` when the server refuses it (AGT-030). A
+        server that cannot be reached answers `mcp_server.unreachable`. Each
+        keeps the last listing.
+      x-requirements: [AGT-028, AGT-030, TEN-006]
+      responses:
+        "200":
+          description: The server, with its tools as listed now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/McpServerRefused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /tenant/mcp-servers/{server_id}/accepted-tools:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    put:
+      tags: [administration]
+      operationId: setAcceptedMcpTools
+      summary: Replace the accepted tools of a remote MCP server (tenant admin only).
+      description: |
+        Each tool named is accepted as last listed, and every other tool of
+        the server is no longer accepted. The request is refused with
+        `resource.conflict`, and nothing changes, when a digest is not that
+        of the tool's last listing, or a tool cannot be accepted (AGT-028,
+        ADR-0099). Applies from the next run.
+      x-requirements: [AGT-028, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptedMcpToolsRequest" }
+      responses:
+        "200":
+          description: The server, with its tools.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
   /tenant/default-model:
     put:
       tags: [models]
@@ -1810,6 +1985,139 @@ paths:
                     items: { $ref: "#/components/schemas/ToolInfo" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /mcp-servers:
+    get:
+      tags: [conversations]
+      operationId: listMyMcpServers
+      summary: The household's remote MCP servers, and what applies to them for the user.
+      description: |
+        Every server of the tenant that is switched on, by name, with its
+        accepted tools and the state of the user's credential. Clients list
+        a switch for each server beside the tool switches, and show a server
+        denied to the user switched off and locked (AGT-029, AGT-030,
+        ADR-0099). Never a credential or a full address.
+      x-requirements: [AGT-029, AGT-030, CNV-013, UX-029, TEN-006]
+      responses:
+        "200":
+          description: The servers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/McpServerSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /mcp-servers/{server_id}/credential:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    put:
+      tags: [conversations]
+      operationId: setMcpCredential
+      summary: Give the user's own token for a `token` server.
+      description: |
+        The token is tried first by listing the server's tools, and refused
+        with `mcp_server.unauthorized` when the server refuses it, or
+        `mcp_server.unreachable` when it cannot be reached; nothing of the
+        listing is kept. It replaces the user's credential for the server,
+        is used only for the user, and is never returned (AGT-030,
+        ADR-0099). A server whose `auth` is not `token` answers
+        `resource.conflict`; a server denied to the user, `permission.denied`.
+        Counts toward the tenant's limit of connections to servers (T-31).
+      x-requirements: [AGT-030, MOD-002, TEN-006, TEN-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpCredentialRequest" }
+      responses:
+        "200":
+          description: The server, as the user now sees it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServerSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/McpServerRefused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      tags: [conversations]
+      operationId: deleteMcpCredential
+      summary: Remove the user's own credential for a server.
+      description: |
+        Deletes the user's token, or the tokens their sign-in obtained,
+        without revoking them at the service (AGT-030, ADR-0100). The
+        server's tools are no longer offered to the user from the next run.
+        Answers 204 also when the user had none.
+      x-requirements: [AGT-030, TEN-006, TEN-007]
+      responses:
+        "204": { description: Credential removed. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /mcp-servers/{server_id}/sign-in:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    post:
+      tags: [conversations]
+      operationId: startMcpSignIn
+      summary: Start signing the user in to an `oauth` server.
+      description: |
+        Returns the address of the service's sign-in page, for the client to
+        open in the browser. The sign-in is bound to the user, valid for 10
+        minutes and used once; the service redirects the browser to
+        `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in`, whose page
+        completes it with `completeMcpSignIn` (AGT-031, ADR-0100). A server
+        whose `auth` is not `oauth` answers `resource.conflict`; a server
+        denied to the user, `permission.denied`.
+      x-requirements: [AGT-031, TEN-006, TEN-007]
+      responses:
+        "200":
+          description: The sign-in started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpSignInStarted" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /mcp-sign-in:
+    post:
+      tags: [conversations]
+      operationId: completeMcpSignIn
+      summary: Complete a sign-in to an `oauth` server with what the redirect carried.
+      description: |
+        The `state` must be of a pending sign-in of the same user, which is
+        used up at once; when the authorization server returns its issuer,
+        or said it would, `iss` must be that issuer. Sibillo exchanges the
+        code for tokens, tries them by listing the server's tools, and keeps
+        them as the user's credential (AGT-030, AGT-031, ADR-0100). Any
+        failure answers `mcp_server.sign_in_failed`, with the step that
+        failed. Counts toward the tenant's limit of connections to servers
+        (T-31).
+      x-requirements: [AGT-030, AGT-031, MOD-002, TEN-006, TEN-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompleteMcpSignInRequest" }
+      responses:
+        "200":
+          description: Signed in; the server, as the user now sees it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServerSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/McpServerRefused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /me/activity:
     get:
       tags: [conversations]
@@ -2092,6 +2400,11 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Id" }
+    McpServerId:
+      name: server_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
     ConversationId:
       name: conversation_id
       in: path
@@ -2236,6 +2549,22 @@ components:
               - type: object
                 properties:
                   test: { $ref: "#/components/schemas/ConnectionTest" }
+    McpServerRefused:
+      description: |
+        The request is invalid (`request.validation_failed`); Sibillo could
+        not connect to the server or list its tools
+        (`mcp_server.unreachable`); the server refused the credential
+        (`mcp_server.unauthorized`); the admin has no credential of their own
+        to list a server with (`mcp_server.credential_missing`); the server
+        or its authorization server lacks what OAuth sign-in needs, or
+        `SIBILLO_PUBLIC_ORIGIN` is not set (`mcp_server.oauth_unsupported`);
+        or a sign-in failed (`mcp_server.sign_in_failed`). `detail` says
+        which step failed and why, without what an internal service answered
+        (AGT-019, AGT-030, AGT-031, T-31).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Server unreachable", status: 422, code: "mcp_server.unreachable", detail: "connect: connection refused" }
     RunInProgress:
       description: |
         A run is in progress in this conversation (`run.in_progress`), or an
@@ -2306,6 +2635,11 @@ components:
         - skill.too_large
         - skill.import_failed
         - connection.test_failed
+        - mcp_server.unreachable
+        - mcp_server.unauthorized
+        - mcp_server.credential_missing
+        - mcp_server.oauth_unsupported
+        - mcp_server.sign_in_failed
         - sandbox.unavailable
         - sandbox.command_failed
         - internal.error
@@ -2798,6 +3132,243 @@ components:
       uniqueItems: true
       items: { $ref: "#/components/schemas/ToolName" }
 
+    McpServerPrefix:
+      type: string
+      description: |
+        What a server's tools are prefixed with for the model, as in
+        `<prefix>__<tool>` (AGT-019, ADR-0099); unique in the tenant, and
+        never changed.
+      pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+      minLength: 1
+      maxLength: 20
+
+    McpServer:
+      type: object
+      description: |
+        A remote MCP server of the household (AGT-019, ADR-0099).
+        `private_network` is true when the address was set by a user who is
+        the instance admin, which allows a private address. `credential` is
+        the state of the requesting admin's own credential; other users'
+        credentials are never shown, nor is a client secret.
+      required: [id, name, prefix, url, auth, oauth, credential, private_network, enabled, server, tools, listed_at, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/Id" }
+        name: { type: string }
+        prefix: { $ref: "#/components/schemas/McpServerPrefix" }
+        url: { type: string, format: uri }
+        auth: { $ref: "#/components/schemas/McpServerAuth" }
+        oauth:
+          description: For `oauth`, the authorization server found and the client (ADR-0100); `null` otherwise.
+          oneOf:
+            - type: object
+              required: [issuer, client_id, client_registration, has_client_secret, scope]
+              properties:
+                issuer: { type: string, format: uri }
+                client_id: { type: string }
+                client_registration:
+                  type: string
+                  enum: [given, dynamic]
+                  description: Whether the client was given by a tenant admin or registered by Sibillo.
+                has_client_secret: { type: boolean }
+                scope: { type: [string, "null"], description: "The scope sign-ins ask for." }
+            - type: "null"
+        credential: { $ref: "#/components/schemas/McpCredentialState" }
+        private_network: { type: boolean }
+        enabled:
+          type: boolean
+          description: False when a tenant admin switched it off for everyone.
+        server:
+          description: What the server said of itself when last listed; `null` before.
+          oneOf:
+            - type: object
+              required: [name, version]
+              properties:
+                name: { type: string }
+                version: { type: string }
+            - type: "null"
+        tools:
+          type: array
+          description: Every tool as last listed, and every accepted tool, by name.
+          items: { $ref: "#/components/schemas/McpServerTool" }
+        listed_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    McpToolDefinition:
+      type: object
+      description: A tool's fields as its server lists them; `annotations` are hints that grant nothing.
+      required: [title, description, input_schema]
+      properties:
+        title: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        input_schema: { type: object }
+        annotations: { type: [object, "null"] }
+
+    McpServerTool:
+      type: object
+      description: |
+        A tool of a remote MCP server, for its review (AGT-028, ADR-0099).
+        `status` is `accepted` when it is offered: accepted, and listed as
+        accepted; `changed` when it is accepted but listed otherwise, and not
+        offered; `gone` when it is accepted but no longer listed;
+        `not_accepted` when it is listed and not accepted; `unusable` when it
+        cannot be accepted, for `problem`.
+      required: [name, model_name, status, listed, accepted, digest, problem, accepted_at]
+      properties:
+        name: { type: string, description: "The server's name for the tool." }
+        model_name: { type: string, description: "The name the model knows it by, `<prefix>__<name>`." }
+        status: { type: string, enum: [accepted, changed, gone, not_accepted, unusable] }
+        listed:
+          description: The tool as last listed; `null` when gone.
+          oneOf: [{ $ref: "#/components/schemas/McpToolDefinition" }, { type: "null" }]
+        accepted:
+          description: The tool as accepted, without annotations; `null` when not accepted.
+          oneOf: [{ $ref: "#/components/schemas/McpToolDefinition" }, { type: "null" }]
+        digest:
+          type: [string, "null"]
+          description: |
+            The SHA-256, in hexadecimal, of the canonical JSON of the listed
+            `title`, `description` and `input_schema`, to send when accepting
+            it; `null` when gone.
+        problem:
+          type: [string, "null"]
+          enum: [name, description_too_long, schema_too_large, too_many_tools, requires_tasks, null]
+          description: |
+            Why it cannot be accepted: its prefixed name does not fit
+            `^[A-Za-z0-9_-]{1,64}$`, its description is longer than 4,000
+            characters, its input schema larger than 16 KiB, the server has
+            more than 100 tools, or it requires task execution.
+        accepted_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+
+    McpServerAuth:
+      type: string
+      description: |
+        How a server's users authenticate (AGT-030, ADR-0099): `none`, with
+        no credential; `token`, with a token each user gives; `oauth`, with
+        tokens each user obtains by signing in (AGT-031, ADR-0100).
+      enum: [none, token, oauth]
+
+    McpCredentialState:
+      type: string
+      description: |
+        The state of the user's own credential for a server: `not_needed`
+        for `none`; `missing` when they have none, or only one given before
+        the server's address, authentication or client changed; `valid`; or
+        `expired` when the server refused it or it could not be renewed
+        (AGT-030).
+      enum: [not_needed, missing, valid, expired]
+
+    CreateMcpServerRequest:
+      type: object
+      description: |
+        `oauth_client_id`, and `oauth_client_secret` when the client has
+        one, may be given only for `oauth`; without them Sibillo registers
+        a client dynamically (ADR-0100).
+      required: [name, prefix, url, auth]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        prefix: { $ref: "#/components/schemas/McpServerPrefix" }
+        url: { type: string, format: uri, maxLength: 2000, description: "Address of its Streamable HTTP endpoint, such as `http://homeassistant.local:8123/api/mcp`." }
+        auth: { $ref: "#/components/schemas/McpServerAuth" }
+        oauth_client_id: { type: string, minLength: 1, maxLength: 2000 }
+        oauth_client_secret: { type: string, minLength: 1, maxLength: 4000, writeOnly: true }
+
+    UpdateMcpServerRequest:
+      type: object
+      description: |
+        Fields to change. A new `url`, `auth` or OAuth client starts a new
+        generation of the server (ADR-0099). `oauth_client_id` set to `null`
+        drops the given client, and Sibillo registers one dynamically;
+        `oauth_client_secret` set to `null` removes the secret.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        url: { type: string, format: uri, maxLength: 2000 }
+        auth: { $ref: "#/components/schemas/McpServerAuth" }
+        oauth_client_id: { oneOf: [{ type: string, minLength: 1, maxLength: 2000 }, { type: "null" }] }
+        oauth_client_secret: { oneOf: [{ type: string, minLength: 1, maxLength: 4000 }, { type: "null" }], writeOnly: true }
+        enabled: { type: boolean }
+
+    McpCredentialRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: { type: string, minLength: 1, maxLength: 4000, writeOnly: true, description: "Sent to the server as a bearer token." }
+
+    McpSignInStarted:
+      type: object
+      required: [authorization_url, expires_at]
+      properties:
+        authorization_url: { type: string, format: uri, description: "The service's sign-in page, to open in the browser." }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+
+    CompleteMcpSignInRequest:
+      type: object
+      description: |
+        The query parameters the redirect to `/mcp-sign-in` carried: `code`
+        on success, `error` and `error_description` on failure.
+      required: [state]
+      additionalProperties: false
+      properties:
+        state: { type: string, minLength: 1, maxLength: 200 }
+        code: { type: string, minLength: 1, maxLength: 4000 }
+        iss: { type: string, maxLength: 2000 }
+        error: { type: string, maxLength: 200 }
+        error_description: { type: string, maxLength: 2000 }
+
+    AcceptedMcpToolsRequest:
+      type: object
+      required: [tools]
+      additionalProperties: false
+      properties:
+        tools:
+          type: array
+          description: The tools to accept, each by its name and the digest of its listing the admin saw.
+          maxItems: 100
+          items:
+            type: object
+            required: [name, digest]
+            additionalProperties: false
+            properties:
+              name: { type: string }
+              digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+
+    McpServerSummary:
+      type: object
+      description: A remote MCP server as a user of the household sees it (AGT-029, ADR-0099).
+      required: [id, name, prefix, host, auth, credential, denied, tools]
+      properties:
+        id: { $ref: "#/components/schemas/Id" }
+        name: { type: string }
+        prefix: { $ref: "#/components/schemas/McpServerPrefix" }
+        host: { type: string, description: "The host of its address, which its tools' calls reach." }
+        auth: { $ref: "#/components/schemas/McpServerAuth" }
+        credential: { $ref: "#/components/schemas/McpCredentialState" }
+        denied:
+          type: boolean
+          description: Whether a tool permission, of the server or of a capability class, takes it away from the user.
+        tools:
+          type: array
+          description: Its accepted tools that the server lists as accepted, as runs offer them.
+          items:
+            type: object
+            required: [model_name, title, description]
+            properties:
+              model_name: { type: string }
+              title: { type: [string, "null"] }
+              description: { type: [string, "null"] }
+
+    DisabledServers:
+      type: array
+      description: |
+        The remote MCP servers that are off, by ID; every other server is on.
+        An ID of no server is ignored (AGT-029, ADR-0099).
+      uniqueItems: true
+      items: { $ref: "#/components/schemas/Id" }
+
     CapabilityClass:
       type: string
       description: A declared property of a tool used for safety decisions (AGT-005, ADR-0012).
@@ -2828,6 +3399,14 @@ components:
           type: object
           propertyNames: { $ref: "#/components/schemas/CapabilityClass" }
           additionalProperties: { $ref: "#/components/schemas/PermissionSetting" }
+        servers:
+          type: object
+          description: |
+            Remote MCP servers denied to the user, by ID; a server left out
+            is available, each call asked (AGT-029, ADR-0099). Optional in a
+            request, where leaving it out keeps none denied.
+          propertyNames: { $ref: "#/components/schemas/Id" }
+          additionalProperties: { type: string, enum: [deny] }
 
     ToolInfo:
       type: object
@@ -3210,6 +3789,9 @@ components:
           description: The reasoning new conversations start with; `null` for `on`.
           oneOf: [{ $ref: "#/components/schemas/Reasoning" }, { type: "null" }]
         disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_servers:
+          allOf: [{ $ref: "#/components/schemas/DisabledServers" }]
+          description: Optional in a request, where leaving it out keeps none off.
         base_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
           description: Replaces the assistant's base instructions; `null` for the built-in ones.
@@ -3220,7 +3802,7 @@ components:
     UserSettingsView:
       type: object
       description: A user's defaults, with the built-in base instructions that clients show (CNV-014, ADR-0081).
-      required: [model, reasoning, disabled_tools, base_instructions, additional_instructions, built_in_base_instructions]
+      required: [model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions, built_in_base_instructions]
       additionalProperties: false
       properties:
         model:
@@ -3228,6 +3810,7 @@ components:
         reasoning:
           oneOf: [{ $ref: "#/components/schemas/Reasoning" }, { type: "null" }]
         disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
         base_instructions: { $ref: "#/components/schemas/Instructions" }
         additional_instructions: { $ref: "#/components/schemas/Instructions" }
         built_in_base_instructions:
@@ -3236,7 +3819,7 @@ components:
 
     Conversation:
       type: object
-      required: [id, title, archived, temporary, active_run_id, model, reasoning, disabled_tools, disabled_skills, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
+      required: [id, title, archived, temporary, active_run_id, model, reasoning, disabled_tools, disabled_skills, disabled_servers, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         temporary:
@@ -3266,6 +3849,9 @@ components:
         disabled_skills:
           allOf: [{ $ref: "#/components/schemas/DisabledSkills" }]
           description: The skills its next run does without; empty when it was created, and copied into a fork (AGT-017, ADR-0096).
+        disabled_servers:
+          allOf: [{ $ref: "#/components/schemas/DisabledServers" }]
+          description: The remote MCP servers its next run does without, copied from its user's defaults when it was created, and into a fork (AGT-029).
         allowances: { $ref: "#/components/schemas/Allowances" }
         base_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
@@ -3406,6 +3992,7 @@ components:
         model: { $ref: "#/components/schemas/ModelChoice" }
         reasoning: { $ref: "#/components/schemas/Reasoning" }
         disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
         temporary:
           type: boolean
           default: false
@@ -3430,6 +4017,9 @@ components:
         disabled_skills:
           allOf: [{ $ref: "#/components/schemas/DisabledSkills" }]
           description: Used from the next run (AGT-017).
+        disabled_servers:
+          allOf: [{ $ref: "#/components/schemas/DisabledServers" }]
+          description: Used from the next run (AGT-029).
         allowances:
           allOf: [{ $ref: "#/components/schemas/Allowances" }]
           description: |

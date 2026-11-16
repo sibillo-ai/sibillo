@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-11-02
 - **Deciders:** @tapionx
-- **Related:** ADR-0011, ADR-0020, ADR-0051, ADR-0061, AGT-003, AGT-013, AGT-018, AGT-019, MOD-002
+- **Related:** ADR-0011, ADR-0020, ADR-0051, ADR-0061, ADR-0099, ADR-0100, AGT-003, AGT-013, AGT-018, AGT-019, MOD-002
 
 ## Context
 
@@ -20,9 +20,12 @@ remote endpoint as a client, at a checked address, does neither.
    servers reached over HTTP. It never starts MCP programs.
 2. **They belong to a tenant,** added by its tenant admin, and are available
    to every user of the tenant. There is nothing to configure per user and no
-   server shared between tenants.
+   server shared between tenants. Amended by ADR-0099: a tenant admin can
+   deny a server to a user, and each user gives their own credential.
 3. **One credential per server,** such as a token, entered by the tenant
    admin, stored encrypted like a model's API key and never returned (MOD-002).
+   Amended by ADR-0099 and ADR-0100: there is no credential of the
+   household; each user gives a token of their own, or signs in with OAuth.
 4. **Where a server may be,** decided by who adds it: a tenant admin who is
    also the instance admin, trusted (ADR-0011), may use any address, such as
    Home Assistant on the household's network or a container next to
@@ -32,7 +35,8 @@ remote endpoint as a client, at a checked address, does neither.
    such as `readOnlyHint`, are hints from the server and grant nothing.
 6. **Everything from a server is untrusted content:** its tool descriptions as
    much as its results (AGT-003), since a server can carry injected
-   instructions in either (T-29).
+   instructions in either (T-29). Refined by ADR-0099: descriptions a
+   tenant admin accepted do not by themselves make a run untrusted.
 
 ## Consequences
 

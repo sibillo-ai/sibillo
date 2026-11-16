@@ -155,6 +155,33 @@ OpenRouter's JSON with base64 audio, and answers
 `X-Generation-Id`, whose cost its `/generation` reports. It records each
 speech request, so tests can check the text, model and voice sent.
 
+## MCP servers
+
+Tests never reach a real MCP server. The test suite serves its own on
+`127.0.0.1`, over Streamable HTTP, and adds it through the API as a remote MCP
+server of the test's tenant, set by a user who is the instance admin, since
+only such a server may use the loopback address (ADR-0099). The tests script
+its tools: their names, titles, descriptions, input schemas, annotations and
+results, an error result, a call that takes longer than the test's
+`SIBILLO_MCP_CALL_SECONDS`, and a tool that requires task execution; and
+they change its tools between two listings, as a server that changes its
+tools does. It can also stop answering, as a server that cannot be reached.
+It records the headers and arguments of each request, so tests can check the
+credential it was sent and what left the worker.
+
+The same server checks bearer tokens and is its own OAuth authorization
+server (ADR-0100). It serves protected resource and authorization server
+metadata, registers clients dynamically and knows one client registered by
+hand, shows a sign-in page that a test completes without a browser by
+following its redirect, and issues, expires, renews and rotates tokens;
+tests can make tokens expire or be revoked. They can also script it to
+misbehave: to answer without `resource_metadata`, to name another issuer or
+resource, to offer no `S256`, to point its metadata at a private address,
+to return a code with a wrong `iss`, or to refuse a renewal. Tests set
+`SIBILLO_PUBLIC_ORIGIN` for the API they start. Tests of the address rules
+check the connection-time transport directly, with an injected resolver, as
+for connections (ADR-0061).
+
 ## Search
 
 Tests never reach a real search engine. The test suite serves its own search

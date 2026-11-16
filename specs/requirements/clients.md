@@ -489,3 +489,29 @@ page (ADR-0096).
 
 Rationale: journey J13.
 
+## UX-029: Remote MCP servers in the app
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** e2e
+
+Among the household's settings, clients MUST let a tenant admin add a remote
+MCP server, with its name, prefix, address and authentication, and an OAuth
+client when the service needs one, and change, refresh, switch off and
+remove one, showing why a connection failed. For each server they MUST list
+every tool it offers, with its name, title, description, input schema and
+annotations, and let the admin accept or withdraw each one; a tool that
+changed since it was accepted MUST be shown as changed, with what changed
+(AGT-028). The tool permissions of a user MUST list the servers, each of
+which the admin can deny. The user's tool switches, in a conversation and in
+their defaults, MUST show each server as a group with one switch and its
+accepted tools, and a denied server switched off and locked. For a server
+that needs a credential, they MUST show whether the user's account is
+connected, let the user enter a token or sign in, with advice to give a
+token the least rights it needs, and remove their credential (AGT-030,
+AGT-031). In a conversation, a call to a server's tool MUST show the
+server's name, and its approval request the arguments and the server's host
+(AGT-018, ADR-0099, ADR-0100).
+
+Rationale: journey J13.

@@ -85,7 +85,10 @@ new entry here first (ADR-0005).
 |---|---|
 | Connected device | A machine or phone of a user, paired to their account, that offers tools running on it to that user's runs (ADR-0063). Not to be confused with a device session, which is a sign-in. |
 | Device service | The program that runs on a connected device, keeps its connection to the instance and runs its tools (ADR-0063). |
-| Remote MCP server | A service reached over HTTP with the Model Context Protocol, added by a tenant admin, whose tools the assistant can call (ADR-0064). |
+| Remote MCP server | A service reached over Streamable HTTP with the Model Context Protocol, added by a tenant admin, whose accepted tools the assistant can call, each call approved, with the user's server credential when it needs one (AGT-018, AGT-019, ADR-0064, ADR-0099). |
+| Server prefix | The short name a remote MCP server's tools carry for the model, as in `<prefix>__<tool>`, chosen when the server is added and fixed (AGT-019, ADR-0099). |
+| Accepted tool | A tool of a remote MCP server that a tenant admin accepted as the server listed it; offered only while the server lists its title, description and input schema unchanged (AGT-028, ADR-0099). |
+| Server credential | A user's own token for a remote MCP server, entered by the user or obtained when they sign in to the service with OAuth; used only for that user, and seen by no one (AGT-030, AGT-031, ADR-0099, ADR-0100). |
 
 ## Clients
 

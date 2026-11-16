@@ -271,7 +271,7 @@ Rationale: journey J13.
 
 ## AGT-018: Every call to a device or an MCP server is approved
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -279,25 +279,31 @@ Rationale: journey J13.
 Every invocation of a tool of a connected device (DEV-003) or of a remote MCP
 server (AGT-019) MUST require the user's explicit approval, whatever its
 capability classes, in addition to AGT-006. The run MUST wait for the answer.
-Tools of the sandbox and Sibillo's own tools follow AGT-006 alone
-(ADR-0063, ADR-0064).
+The approval MUST cover only that invocation, and MUST NOT be lifted by
+any tool permission or allowance. Tools of the sandbox and Sibillo's own tools follow
+AGT-006 alone (ADR-0063, ADR-0064, ADR-0099).
 
 ## AGT-019: Remote MCP servers of a household
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
 
-A tenant admin MUST be able to add remote MCP servers, reached over HTTP, to
-their tenant; their tools MUST be available to every user of that tenant and
-to no other tenant. Each server MUST have at most one credential, stored
-encrypted and never returned by the API or sent to sandboxes or clients
-(MOD-002). Only a tenant admin who is also the instance admin MAY use a
+A tenant admin MUST be able to add remote MCP servers, reached over
+Streamable HTTP, to their tenant, and to list, change, switch off and remove
+them; their tools MUST be available to the users of that tenant (AGT-029) and
+to no other tenant. A server MUST need either no credential or a credential
+of each user (AGT-030); no credential MAY be shared between users. Only a
+tenant admin who is also the instance admin MAY use a
 private or local address; other tenant admins MUST use public `https`
-addresses, checked at connection time (ADR-0061). Results and tool
-descriptions from these servers MUST be treated as untrusted content
-(AGT-003) (ADR-0064).
+addresses, checked at connection time, without following redirects
+(ADR-0061). The control plane MUST only call a server's tools, never start a
+program, and MUST NOT give the model the server's instructions, resources or
+prompts. A server's tools MUST be offered under names prefixed with the
+server's prefix, which no tool of Sibillo or of another server can take.
+Their results MUST be untrusted content (AGT-003) (ADR-0064, ADR-0099,
+ADR-0100).
 
 ## AGT-020: Web search
 
@@ -426,3 +432,85 @@ it (ADR-0097).
 Rationale: the first long task a user tried stopped at a default limit
 nobody had chosen, as an internal error, and lost its work.
 
+## AGT-028: Tools of an MCP server are reviewed
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+A tool of a remote MCP server MUST be offered to the model only after a
+tenant admin accepted it, having been shown its name, title, description,
+input schema and annotations as the server listed them, and only while the
+server lists its title, description and input schema exactly as accepted. A
+tool that changed, or a new one, MUST NOT be offered until a tenant admin
+accepts it again, and an approved call to a tool that is no longer offered
+as accepted MUST NOT run. An acceptance MUST be refused when the server's
+listing changed after the admin saw it, and a new address MUST clear a
+server's acceptances. Accepted descriptions MUST NOT by themselves make a run
+have untrusted content (ADR-0099).
+
+Rationale: tool descriptions reach the model in every run, and the server
+can change them at any time (T-29).
+
+## AGT-029: Remote MCP servers for each user
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration
+
+A tenant admin MUST be able to deny a remote MCP server to a user; a denied
+server MUST NOT be offered to that user, a call to its tools MUST be refused,
+and the user MUST NOT be able to switch it on. A capability class set to
+`deny` for a user MUST take away the tools of every server, as it does for
+other tools of that class (AGT-002). A user MUST be able to switch each
+server on or off for a conversation and in their defaults, as for tools
+(CNV-013); a server added later MUST be on (ADR-0099).
+
+Rationale: a household may want a server for some of its members only.
+
+## AGT-030: Each user's own credential for an MCP server
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+For a remote MCP server that needs a credential, each user MUST give their
+own: a token they enter, or one obtained by signing in to the service
+(AGT-031). A credential MUST be used only for its user's runs and requests,
+sent only to its server's address, stored encrypted, and never returned by
+the API or shown to tenant admins, other users, sandboxes, clients or logs
+(MOD-002). A token MUST be tried when given and refused when the server
+refuses it. A user MUST be able to remove their credential. A user without a
+credential, or whose credential the server refuses or that cannot be
+renewed, MUST NOT be offered the server's tools, and the run's instructions
+MUST say that their account is not connected. A new address, authentication
+or OAuth client of a server MUST make every credential given for it before
+unusable (ADR-0099).
+
+Rationale: most services know each person; a shared credential would let
+one user act on a service as another (T-37).
+
+## AGT-031: Signing in to an MCP server with OAuth
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+A user MUST be able to obtain their credential for a remote MCP server by
+signing in to the service in their browser, with OAuth 2.1's authorization
+code flow and PKCE (`S256`), as the MCP authorization specification
+describes. The control plane MUST find the server's authorization server
+from its metadata, and use a client given by a tenant admin or registered
+dynamically. Each sign-in MUST be bound to the user who started it, used
+once, and expire after 10 minutes; its `state` MUST be checked, and the
+issuer when the authorization server returns it. Tokens MUST be asked for
+the server alone (`resource`), and renewed once at a time per credential. The
+requests the control plane makes for OAuth MUST follow the server's address
+rules (AGT-019) (ADR-0100).
+
+Rationale: many hosted servers accept no other credential, and people who
+are not technical cannot create tokens (T-38).
