@@ -563,7 +563,7 @@ def test_a_user_signs_in_with_pkce_for_this_server_alone(
     with server.client(household.member_token) as client:
         started = client.post(f"/mcp-servers/{added['id']}/sign-in")
     assert started.status_code == 200, started.text
-    address = urlsplit(body(started)["authorization_url"])
+    address = urlsplit(str(body(started)["authorization_url"]))
     query = {name: values[0] for name, values in parse_qs(address.query).items()}
     assert f"{address.scheme}://{address.netloc}{address.path}" == f"{mcp.issuer}/authorize"
     assert query["response_type"] == "code"

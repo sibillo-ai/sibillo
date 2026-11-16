@@ -131,8 +131,8 @@ class McpServer:
     requests: list[McpRequest] = field(default_factory=list[McpRequest])
     token_requests: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
     clients: dict[str, _Client] = field(default_factory=dict[str, _Client])
-    _codes: dict[str, dict[str, str]] = field(default_factory=dict[str, dict[str, str]])
-    _refresh_tokens: dict[str, str] = field(default_factory=dict[str, str])
+    codes: dict[str, dict[str, str]] = field(default_factory=dict[str, dict[str, str]])
+    refresh_tokens: dict[str, str] = field(default_factory=dict[str, str])
 
     @property
     def url(self) -> str:
@@ -157,7 +157,7 @@ class McpServer:
         """Make every token the server issued or accepted invalid, as a revocation at the service does."""
         with self.service.lock:
             self.tokens.clear()
-            self._refresh_tokens.clear()
+            self.refresh_tokens.clear()
 
     def register_client(self, *, secret: str | None = None) -> str:
         """A client registered by hand, as a service's administrator would: its ID."""
@@ -417,7 +417,7 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 return
             code = secrets.token_urlsafe(16)
             with service.lock:
-                server._codes[code] = dict(query)
+                server.codes[code] = dict(query)
             iss = f"{server.service.url}/s/other" if "wrong_iss" in server.misbehaviours else server.issuer
             answer = urlencode({"code": code, "state": query.get("state", ""), "iss": iss})
             self._empty(302, {"Location": f"{redirect_uri}?{answer}"})
@@ -438,7 +438,7 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             access, refresh = f"access-{secrets.token_hex(8)}", f"refresh-{secrets.token_hex(8)}"
             with service.lock:
                 server.tokens.add(access)
-                server._refresh_tokens[refresh] = client_id
+                server.refresh_tokens[refresh] = client_id
             self._json(
                 200,
                 {
@@ -460,7 +460,7 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 return
             if form.get("grant_type") == "authorization_code":
                 with service.lock:
-                    asked = server._codes.pop(form.get("code", ""), None)
+                    asked = server.codes.pop(form.get("code", ""), None)
                 if (
                     asked is None
                     or asked.get("client_id") != client.client_id
@@ -476,7 +476,7 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 return
             if form.get("grant_type") == "refresh_token":
                 with service.lock:
-                    owner = server._refresh_tokens.pop(form.get("refresh_token", ""), None)
+                    owner = server.refresh_tokens.pop(form.get("refresh_token", ""), None)
                 if "refuse_refresh" in server.misbehaviours or owner != client.client_id:
                     self._json(400, {"error": "invalid_grant"})
                     return
