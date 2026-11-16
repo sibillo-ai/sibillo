@@ -35,6 +35,8 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "conversation_messages": ("run_id", "seq"),
     "usage_ledger": ("id",),
     "audit_events": ("id",),
+    "mcp_credentials": ("id",),
+    "mcp_sign_ins": ("id",),
 }
 
 
@@ -48,6 +50,8 @@ class User:
     token_hash: bytes
     conversation_id: uuid.UUID
     run_id: uuid.UUID
+    # A remote MCP server of the user's tenant, which their credential and sign-in are for (ADR-0099).
+    mcp_server_id: uuid.UUID
     # Primary key value of the user's row in each private table, as a tuple.
     rows: dict[str, tuple[object, ...]]
 
@@ -86,7 +90,10 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         passkey_id,
         memory_id,
         skill_id,
-    ) = (uuid7() for _ in range(11))
+        mcp_server_id,
+        credential_id,
+        sign_in_id,
+    ) = (uuid7() for _ in range(14))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -178,6 +185,28 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         " created_at) VALUES (%s, %s, %s, %s, %s, 'call-1', 'web_search', 'not_needed', now())",
         (audit_id, tenant_id, user_id, conversation_id, run_id),
     )
+    # A server of the tenant, with one tool, for the user's credential and sign-in (AGT-030, AGT-031).
+    conn.execute(
+        "INSERT INTO mcp_servers (id, tenant_id, name, prefix, url, auth, generation, private_network, enabled,"
+        " created_at, updated_at) VALUES (%s, %s, %s, %s, 'https://mcp.example/mcp', 'token', %s, false, true,"
+        " now(), now())",
+        (mcp_server_id, tenant_id, f"Server {mcp_server_id}", f"w{mcp_server_id.hex[-8:]}", mcp_server_id),
+    )
+    conn.execute(
+        "INSERT INTO mcp_server_tools (tenant_id, server_id, name, listed) VALUES (%s, %s, 'turn_on', %s)",
+        (tenant_id, mcp_server_id, Jsonb({"title": None, "description": "x", "inputSchema": {}, "annotations": None})),
+    )
+    conn.execute(
+        "INSERT INTO mcp_credentials (id, tenant_id, owner_id, server_id, server_generation, kind,"
+        " access_token_ciphertext, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, 'token', %s, 'valid',"
+        " now(), now())",
+        (credential_id, tenant_id, user_id, mcp_server_id, mcp_server_id, b"ciphertext"),
+    )
+    conn.execute(
+        "INSERT INTO mcp_sign_ins (id, tenant_id, owner_id, server_id, server_generation, state_hash, code_verifier,"
+        " created_at, expires_at) VALUES (%s, %s, %s, %s, %s, %s, 'verifier', now(), now() + interval '10 minutes')",
+        (sign_in_id, tenant_id, user_id, mcp_server_id, mcp_server_id, sign_in_id.bytes * 2),
+    )
     rows: dict[str, tuple[object, ...]] = {
         "device_sessions": (session_id,),
         "passkey_challenges": (challenge_id,),
@@ -193,9 +222,11 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "conversation_messages": (run_id, 1),
         "usage_ledger": (ledger_id,),
         "audit_events": (audit_id,),
+        "mcp_credentials": (credential_id,),
+        "mcp_sign_ins": (sign_in_id,),
     }
     assert set(rows) == set(PRIVATE_TABLES)
-    return User(user_id, tenant_id, username, role, token_hash, conversation_id, run_id, rows)
+    return User(user_id, tenant_id, username, role, token_hash, conversation_id, run_id, mcp_server_id, rows)
 
 
 def disable_user(database: Database, user: User) -> None:

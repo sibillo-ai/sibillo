@@ -43,6 +43,9 @@ PRIVATE_TABLES = (
     "runs",
     "usage_ledger",
     "audit_events",
+    # Each user's own credential for a remote MCP server, and their sign-ins (AGT-030, AGT-031, ADR-0099).
+    "mcp_credentials",
+    "mcp_sign_ins",
 )
 # Configuration of the instance, without a tenant.
 INSTANCE_TABLES = ("tenants",)
@@ -55,6 +58,9 @@ TENANT_TABLES = (
     "tool_permissions",
     "egress_policies",
     "passkeys",
+    # A household's remote MCP servers and their tools (AGT-019, AGT-028, ADR-0099).
+    "mcp_servers",
+    "mcp_server_tools",
 )
 CONTRACT_TABLES = ("tenants", "login_attempts", *TENANT_TABLES, *PRIVATE_TABLES)
 # Column holding the owning user of each private table.

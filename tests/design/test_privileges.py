@@ -59,6 +59,11 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "usage_ledger": {"SELECT": EVERY, "INSERT": EVERY},
     "connections": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "connection_models": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    # A household's remote MCP servers, and each user's credentials and sign-ins (ADR-0099, ADR-0100).
+    "mcp_servers": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "mcp_server_tools": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "mcp_credentials": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "mcp_sign_ins": {"SELECT": EVERY, "INSERT": EVERY, "DELETE": EVERY},
     # Any user of a household records the window its Ollama server runs a model with (MOD-019, ADR-0093).
     "served_context_windows": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
     "tool_permissions": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},

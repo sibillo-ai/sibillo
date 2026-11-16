@@ -10,6 +10,7 @@ import pytest
 
 from tests.support.accounts import body, create_account, login
 from tests.support.database import Database, start_database
+from tests.support.mcp import McpService, start_mcp_service
 from tests.support.model import ModelServer, start_model_server
 from tests.support.sandbox import Driver, start_sandboxes
 from tests.support.search import SearchServer, start_search_server
@@ -36,6 +37,14 @@ def sandboxes(request: pytest.FixtureRequest) -> Driver:
 def search_service() -> Iterator[SearchServer]:
     search, http = start_search_server()
     yield search
+    http.shutdown()
+
+
+@pytest.fixture(scope="session")
+def mcp_service() -> Iterator[McpService]:
+    """The remote MCP servers the tests serve (ADR-0099)."""
+    service, http = start_mcp_service()
+    yield service
     http.shutdown()
 
 

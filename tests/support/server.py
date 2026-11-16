@@ -172,6 +172,8 @@ def _wait_until_ready(api: Process, worker: Process, base_url: str) -> None:
 _SERVER = pytest.StashKey[Server | BaseException]()
 
 
+# Seconds a call to a remote MCP server's tool may take in tests (specs/contracts/test-harness.md).
+MCP_CALL_SECONDS = 2
 # The limit of model requests of a run in tests (AGT-027, specs/contracts/test-harness.md).
 RUN_REQUEST_LIMIT = 20
 
@@ -234,6 +236,8 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
             "SIBILLO_SEARCH_URL": search_url,
             "SIBILLO_TEMPORARY_SWEEP_SECONDS": "1",
             "SIBILLO_APPROVAL_SWEEP_SECONDS": "1",
+            # Calls to a remote MCP server's tools time out quickly, so that their test need not wait (ADR-0099).
+            "SIBILLO_MCP_CALL_SECONDS": str(MCP_CALL_SECONDS),
         }
         # A low limit of model requests, so that a test reaches it quickly; evals keep the default (ADR-0097).
         if not _evaluating(config):

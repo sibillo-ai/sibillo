@@ -154,6 +154,19 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " outcome, created_at) VALUES (%s, %s, %s, %s, %s, 'intruder', 'web_search', 'not_needed', now())",
                 (uuid7(), tenant, user, owner.conversation_id, owner.run_id),
             )
+        case "mcp_credentials":
+            return (
+                "INSERT INTO mcp_credentials (id, tenant_id, owner_id, server_id, server_generation, kind,"
+                " access_token_ciphertext, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, 'token',"
+                " 'intruder'::bytea, 'valid', now(), now())",
+                (uuid7(), tenant, user, owner.mcp_server_id, owner.mcp_server_id),
+            )
+        case "mcp_sign_ins":
+            return (
+                "INSERT INTO mcp_sign_ins (id, tenant_id, owner_id, server_id, server_generation, state_hash,"
+                " code_verifier, created_at, expires_at) VALUES (%s, %s, %s, %s, %s, %s, 'intruder', now(), now())",
+                (uuid7(), tenant, user, owner.mcp_server_id, owner.mcp_server_id, uuid.uuid4().bytes * 2),
+            )
         case _:
             raise AssertionError(f"no row builder for {table}")
 
