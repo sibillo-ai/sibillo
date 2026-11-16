@@ -76,6 +76,9 @@ Hardware virtualization is not needed (OPS-009).
   [gVisor's official repository](https://gvisor.dev/docs/user_guide/install/)
   and registered with Docker as the `runsc` runtime (`sudo runsc install`,
   then reload Docker). Distribution packages are usually far too old.
+- Docker running as root, not rootless, on a host with loop devices, as every
+  common distribution provides: each workspace is a disk of its own, attached
+  to a loop device (ADR-0098).
 - About 3 GB of disk for the images, and internet access to build them.
 
 **Install**
@@ -310,6 +313,20 @@ started, is discarded when the answer ends, and the next answer gets a new
 sandbox (ADR-0076). Deleting a conversation deletes its workspace; a fork
 starts with a copy. Each workspace has a quota, 2 GiB by default
 (`SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`); the assistant is told when it nears it.
+
+No sandbox can fill the server's disk (SBX-016, ADR-0098). Each workspace is
+a disk of its own, the quota plus 10% and 32 MiB, and a write beyond it fails
+inside the sandbox; everything outside the workspace is limited to 4 GiB
+(`SIBILLO_SANDBOX_DISK_MB`), for the length of an answer. Disks are sparse
+files under Docker's volumes: they take the space their files use, not their
+size, so a household can promise more than the server holds; size the quota
+with the number of conversations in mind. Raising the quota grows existing
+disks; lowering it applies to new conversations only. Workspaces from before
+these limits are converted the first time they are used, keeping their files.
+
+Sandboxes resolve names only through the instance's resolver, Quad9 by
+default (`SIBILLO_SANDBOX_RESOLVER`, which must be a public address): the
+network guard blocks DNS to any other server (SBX-007).
 
 **Files** opens a conversation's workspace beside it, or full screen on a
 phone: browse it as a tree, preview text, images, PDF, audio and video,
