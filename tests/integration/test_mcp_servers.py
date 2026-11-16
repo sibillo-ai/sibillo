@@ -12,10 +12,12 @@ import json
 import secrets
 import time
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 import pytest
 
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
@@ -557,6 +559,68 @@ def test_without_registration_a_client_must_be_given(
     assert_problem(refused, 422, "mcp_server.oauth_unsupported")
     added = add(server, household.admin, mcp, oauth_client_id=mcp.register_client())
     assert added["oauth"]["client_registration"] == "given"
+
+
+@pytest.fixture
+def https_origin(server: Server) -> Iterator[tuple[str, str]]:
+    """An API whose public origin is `https`, as Client ID Metadata Documents need: that origin, and its API."""
+    origin = "https://sibillo.test"
+    api, address = server.start_twin_api(SIBILLO_PUBLIC_ORIGIN=origin)
+    yield origin, f"{address}/v1"
+    api.close()
+
+
+@pytest.mark.spec("AGT-031")
+def test_a_service_that_reads_client_metadata_documents_needs_no_client(
+    server: Server, household: Household, mcp_service: McpService, https_origin: tuple[str, str]
+) -> None:
+    origin, api = https_origin
+    document = httpx.get(f"{api}/mcp-client", timeout=10)
+    assert document.status_code == 200, document.text
+    assert body(document) == {
+        "client_id": f"{origin}/v1/mcp-client",
+        "client_name": "Sibillo",
+        "client_uri": origin,
+        "redirect_uris": [f"{origin}/mcp-sign-in"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+    }
+    mcp = mcp_service.new(auth="oauth")
+    mcp.client_documents = api.removesuffix("/v1")
+    with server.client(household.admin) as client:
+        client.base_url = httpx.URL(api)
+        response = client.post(
+            "/tenant/mcp-servers", json={"name": "Home", "prefix": _prefix(), "url": mcp.url, "auth": "oauth"}
+        )
+        assert response.status_code == 201, response.text
+        added = body(response)
+        assert added["oauth"]["client_registration"] == "metadata_document"
+        assert added["oauth"]["client_id"] == f"{origin}/v1/mcp-client"
+        # Nothing was registered: the service fetches the document when someone signs in.
+        assert mcp.clients == {}
+    with server.client(household.member_token) as client:
+        client.base_url = httpx.URL(api)
+        started = client.post(f"/mcp-servers/{added['id']}/sign-in")
+        assert started.status_code == 200, started.text
+        redirect = follow_sign_in(body(started)["authorization_url"])
+        signed_in = client.post("/mcp-sign-in", json=redirect)
+        assert signed_in.status_code == 200, signed_in.text
+        assert body(signed_in)["credential"] == "valid"
+    assert [found["client_id"] for found in mcp.documents] == [f"{origin}/v1/mcp-client"]
+
+
+@pytest.mark.spec("AGT-031")
+def test_without_an_https_origin_a_client_is_registered_instead(
+    server: Server, household: Household, mcp_service: McpService
+) -> None:
+    # The harness's public origin is `http://localhost`: no client ID can be its document's address.
+    with server.client() as client:
+        assert_problem(client.get("/mcp-client"), 404, "resource.not_found")
+    mcp = mcp_service.new(auth="oauth")
+    mcp.client_documents = mcp_service.url
+    added = add(server, household.admin, mcp)
+    assert added["oauth"]["client_registration"] == "dynamic"
 
 
 @pytest.mark.spec("AGT-030", "AGT-031")

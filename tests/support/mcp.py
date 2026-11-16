@@ -128,6 +128,11 @@ class McpServer:
     misbehaviours: set[str] = field(default_factory=set[str])
     # Seconds an issued access token lasts.
     token_lifetime: int = 3600
+    # While set, the authorization server reads Client ID Metadata Documents, fetching a document from this
+    # origin in place of its client ID's own, which tests cannot serve at an https address (ADR-0100).
+    client_documents: str | None = None
+    # The Client ID Metadata Documents it fetched.
+    documents: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     requests: list[McpRequest] = field(default_factory=list[McpRequest])
     token_requests: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
     clients: dict[str, _Client] = field(default_factory=dict[str, _Client])
@@ -390,6 +395,8 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 "authorization_response_iss_parameter_supported": True,
                 "scopes_supported": SCOPE.split(),
             }
+            if server.client_documents is not None:
+                metadata["client_id_metadata_document_supported"] = True
             if "no_registration" not in server.misbehaviours:
                 metadata["registration_endpoint"] = f"{server.issuer}/register"
             self._json(200, metadata)
@@ -409,8 +416,11 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
 
         def _authorize(self, server: McpServer) -> None:
             query = {name: values[0] for name, values in parse_qs(urlsplit(self.path).query).items()}
+            client_id = query.get("client_id", "")
+            if server.client_documents is not None and client_id.startswith("https://"):
+                self._read_document(server, client_id)
             with service.lock:
-                client = server.clients.get(query.get("client_id", ""))
+                client = server.clients.get(client_id)
             redirect_uri = query.get("redirect_uri", "")
             if client is None or (client.redirect_uris is not None and redirect_uri not in client.redirect_uris):
                 self._json(400, {"error": "invalid_request", "error_description": "unknown client or redirect"})
@@ -421,6 +431,21 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             iss = f"{server.service.url}/s/other" if "wrong_iss" in server.misbehaviours else server.issuer
             answer = urlencode({"code": code, "state": query.get("state", ""), "iss": iss})
             self._empty(302, {"Location": f"{redirect_uri}?{answer}"})
+
+        def _read_document(self, server: McpServer, client_id: str) -> None:
+            """Fetch a client's metadata document, and know the client by it when it names itself."""
+            address = f"{server.client_documents}{urlsplit(client_id).path}"
+            try:
+                document: Any = httpx.get(address, timeout=SIGN_IN_SECONDS).json()
+            except (httpx.HTTPError, ValueError):
+                return
+            if not isinstance(document, dict) or cast(dict[str, Any], document).get("client_id") != client_id:
+                return
+            found = cast(dict[str, Any], document)
+            uris = [str(uri) for uri in cast(list[Any], found.get("redirect_uris") or [])]
+            with service.lock:
+                server.documents.append(found)
+                server.clients[client_id] = _Client(client_id, None, uris)
 
         def _client_of(self, server: McpServer, form: dict[str, str]) -> _Client | None:
             header = self.headers.get("Authorization") or ""
