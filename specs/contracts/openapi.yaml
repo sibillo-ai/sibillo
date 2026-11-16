@@ -3932,7 +3932,12 @@ components:
       description: What a tool call will do, for the user to approve (AGT-007, ADR-0090).
       required: [tool, arguments, action, data, destination, reason, scopes]
       properties:
-        tool: { $ref: "#/components/schemas/ToolName" }
+        tool:
+          type: string
+          description: |
+            The tool's name: a `ToolName`, or the name of a remote MCP
+            server's tool, `<prefix>__<tool>` (AGT-018, ADR-0099).
+          pattern: "^[A-Za-z0-9_-]{1,64}$"
         arguments:
           type: object
           additionalProperties: true
