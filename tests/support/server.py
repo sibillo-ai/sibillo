@@ -173,7 +173,7 @@ _SERVER = pytest.StashKey[Server | BaseException]()
 
 
 # Seconds a call to a remote MCP server's tool may take in tests (specs/contracts/test-harness.md).
-MCP_CALL_SECONDS = 2
+MCP_CALL_SECONDS = 1
 # The limit of model requests of a run in tests (AGT-027, specs/contracts/test-harness.md).
 RUN_REQUEST_LIMIT = 20
 

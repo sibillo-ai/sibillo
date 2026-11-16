@@ -354,6 +354,8 @@ NO_DEFAULTS: dict[str, Any] = {
     "model": None,
     "reasoning": None,
     "disabled_tools": [],
+    # The remote MCP servers that are off (AGT-029).
+    "disabled_servers": [],
     "base_instructions": None,
     "additional_instructions": None,
 }
@@ -398,6 +400,7 @@ def test_a_user_has_no_defaults_until_they_set_them(database: Database, server: 
         "model": {"connection_id": household.openrouter_id, "model": "test/popular"},
         "reasoning": "deep",
         "disabled_tools": ["web_search", "run_command"],
+        "disabled_servers": [],
         "base_instructions": "You are Ada, a patient helper.",
         "additional_instructions": "Answer in French.",
     }

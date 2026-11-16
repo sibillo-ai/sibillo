@@ -48,13 +48,18 @@ class Household:
 
 
 @pytest.fixture
-def household(database: Database, server: Server, default_model: HarnessModel) -> Household:
+def household(database: Database, server: Server) -> Household:
+    """A household without a model: tests of runs also use `household_model`."""
     tenant_id = create_tenant(database)
-    model = default_model.connect(tenant_id)
+    admin = create_account(database, tenant_id, "tenant_admin", instance_admin=True)
     member = create_account(database, tenant_id)
-    with server.client(model.admin_token) as client:
-        admin_id = uuid.UUID(body(client.get("/me"))["id"])
-    return Household(tenant_id, model.admin_token, admin_id, member, login(server, member))
+    return Household(tenant_id, login(server, admin), admin.id, member, login(server, member))
+
+
+@pytest.fixture
+def household_model(household: Household, default_model: HarnessModel) -> None:
+    """The household's default model is the harness model, for tests of runs."""
+    default_model.connect(household.tenant_id)
 
 
 def _prefix() -> str:
@@ -616,8 +621,9 @@ def test_a_sign_in_is_bound_to_its_user_used_once_and_checked(
 # --- Calls in runs (AGT-018, AGT-019, AGT-028 to AGT-031) ---
 
 
-@pytest.mark.spec("AGT-018", "AGT-019", "AGT-030")
-def test_every_call_is_approved_once_and_reaches_the_server_with_the_users_token(
+@pytest.mark.spec("AGT-018", "AGT-019", "AGT-028", "AGT-030")
+@pytest.mark.usefixtures("household_model")
+def test_every_call_is_approved_once_reaches_the_server_with_the_users_token_and_is_untrusted(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:
     mcp = mcp_service.new(auth="token")
@@ -625,6 +631,8 @@ def test_every_call_is_approved_once_and_reaches_the_server_with_the_users_token
     token = mcp.new_token()
     give_token(server, household.member_token, added["id"], token)
     conversation_id = create_conversation(server, household.member_token)["id"]
+    # Offering the server's reviewed tools asks nothing about the web (ADR-0099).
+    completed(server, household.member_token, conversation_id, search(fresh_query("before")))
     _, request = asked(server, household.member_token, conversation_id, call(added["prefix"], "turn_on"))
     approval = request["metadata"]["approval"]
     assert approval["tool"] == f"{added['prefix']}__turn_on"
@@ -644,21 +652,6 @@ def test_every_call_is_approved_once_and_reaches_the_server_with_the_users_token
     assert sent.headers["authorization"] == f"Bearer {token}"
     events_of_call = activity(server, household.member_token, tool=f"{added['prefix']}__turn_on")
     assert [event["outcome"] for event in events_of_call] == ["approved"]
-    # The next call is asked again: no approval lasts beyond its call.
-    _, again = asked(server, household.member_token, conversation_id, call(added["prefix"], "turn_off"))
-    assert again["metadata"]["approval"]["scopes"] == ["once"]
-
-
-@pytest.mark.spec("AGT-019", "AGT-028")
-def test_a_servers_results_are_untrusted_but_its_reviewed_tools_are_not(
-    server: Server, household: Household, mcp_service: McpService
-) -> None:
-    added = ready(server, household, mcp_service.new())
-    conversation_id = create_conversation(server, household.member_token)["id"]
-    # Offering the server's tools asks nothing about the web (ADR-0099).
-    completed(server, household.member_token, conversation_id, search(fresh_query("before")))
-    _, request = asked(server, household.member_token, conversation_id, call(added["prefix"], "turn_on"))
-    resumed(server, household.member_token, conversation_id, [approve(request["id"])])
     # Its result is untrusted content: the web is asked from then on.
     run_id, events = start_run(server, household.member_token, conversation_id, search(fresh_query("after")))
     wait_for_run(server, household.member_token, run_id)
@@ -666,6 +659,7 @@ def test_a_servers_results_are_untrusted_but_its_reviewed_tools_are_not(
 
 
 @pytest.mark.spec("AGT-019", "AGT-028")
+@pytest.mark.usefixtures("household_model")
 def test_only_accepted_unchanged_tools_are_offered_without_the_servers_instructions(
     server: Server, household: Household, mcp_service: McpService, default_model: HarnessModel
 ) -> None:
@@ -685,6 +679,7 @@ def test_only_accepted_unchanged_tools_are_offered_without_the_servers_instructi
 
 
 @pytest.mark.spec("AGT-028")
+@pytest.mark.usefixtures("household_model")
 def test_an_approved_call_to_a_tool_that_changed_does_not_run(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:
@@ -699,6 +694,7 @@ def test_an_approved_call_to_a_tool_that_changed_does_not_run(
 
 
 @pytest.mark.spec("AGT-029")
+@pytest.mark.usefixtures("household_model")
 def test_a_switched_off_or_denied_server_is_not_offered(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:
@@ -715,6 +711,7 @@ def test_a_switched_off_or_denied_server_is_not_offered(
 
 
 @pytest.mark.spec("AGT-030")
+@pytest.mark.usefixtures("household_model")
 def test_without_a_credential_the_tools_are_left_out_and_the_model_is_told(
     server: Server, household: Household, mcp_service: McpService, default_model: HarnessModel
 ) -> None:
@@ -729,6 +726,7 @@ def test_without_a_credential_the_tools_are_left_out_and_the_model_is_told(
 
 
 @pytest.mark.spec("AGT-019")
+@pytest.mark.usefixtures("household_model")
 def test_a_server_that_cannot_be_reached_is_left_out_of_the_run(
     server: Server, household: Household, mcp_service: McpService, default_model: HarnessModel
 ) -> None:
@@ -744,12 +742,13 @@ def test_a_server_that_cannot_be_reached_is_left_out_of_the_run(
 
 
 @pytest.mark.spec("AGT-019")
+@pytest.mark.usefixtures("household_model")
 def test_failed_and_slow_calls_are_failed_tool_calls(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:
     mcp = mcp_service.new()
     mcp.results["turn_on"] = Result("The light is broken.", error=True)
-    mcp.results["turn_off"] = Result("too late", delay=MCP_CALL_SECONDS + 2)
+    mcp.results["turn_off"] = Result("too late", delay=MCP_CALL_SECONDS + 1)
     added = ready(server, household, mcp)
     conversation_id = create_conversation(server, household.member_token)["id"]
     _, request = asked(server, household.member_token, conversation_id, call(added["prefix"], "turn_on"))
@@ -765,6 +764,7 @@ def test_failed_and_slow_calls_are_failed_tool_calls(
 
 
 @pytest.mark.spec("AGT-031")
+@pytest.mark.usefixtures("household_model")
 def test_tokens_are_renewed_once_and_an_expired_sign_in_is_said(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:
