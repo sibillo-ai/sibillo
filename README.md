@@ -303,6 +303,45 @@ reads are fetched from the conversation's sandbox.
 Every setting is listed in the
 [configuration contract](specs/contracts/configuration.md).
 
+**MCP servers**
+
+The assistant can use the tools of services that speak the Model Context
+Protocol over Streamable HTTP, such as Home Assistant, GitHub, Notion or
+Linear (AGT-019, ADR-0099). A household's administrator adds each one in
+**Settings**, then **MCP servers**, with a name, a short prefix that its
+tools carry for the model (`home` makes `home__HassTurnOn`), its address, and
+how people sign in to it:
+
+- **No sign-in**, for a server that needs no account;
+- **Each person's own token**, such as a Home Assistant long-lived access
+  token or a GitHub personal access token;
+- **Each person signs in**, with OAuth, at the service's own sign-in page
+  (ADR-0100). Sibillo finds the service's sign-in on its own, and registers
+  itself there when the service allows it; otherwise create an OAuth app at
+  the service, with `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in` as its
+  callback, and give its client ID. Signing in needs `SIBILLO_PUBLIC_ORIGIN`
+  (see **Passkeys**); the service never needs to reach your server.
+
+Nobody shares an account: each person connects their own in **Settings**,
+then **Services**, and acts on the service as themselves, with what their
+account may do there. Give a token the least rights it needs. Removing it
+in Sibillo forgets it; revoke it at the service to end it there too.
+
+The administrator then reviews the server's tools, one by one, and accepts
+those the assistant may use: the model reads every word of a tool's
+description, and a server could hide instructions in it. A tool that
+changes afterwards is not offered until it is accepted again; **Refresh**
+shows what changed. The assistant asks before every call, showing its
+arguments and the server's address, and treats what comes back as content
+from elsewhere: after a call, it asks before searching the web or running
+commands too. In **Settings**, then **Tool permissions**, an administrator
+can deny a server to a member, and each person switches a server on or off
+for themselves or for a chat, beside the other tools. A server on the
+household's network, such as `http://homeassistant.local:8123/api/mcp`, can
+be added only by the instance's administrator; anyone else needs a public
+`https` address. A call that takes longer than two minutes is stopped
+(`SIBILLO_MCP_CALL_SECONDS`).
+
 **Sandboxes and workspaces**
 
 Every conversation has a sandbox of its own, which no other conversation
