@@ -316,11 +316,14 @@ how people sign in to it:
 - **Each person's own token**, such as a Home Assistant long-lived access
   token or a GitHub personal access token;
 - **Each person signs in**, with OAuth, at the service's own sign-in page
-  (ADR-0100). Sibillo finds the service's sign-in on its own, and registers
-  itself there when the service allows it; otherwise create an OAuth app at
-  the service, with `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in` as its
-  callback, and give its client ID. Signing in needs `SIBILLO_PUBLIC_ORIGIN`
-  (see **Passkeys**); the service never needs to reach your server.
+  (ADR-0100). Sibillo finds the service's sign-in on its own. A service
+  that reads Client ID Metadata Documents, such as Home Assistant, fetches
+  Sibillo's own description from `SIBILLO_PUBLIC_ORIGIN` followed by
+  `/v1/mcp-client`, so it must reach that address, over HTTPS; another
+  service registers Sibillo when it allows it. For the rest, such as
+  GitHub, create an OAuth app at the service, with `SIBILLO_PUBLIC_ORIGIN`
+  followed by `/mcp-sign-in` as its callback, and give its client ID.
+  Signing in needs `SIBILLO_PUBLIC_ORIGIN` (see **Passkeys**).
 
 Nobody shares an account: each person connects their own in **Settings**,
 then **Services**, and acts on the service as themselves, with what their
