@@ -752,3 +752,46 @@ def test_the_default_model_is_chosen_with_the_model_picker(
     expect(page.get_by_role("button", name="Household default model")).to_contain_text("Test: Popular")
     page.get_by_role("link", name="New chat").click()
     expect(page.get_by_role("button", name=re.compile("Test: Popular"))).to_be_visible()
+
+
+# How far, in pixels, the thread is from its end.
+FROM_END = """(() => {
+    const thread = document.querySelector("[aria-busy]");
+    return thread.scrollHeight - thread.clientHeight - thread.scrollTop;
+})()"""
+
+
+@pytest.mark.spec("UX-030")
+def test_the_thread_follows_the_answer_only_from_its_end(
+    page: Page, member: Account, default_model: HarnessModel
+) -> None:
+    page.set_viewport_size({"width": 390, "height": 600})
+    sign_in(page, member)
+    # A long message and its echo are taller than the window.
+    _send(page, "long " + "word " * 300)
+    _answer(page, "Echo: long")
+    expect(page.get_by_role("button", name="Send")).to_be_visible(timeout=30_000)
+    new_text = page.get_by_role("button", name="New text")
+    # At the end, the thread follows the answer as it streams.
+    _send(page, "slow:24")
+    _answer(page, "piece 3 ")
+    page.wait_for_timeout(300)
+    assert page.evaluate(FROM_END) <= 2
+    expect(new_text).to_have_count(0)
+    # Scrolled up, new text leaves the thread where it is and a sign says it arrived.
+    thread = page.locator("[aria-busy]")
+    thread.hover()
+    page.mouse.wheel(0, -1_000)
+    page.wait_for_timeout(300)
+    top = page.evaluate("document.querySelector('[aria-busy]').scrollTop")
+    _answer(page, "piece 8 ")
+    page.wait_for_timeout(300)
+    assert page.evaluate("document.querySelector('[aria-busy]').scrollTop") == top
+    expect(new_text).to_be_visible()
+    # The sign takes the user back to the end, from where the thread follows again.
+    new_text.click()
+    expect(new_text).to_have_count(0)
+    _answer(page, "piece 13 ")
+    page.wait_for_timeout(300)
+    assert page.evaluate(FROM_END) <= 2
+    expect(new_text).to_have_count(0)
