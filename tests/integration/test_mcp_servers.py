@@ -547,6 +547,53 @@ def test_an_oauth_server_without_what_sign_in_needs_is_refused(
 
 
 @pytest.mark.spec("AGT-031")
+@pytest.mark.parametrize("containing", ["origin", "parent_path"])
+def test_a_resource_that_contains_the_server_is_the_one_tokens_are_asked_for(
+    server: Server, household: Household, mcp_service: McpService, containing: str
+) -> None:
+    # Home Assistant's metadata names its origin for its server at `/api/mcp` (ADR-0100, point 2).
+    mcp = mcp_service.new(auth="oauth")
+    mcp.resource = mcp_service.url if containing == "origin" else mcp.issuer
+    # Tokens that expire at once: listing the tools renews them first.
+    mcp.token_lifetime = 1
+    added = add(server, household.admin, mcp)
+    with server.client(household.admin) as client:
+        started = client.post(f"/mcp-servers/{added['id']}/sign-in")
+    assert started.status_code == 200, started.text
+    query = parse_qs(urlsplit(str(body(started)["authorization_url"])).query)
+    assert query["resource"] == [mcp.resource]
+    signed_in = _complete(server, household.admin, follow_sign_in(body(started)["authorization_url"]))
+    assert signed_in.status_code == 200, signed_in.text
+    assert body(signed_in)["credential"] == "valid"
+    (exchange,) = mcp.token_requests
+    assert exchange["resource"] == mcp.resource
+    refresh(server, household.admin, added["id"])
+    assert mcp.refreshes()
+    assert {renewal["resource"] for renewal in mcp.refreshes()} == {mcp.resource}
+
+
+@pytest.mark.spec("AGT-031")
+@pytest.mark.parametrize("named", ["inside_a_segment", "deeper", "with_query", "other_host"])
+def test_a_resource_that_does_not_contain_the_server_is_refused(
+    server: Server, household: Household, mcp_service: McpService, named: str
+) -> None:
+    mcp = mcp_service.new(auth="oauth")
+    port = urlsplit(mcp_service.url).port
+    mcp.resource = {
+        # A prefix of the server's path that ends inside a segment: `/s/<id>/mc` of `/s/<id>/mcp`.
+        "inside_a_segment": mcp.url.removesuffix("p"),
+        "deeper": f"{mcp.url}/tools",
+        "with_query": f"{mcp.issuer}?tenant=1",
+        "other_host": f"http://localhost:{port}/s/{mcp.id}",
+    }[named]
+    with server.client(household.admin) as client:
+        refused = client.post(
+            "/tenant/mcp-servers", json={"name": "OAuth", "prefix": _prefix(), "url": mcp.url, "auth": "oauth"}
+        )
+    assert_problem(refused, 422, "mcp_server.oauth_unsupported")
+
+
+@pytest.mark.spec("AGT-031")
 def test_without_registration_a_client_must_be_given(
     server: Server, household: Household, mcp_service: McpService
 ) -> None:

@@ -126,6 +126,9 @@ class McpServer:
     # Seconds `tools/list` takes.
     list_delay: float = 0.0
     misbehaviours: set[str] = field(default_factory=set[str])
+    # The resource its metadata names, in place of its address: one that contains it, as Home Assistant names
+    # its origin (ADR-0100). Its authorization server issues tokens for that resource alone.
+    resource: str | None = None
     # Seconds an issued access token lasts.
     token_lifetime: int = 3600
     # While set, the authorization server reads Client ID Metadata Documents, fetching a document from this
@@ -147,6 +150,11 @@ class McpServer:
     @property
     def issuer(self) -> str:
         return f"{self.service.url}/s/{self.id}"
+
+    @property
+    def protected_resource(self) -> str:
+        """The resource its metadata names, which tokens are asked for."""
+        return self.resource or self.url
 
     def resource_metadata_url(self) -> str:
         return f"{self.service.url}/.well-known/oauth-protected-resource/s/{self.id}/mcp"
@@ -373,7 +381,11 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             if server is None or "no_resource_metadata" in server.misbehaviours:
                 self._json(404, {"error": "not found"})
                 return
-            resource = f"{server.service.url}/s/other/mcp" if "other_resource" in server.misbehaviours else server.url
+            resource = (
+                f"{server.service.url}/s/other/mcp"
+                if "other_resource" in server.misbehaviours
+                else server.protected_resource
+            )
             self._json(
                 200,
                 {"resource": resource, "authorization_servers": [server.issuer], "scopes_supported": SCOPE.split()},
@@ -492,8 +504,8 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                     or asked.get("redirect_uri") != form.get("redirect_uri")
                     or asked.get("code_challenge_method") != "S256"
                     or asked.get("code_challenge") != _challenge(form.get("code_verifier", ""))
-                    or asked.get("resource") != server.url
-                    or form.get("resource") != server.url
+                    or asked.get("resource") != server.protected_resource
+                    or form.get("resource") != server.protected_resource
                 ):
                     self._json(400, {"error": "invalid_grant"})
                     return
@@ -502,7 +514,11 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             if form.get("grant_type") == "refresh_token":
                 with service.lock:
                     owner = server.refresh_tokens.pop(form.get("refresh_token", ""), None)
-                if "refuse_refresh" in server.misbehaviours or owner != client.client_id:
+                if (
+                    "refuse_refresh" in server.misbehaviours
+                    or owner != client.client_id
+                    or form.get("resource") != server.protected_resource
+                ):
                     self._json(400, {"error": "invalid_grant"})
                     return
                 self._issue(server, client.client_id)
