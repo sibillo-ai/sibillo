@@ -515,3 +515,19 @@ server's name, and its approval request the arguments and the server's host
 (AGT-018, ADR-0099, ADR-0100).
 
 Rationale: journey J13.
+
+## UX-030: The thread follows the answer only from its end
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 1
+- **Verification:** e2e
+
+While an answer streams, clients SHOULD keep the end of the conversation in
+view only while the user is at its end. When the user scrolls up, new text
+MUST NOT move the conversation; clients SHOULD instead show at its end a
+sign that new text has arrived, which takes the user back to the end when
+chosen. Back at the end, the conversation follows the answer again.
+
+Rationale: a user who scrolls up to read the start of a long answer loses
+their place if every new piece of text pulls them back down.
