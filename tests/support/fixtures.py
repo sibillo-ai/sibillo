@@ -49,12 +49,21 @@ def mcp_service() -> Iterator[McpService]:
     http.shutdown()
 
 
+_PUSH_SERVICE = pytest.StashKey[PushService]()
+
+
 @pytest.fixture(scope="session")
-def push_service() -> Iterator[PushService]:
-    """The push service the tests serve, for the push services' hosts (ADR-0101)."""
-    service, http = start_push_service()
-    yield service
-    http.shutdown()
+def push_service(request: pytest.FixtureRequest) -> PushService:
+    """The push service the tests serve, for the push services' hosts (ADR-0101).
+
+    One per test session, as the worker that sends to it is, whichever test directory asks first.
+    """
+    service = request.config.stash.get(_PUSH_SERVICE, None)
+    if service is None:
+        service, http = start_push_service()
+        request.config.add_cleanup(http.shutdown)
+        request.config.stash[_PUSH_SERVICE] = service
+    return service
 
 
 @pytest.fixture(scope="session")
