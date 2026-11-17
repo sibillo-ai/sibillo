@@ -20,6 +20,7 @@ from typing import Any, cast
 import pytest
 from tests.support.database import Database
 from tests.support.fixtures import database as database
+from tests.support.fixtures import push_service as push_service
 from tests.support.fixtures import sandboxes as sandboxes
 from tests.support.fixtures import search_service as search_service
 from tests.support.fixtures import server as server

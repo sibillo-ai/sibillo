@@ -12,6 +12,7 @@ from tests.support.accounts import body, create_account, login
 from tests.support.database import Database, start_database
 from tests.support.mcp import McpService, start_mcp_service
 from tests.support.model import ModelServer, start_model_server
+from tests.support.push import PushService, start_push_service
 from tests.support.sandbox import Driver, start_sandboxes
 from tests.support.search import SearchServer, start_search_server
 from tests.support.server import Server, start_server
@@ -49,10 +50,28 @@ def mcp_service() -> Iterator[McpService]:
 
 
 @pytest.fixture(scope="session")
+def push_service() -> Iterator[PushService]:
+    """The push service the tests serve, for the push services' hosts (ADR-0101)."""
+    service, http = start_push_service()
+    yield service
+    http.shutdown()
+
+
+@pytest.fixture(scope="session")
 def server(
-    request: pytest.FixtureRequest, database: Database, sandboxes: Driver, search_service: SearchServer
+    request: pytest.FixtureRequest,
+    database: Database,
+    sandboxes: Driver,
+    search_service: SearchServer,
+    push_service: PushService,
 ) -> Server:
-    return start_server(request.config, database, (sandboxes.url, sandboxes.token), search_service.url)
+    return start_server(
+        request.config,
+        database,
+        (sandboxes.url, sandboxes.token),
+        search_service.url,
+        (push_service.address, push_service.certificate_authority),
+    )
 
 
 @dataclass(frozen=True)

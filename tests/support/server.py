@@ -187,11 +187,19 @@ def _evaluating(config: pytest.Config) -> bool:
     return True
 
 
-def start_server(config: pytest.Config, database: Database, sandbox_driver: tuple[str, str], search_url: str) -> Server:
+def start_server(
+    config: pytest.Config,
+    database: Database,
+    sandbox_driver: tuple[str, str],
+    search_url: str,
+    push: tuple[str, Path] | None = None,
+) -> Server:
     """Start the API and the worker once per test session; later calls return the same server.
 
     `sandbox_driver` is the URL and the secret of the session's sandbox driver,
-    `search_url` the address of the search service the tests serve.
+    `search_url` the address of the search service the tests serve, and `push`
+    the address of the push service the tests serve and its certificate
+    authority's file (ADR-0101).
     """
     cached = config.stash.get(_SERVER, None)
     if isinstance(cached, BaseException):
@@ -234,6 +242,8 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
         # So are expired approval requests, so that their tests need not wait either (ADR-0090).
         worker_environment = {
             "SIBILLO_SEARCH_URL": search_url,
+            # Notifications are sent, to the push service the tests serve (ADR-0101).
+            "SIBILLO_PUBLIC_ORIGIN": f"http://localhost:{port}",
             "SIBILLO_TEMPORARY_SWEEP_SECONDS": "1",
             "SIBILLO_APPROVAL_SWEEP_SECONDS": "1",
             # Calls to a remote MCP server's tools time out quickly, so that their test need not wait (ADR-0099).
@@ -242,6 +252,9 @@ def start_server(config: pytest.Config, database: Database, sandbox_driver: tupl
         # A low limit of model requests, so that a test reaches it quickly; evals keep the default (ADR-0097).
         if not _evaluating(config):
             worker_environment["SIBILLO_RUN_REQUEST_LIMIT"] = str(RUN_REQUEST_LIMIT)
+        if push is not None:
+            push_address, authority = push
+            worker_environment |= {"TEST_PUSH_ADDRESS": push_address, "SSL_CERT_FILE": str(authority)}
         worker = Process("worker", base | shared | worker_environment, command="worker")
         config.add_cleanup(worker.close)
         server = Server(

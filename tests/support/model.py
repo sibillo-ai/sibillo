@@ -30,6 +30,9 @@ last user message:
 - `think-run:<command>` reasons `Planning: <command>` and calls the command
   tool, then, once the result arrives, reasons `Looking at the result` and
   answers `Tool said: <result>` (CNV-013, ADR-0085);
+- `wait:<seconds> ||| <script>` waits that many seconds before every answer,
+  then answers as `<script>` does, so that a client can leave a run before it
+  ends (ADR-0101);
 - anything else streams `Echo: <message>`.
 
 The command tool is found among the tools the request offers, by its name or
@@ -373,6 +376,9 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             model.record(request)
             texts = request.user_texts()
             last = texts[-1] if texts else ""
+            if last.startswith("wait:") and " ||| " in last:
+                seconds, _, last = last.removeprefix("wait:").partition(" ||| ")
+                time.sleep(float(seconds))
             self.prompt_tokens = PROMPT_TOKENS
             if last.startswith("prompt-tokens:"):
                 self.prompt_tokens = int(last.removeprefix("prompt-tokens:"))

@@ -35,3 +35,39 @@ def _hook(event: str, args: tuple[object, ...]) -> None:
 
 if _LOG:
     sys.addaudithook(_hook)
+
+
+# The push service the tests serve stands in for the push services of ADR-0101
+# (specs/contracts/test-harness.md, "Push services"): lookups of their hosts
+# answer its address, and connections to them on port 443 reach its port.
+_PUSH = os.environ.get("TEST_PUSH_ADDRESS")
+_PUSH_DOMAINS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com")
+
+
+def _is_push_host(host: object) -> bool:
+    name = str(host).rstrip(".").lower()
+    return name in _PUSH_DOMAINS or name.endswith(".notify.windows.com")
+
+
+if _PUSH:
+    import socket
+    from typing import Any
+
+    import anyio
+
+    _push_host, _, _push_port = _PUSH.rpartition(":")
+    _getaddrinfo: Any = socket.getaddrinfo
+    _connect_tcp: Any = anyio.connect_tcp
+
+    def _push_getaddrinfo(host: Any, port: Any, *args: Any, **kwargs: Any) -> Any:
+        if _is_push_host(host):
+            host, port = _push_host, (int(_push_port) if str(port) == "443" else port)
+        return _getaddrinfo(host, port, *args, **kwargs)
+
+    async def _push_connect_tcp(remote_host: Any, remote_port: int, *args: Any, **kwargs: Any) -> Any:
+        if _is_push_host(remote_host) and remote_port == 443:
+            remote_host, remote_port = _push_host, int(_push_port)
+        return await _connect_tcp(remote_host, remote_port, *args, **kwargs)
+
+    setattr(socket, "getaddrinfo", _push_getaddrinfo)  # noqa: B010 - replaced for the whole process
+    setattr(anyio, "connect_tcp", _push_connect_tcp)  # noqa: B010 - replaced for the whole process
