@@ -246,6 +246,22 @@ instance administrator's own are removed on the server:
 docker compose run --rm setup sibillo_server remove-passkeys YOUR-USERNAME
 ```
 
+**Notifications**
+
+Each person can be told on their phone or computer when an answer is ready,
+or when the assistant waits for their approval or an answer, while they are
+away from the chat (UX-004, ADR-0101). Notifications need the same
+`SIBILLO_PUBLIC_ORIGIN` as passkeys, and an HTTPS address, which browsers
+require; nothing else to configure. Each person turns them on in
+**Settings**, then **Notifications**, once on each device. On an iPhone or
+iPad, add Sibillo to the Home Screen first and open it from there.
+
+A notification says only what happened, never what the chat says. It
+travels through the browser maker's push service (Google, Mozilla, Apple or
+Microsoft), which learns that your server notified a device and when, but
+nothing of the conversation. No notification comes for a chat that is open
+on one of the person's devices.
+
 **Memory**
 
 The assistant remembers what each person would want it to know in their
