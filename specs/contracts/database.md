@@ -207,6 +207,21 @@ Policies: all operations where `tenant_id = app_tenant_id()` and
 `user_id = app_user_id()`. `INSERT` at login happens after the context is set
 from the verified credentials.
 
+### `notification_subscriptions` (private)
+
+The Web Push subscription of a device session (UX-004, ADR-0101).
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` |
+| `device_session_id` | uuid | primary key; (`tenant_id`, `owner_id`, `device_session_id`) references `device_sessions` (`tenant_id`, `user_id`, `id`) on delete cascade |
+| `endpoint` | text | not null; an `https` URL on a push service of ADR-0101 |
+| `p256dh` | text | not null; the browser's public key, base64url |
+| `auth` | text | not null; the browser's authentication secret, base64url |
+| `created_at` | timestamptz | not null |
+
+A subscription is used only while its device session is valid (ADR-0101).
+
 ### `login_attempts`
 
 | Column | Type | Notes |
@@ -431,6 +446,7 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `connection_id` | uuid | the connection that answered; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`) |
 | `model_provider`, `model_name` | text | set when known (MOD-005) |
 | `last_event_seq` | integer | sequence number of the last event written to the run's stream |
+| `followed_at` | timestamptz | when a client last read the run's event stream; set when the stream opens and at least every 10 seconds while it is open (ADR-0101); null when never followed |
 | `created_at`, `started_at`, `finished_at` | timestamptz | |
 
 Constraints:
@@ -697,7 +713,7 @@ connection.
 
 ### Policies for private tables
 
-`device_sessions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
+`device_sessions`, `notification_subscriptions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
 `conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`,
 `audit_events`, `mcp_credentials` and `mcp_sign_ins` use the same policy for
 every operation:
@@ -721,6 +737,7 @@ keys, not by privileges of `sibillo_app`.
 | `tenants` | `SELECT`, `INSERT` |
 | `users` | `SELECT` on every column except `password_hash`; `INSERT`; `UPDATE` of `display_name`, `password_hash`, `role`, `disabled_at` |
 | `device_sessions` | `SELECT`, `INSERT`, `DELETE`; `UPDATE` of `revoked_at` |
+| `notification_subscriptions` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `login_attempts` | none |
 | `passkeys` | `SELECT`, `INSERT`, `DELETE`; `UPDATE` of `sign_count` and `last_used_at` |
 | `passkey_challenges` | `SELECT`, `INSERT`, `DELETE` |

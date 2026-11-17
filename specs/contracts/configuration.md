@@ -19,9 +19,9 @@ variable.
 | `SIBILLO_WEB_ROOT` | no | the web app built into the image | Directory of the built web app, served at `/` (ADR-0067). When it does not exist, only the API is served. |
 | `SIBILLO_SANDBOXD_URL` | yes | — | Base URL of the sandbox driver's API, for `/health` (ADR-0054). |
 | `SIBILLO_SANDBOXD_TOKEN` | yes | — | The secret shared with the sandbox driver. |
-| `SIBILLO_SECRET_KEY` | yes | — | 32 random bytes, base64url-encoded (for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Encrypts the API keys of connections (ADR-0051, ADR-0069). The API and the worker must share it; changing it makes stored API keys unusable. |
+| `SIBILLO_SECRET_KEY` | yes | — | 32 random bytes, base64url-encoded (for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Encrypts the API keys of connections (ADR-0051, ADR-0069), and the key that signs notifications is derived from it (ADR-0101). The API and the worker must share it; changing it makes stored API keys unusable and every notification subscription must be made again. |
 | `SIBILLO_UPLOAD_MAX_MB` | no | `1024` | The largest file one upload may bring into a workspace, in MiB, from 1 to 1048576 (CNV-017, ADR-0079). A reverse proxy in front of the API must let bodies this large through. |
-| `SIBILLO_PUBLIC_ORIGIN` | no | empty | The origin users open, `https://HOST[:PORT]` or `http://localhost[:PORT]`, with no path, such as `https://sibillo.example.org`. Passkeys are bound to its host and must come from exactly this origin (AUTH-010, ADR-0094), and sign-ins to remote MCP servers come back to its `/mcp-sign-in` (AGT-031, ADR-0100). When empty, passkeys and `oauth` MCP servers are unavailable. |
+| `SIBILLO_PUBLIC_ORIGIN` | no | empty | The origin users open, `https://HOST[:PORT]` or `http://localhost[:PORT]`, with no path, such as `https://sibillo.example.org`. Passkeys are bound to its host and must come from exactly this origin (AUTH-010, ADR-0094), sign-ins to remote MCP servers come back to its `/mcp-sign-in` (AGT-031, ADR-0100), and it is the contact of notifications (UX-004, ADR-0101). When empty, passkeys, `oauth` MCP servers and notifications are unavailable. |
 | `SIBILLO_BACKUP_STATUS` | no | empty | Path of the backup service's `status.json` (ADR-0077). When set, `/health` is `degraded` when the file is missing, when the newest attempt failed, or when neither the last success nor the schedule's start is within the last two days (OPS-011). |
 
 ## Worker
@@ -31,7 +31,8 @@ variable.
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `SIBILLO_DATABASE_URL` | yes | — | The same URL form, for `sibillo_app` (TEN-004). |
-| `SIBILLO_SECRET_KEY` | yes | — | The same key as the API's. |
+| `SIBILLO_SECRET_KEY` | yes | — | The same key as the API's. Notifications are signed with a key derived from it (ADR-0101). |
+| `SIBILLO_PUBLIC_ORIGIN` | no | empty | The same origin as the API's. When empty, the worker sends no notifications (UX-004, ADR-0101). |
 | `SIBILLO_RUN_RETENTION_DAYS` | no | `30` | Days after a run finishes before its durable workflow and event stream are deleted (TEN-009), from 1 to 3650. |
 | `SIBILLO_TEMPORARY_SWEEP_SECONDS` | no | `600` | Seconds between two sweeps for temporary conversations to delete (CNV-011, ADR-0082), from 1 to 86400. |
 | `SIBILLO_RUN_REQUEST_LIMIT` | no | `200` | The most model requests one run makes before it fails with `run.step_limit` (AGT-027, ADR-0097), from 10 to 10000. |

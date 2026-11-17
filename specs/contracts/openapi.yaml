@@ -625,6 +625,57 @@ paths:
                     items: { $ref: "#/components/schemas/DeviceSession" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /me/notifications:
+    get:
+      tags: [auth]
+      operationId: getMyNotifications
+      summary: Whether notifications are available, and on for this device.
+      description: |
+        `available` is false when the instance has no public origin
+        (ADR-0101). `public_key` is the key a browser subscribes with, the
+        `applicationServerKey` of the Push API.
+      x-requirements: [UX-004]
+      responses:
+        "200":
+          description: The notification settings of the current device session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    put:
+      tags: [auth]
+      operationId: subscribeToNotifications
+      summary: Turn notifications on for the current device session.
+      description: |
+        Saves the browser's push subscription for the session making the
+        request, replacing the one it had. The endpoint must be on a push
+        service listed by ADR-0101, or the request fails with
+        `notification.endpoint_refused`. Fails with
+        `notification.unavailable` when the instance has no public origin.
+      x-requirements: [UX-004]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationSubscription" }
+      responses:
+        "200":
+          description: The notification settings of the current device session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/NotificationEndpointRefused" }
+        "503": { $ref: "#/components/responses/NotificationsUnavailable" }
+    delete:
+      tags: [auth]
+      operationId: unsubscribeFromNotifications
+      summary: Turn notifications off for the current device session.
+      x-requirements: [UX-004]
+      responses:
+        "204": { description: Notifications are off for this device session. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
   /me/sessions/{session_id}:
     parameters:
       - $ref: "#/components/parameters/SessionId"
@@ -2523,6 +2574,18 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
           example: { type: "about:blank", title: "Invalid credentials", status: 403, code: "auth.invalid_credentials" }
+    NotificationsUnavailable:
+      description: The instance has no `SIBILLO_PUBLIC_ORIGIN`, so it cannot send notifications (ADR-0101).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Notifications unavailable", status: 503, code: "notification.unavailable" }
+    NotificationEndpointRefused:
+      description: The endpoint of the subscription is not on a push service listed by ADR-0101.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Endpoint refused", status: 422, code: "notification.endpoint_refused" }
     PasskeysUnavailable:
       description: The instance has no `SIBILLO_PUBLIC_ORIGIN`, so it cannot check passkeys (ADR-0094).
       content:
@@ -2813,6 +2876,29 @@ components:
           allOf:
             - $ref: "#/components/schemas/Timestamp"
         current: { type: boolean, description: "True for the session making the request." }
+
+    NotificationSettings:
+      type: object
+      required: [available, subscribed]
+      properties:
+        available: { type: boolean, description: "False when the instance has no public origin (ADR-0101)." }
+        subscribed: { type: boolean, description: "True when the current device session has a subscription." }
+        public_key:
+          type: string
+          description: The VAPID public key, an uncompressed P-256 point, base64url without padding; absent when not available.
+
+    NotificationSubscription:
+      type: object
+      description: A browser's push subscription, as `PushSubscription.toJSON()` gives it (UX-004, ADR-0101).
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048 }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, maxLength: 256 }
+            auth: { type: string, maxLength: 64 }
 
     Role:
       type: string

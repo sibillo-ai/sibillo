@@ -48,10 +48,10 @@ Rationale: personas P2 and P4 need clarity; persona P1 needs the details.
 
 ## UX-004: Notifications
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
-- **Verification:** integration, security
+- **Verification:** integration, security, e2e
 
 The installable web app MUST be able to receive notifications, with the user's
 consent, when a run finishes while the user is away and when an approval or an
@@ -59,6 +59,13 @@ answer to a question is pending. Notification payloads MUST NOT contain
 message text, titles, tool arguments or other conversation content; they MUST
 carry only the kind of event and identifiers needed to open the right
 conversation (ADR-0039).
+
+Notifications MUST be off on every device until the user turns them on there,
+and the user MUST be able to turn them off again. The server MUST NOT send a
+notification for a run that a client of the user is following, or that the
+user stopped, and MUST NOT use the subscription of a device session that is
+revoked or expired. It MUST accept subscriptions only on the push services
+ADR-0101 lists. Opening a notification MUST open its conversation (ADR-0101).
 
 Rationale: journey J8; pending approvals expire (AGT-007), so users must learn
 about them in time.

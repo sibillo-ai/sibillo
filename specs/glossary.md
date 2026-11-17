@@ -55,7 +55,8 @@ new entry here first (ADR-0005).
 | Hands-free mode | A way of holding voice turns without looking at the screen: one large button, the media buttons of a headset or a car, and sounds that say where the conversation stands (UX-005, ADR-0088). |
 | Transcription model | A model of a connection that turns recorded speech into text (API-006, ADR-0088). |
 | Speech model | A model of a connection that reads text aloud in one of its voices (API-006, ADR-0088). |
-| Notification | A content-free message pushed to a user's device when a run finishes or an approval is pending (ADR-0039). |
+| Notification | A content-free message pushed to a user's device when a run finishes or fails, or an approval request or a question is pending (UX-004, ADR-0039, ADR-0101). |
+| Notification subscription | The Web Push subscription of one device session, saved when the user turns notifications on in that client (UX-004, ADR-0101). |
 | Agent | The component that turns a user request into model calls and tool calls. |
 | Run | One execution of the agent in response to a message, including all its model and tool calls. |
 | Run event | An AG-UI event produced during a run (text, tool call, result, interrupt, completion), stored durably with a sequence number and streamed to clients (ADR-0032, ADR-0034). |
