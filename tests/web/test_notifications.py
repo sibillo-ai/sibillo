@@ -3,18 +3,20 @@
 Chromium in tests reaches no push service: the page's `PushManager` returns a
 subscription the test made, on the push services' hosts, and pushes are
 delivered to the app's service worker through the DevTools protocol
-(test-harness.md, "Web").
+(test-harness.md, "Web"). Playwright's headless shell has no notifications
+and denies them whatever is granted, so these tests drive Chromium itself, in
+its headless mode.
 """
 
 from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, cast
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Browser, Page, Playwright, expect
 
 from tests.support.accounts import Account
 from tests.support.database import Database, uuid7
@@ -43,6 +45,23 @@ SHOWN = """async () => {
   return shown.map((n) => ({ title: n.title, body: n.body, tag: n.tag }));
 }"""
 KINDS = ("run_finished", "run_failed", "approval_pending", "question_pending")
+
+
+@pytest.fixture(scope="module")
+def chromium(playwright: Playwright) -> Iterator[Browser]:
+    """Chromium itself, which shows notifications, rather than the headless shell, which never does."""
+    browser = playwright.chromium.launch(channel="chromium")
+    yield browser
+    browser.close()
+
+
+@pytest.fixture
+def page(chromium: Browser, web_origin: str) -> Iterator[Page]:
+    context = chromium.new_context(base_url=web_origin)
+    page = context.new_page()
+    page.set_default_timeout(15_000)
+    yield page
+    context.close()
 
 
 def _notifications_page(page: Page, member: Account, subscription: BrowserSubscription) -> None:
@@ -90,7 +109,9 @@ def test_a_push_shows_a_notification_that_reveals_nothing(page: Page, member: Ac
     page.evaluate("async () => { await navigator.serviceWorker.ready; }")
     conversations: dict[str, str] = {}
     for kind in KINDS:
-        response = page.request.post("/v1/conversations", data={"title": f"Secret plans {kind}"})
+        response = page.request.post(
+            "/v1/conversations", data={"title": f"Secret plans {kind}"}, headers={"X-Sibillo-Request": "1"}
+        )
         assert response.status == 201, response.text()
         conversations[kind] = str(response.json()["id"])
 
