@@ -4,9 +4,10 @@ Discovery as the MCP authorization specification describes it: the server's
 401 names its protected resource metadata (RFC 9728), which names an
 authorization server, whose metadata (RFC 8414, or OpenID Connect discovery)
 gives its endpoints. Sibillo signs each user in with the authorization code
-flow and PKCE (`S256`), for the server alone (`resource`, RFC 8707), and
-renews their tokens. Every request it makes itself follows the server's
-address rules (`mcp_http`).
+flow and PKCE (`S256`), for the resource the server's metadata names, which
+is the server or contains it (`resource`, RFC 8707), and renews their
+tokens. Every request it makes itself follows the server's address rules
+(`mcp_http`).
 """
 
 from __future__ import annotations
@@ -58,6 +59,8 @@ class OAuthSettings:
     client_id: str
     client_registration: str
     token_endpoint_auth_method: str
+    # The resource tokens are asked for; none in settings kept before it was, which ask for the server's address.
+    resource: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,6 +79,7 @@ class Discovered:
     iss_parameter_supported: bool
     auth_methods: tuple[str, ...]
     scope: str | None
+    resource: str
     # The authorization server reads Client ID Metadata Documents.
     metadata_documents: bool = False
 
@@ -95,6 +99,17 @@ def same_address(first: str, second: str) -> bool:
         return (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query)
 
     return normal(first) == normal(second)
+
+
+def contains(resource: str, url: str) -> bool:
+    """A resource names the server's address or contains it: same origin, no query, a path prefix at a `/`."""
+    outer, inner = urlsplit(resource.strip()), urlsplit(url.strip())
+    if (outer.scheme.lower(), outer.netloc.lower()) != (inner.scheme.lower(), inner.netloc.lower()):
+        return False
+    if outer.query or outer.fragment:
+        return same_address(resource, url)
+    prefix, path = outer.path.rstrip("/"), inner.path.rstrip("/")
+    return path == prefix or path.startswith(prefix + "/")
 
 
 def redirect_uri(public_origin: str) -> str:
@@ -199,7 +214,8 @@ async def discover(url: str, private_network: bool) -> Discovered:
                 break
         if resource is None:
             raise OAuthError("resource_metadata", "the server publishes no protected resource metadata")
-        if not same_address(str(resource.get("resource", "")), url):
+        named = str(resource.get("resource", ""))
+        if not contains(named, url):
             raise OAuthError("resource_metadata", "the metadata is of another resource")
         servers = resource.get("authorization_servers")
         if not isinstance(servers, list) or not servers or not isinstance(servers[0], str):
@@ -253,6 +269,7 @@ async def discover(url: str, private_network: bool) -> Discovered:
         if isinstance(methods, list)
         else ("client_secret_basic",),
         scope=scope or None,
+        resource=named.strip(),
         metadata_documents=metadata.get("client_id_metadata_document_supported") is True,
     )
 
@@ -291,6 +308,7 @@ async def settings_for(
         client_id=client_id,
         client_registration=registration,
         token_endpoint_auth_method=method,
+        resource=found.resource,
     )
     return settings, secret
 
@@ -329,7 +347,7 @@ def authorization_url(settings: OAuthSettings, url: str, public_origin: str, sta
         "state": state,
         "code_challenge": challenge_of(verifier),
         "code_challenge_method": "S256",
-        "resource": url,
+        "resource": settings.resource or url,
     }
     if settings.scope:
         query["scope"] = settings.scope
@@ -393,7 +411,7 @@ async def exchange(
             "code": code,
             "code_verifier": verifier,
             "redirect_uri": redirect_uri(public_origin),
-            "resource": url,
+            "resource": settings.resource or url,
         },
         "exchange",
     )
@@ -405,6 +423,6 @@ async def renew(settings: OAuthSettings, secret: str | None, url: str, private_n
         settings,
         secret,
         private_network,
-        {"grant_type": "refresh_token", "refresh_token": refresh, "resource": url},
+        {"grant_type": "refresh_token", "refresh_token": refresh, "resource": settings.resource or url},
         "renew",
     )
