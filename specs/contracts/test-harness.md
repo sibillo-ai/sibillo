@@ -197,7 +197,9 @@ metadata, registers clients dynamically, knows one client registered by
 hand, reads Client ID Metadata Documents when a test says so, fetching them
 from an address the test gives for the client's origin, shows a sign-in page that a test completes without a browser by
 following its redirect, and issues, expires, renews and rotates tokens;
-tests can make tokens expire or be revoked. They can also script it to
+tests can make tokens expire or be revoked, and make its metadata name a
+resource that contains its address, such as its origin, as Home Assistant's
+does. They can also script it to
 misbehave: to answer without `resource_metadata`, to name another issuer or
 resource, to offer no `S256`, to point its metadata at a private address,
 to return a code with a wrong `iss`, or to refuse a renewal. Tests set

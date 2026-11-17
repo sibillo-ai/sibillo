@@ -509,7 +509,9 @@ ID Metadata Document when the authorization server reads them, or a client
 registered dynamically. Each sign-in MUST be bound to the user who started it, used
 once, and expire after 10 minutes; its `state` MUST be checked, and the
 issuer when the authorization server returns it. Tokens MUST be asked for
-the server alone (`resource`), and renewed once at a time per credential. The
+the resource the server's metadata names (`resource`), which MUST be the
+server's address or contain it on the same origin, and renewed once at a
+time per credential. The
 requests the control plane makes for OAuth MUST follow the server's address
 rules (AGT-019) (ADR-0100).
 

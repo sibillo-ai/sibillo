@@ -41,12 +41,16 @@ process.
    connects without a credential and expects 401. It reads the protected
    resource metadata at the address the answer's `WWW-Authenticate` names in
    `resource_metadata`, or else at the well-known addresses of RFC 9728 for
-   the server's address, path first; its `resource` must be the server's
-   address. It takes the first authorization server the metadata lists, and
+   the server's address, path first. Its `resource` must be the server's
+   address, or a resource that contains it: the same scheme, host and port,
+   no query, and a path that is the server's path or a prefix of it ending
+   at a `/` boundary. Home Assistant names its origin for its server at
+   `/api/mcp`. It takes the first authorization server the metadata lists, and
    reads its metadata at the well-known addresses of RFC 8414 and of OpenID
    Connect, in the order the MCP specification gives; its `issuer` must be
    that authorization server. The metadata must offer the `code` response
-   type and the `S256` code challenge method. Sibillo keeps the issuer, the
+   type and the `S256` code challenge method. Sibillo keeps the resource, the
+   issuer, the
    authorization and token endpoints, whether the issuer is returned with
    the code (RFC 9207), and the scope to ask for: the `scope` of the 401
    answer, or else the `scopes_supported` of the resource metadata, or else
@@ -82,7 +86,7 @@ process.
    the user, the server and its generation, valid for 10 minutes and used
    once. It answers the authorization address, with `response_type=code`,
    the client ID, the redirect address, the `state`, the `S256` code
-   challenge, the server's address as `resource`, and the scope. The
+   challenge, the resource kept at discovery as `resource`, and the scope. The
    client opens it in the browser. `POST /mcp-sign-in` completes it
    with what the redirect carried: the `state` must be a pending sign-in of
    the same user, which is deleted at once; an `error` ends it; when the
@@ -136,6 +140,10 @@ process.
   Sibillo's document, so it must reach `SIBILLO_PUBLIC_ORIGIN`, which a
   service on the household's network usually does. An instance opened only
   at `http://localhost` cannot use them, since a client ID must be `https`.
+- A token asked for a resource that contains the server, such as Home
+  Assistant's origin, is valid at every address under it, as the service
+  chose. The resource never reaches past the server's own origin, and no
+  further up its path than a `/` boundary.
 - Servers that need a scope granted step by step cannot be signed in to
   yet. Servers of the earlier protocol
   revision, without protected resource metadata, can be used with `token`.
@@ -152,6 +160,15 @@ process.
   and Home Assistant's, but a hosted service must fetch the document from
   Sibillo, which a household instance often does not expose to the
   internet; registration and given clients remain beside it.
+- **A `resource` identical to the server's address only (RFC 9728,
+  section 3.3):** the strictest reading, but it refuses Home Assistant, whose
+  metadata names its origin. A resource that contains the server on the same
+  origin is no broader than the service itself declares, and the MCP Python
+  SDK's client accepts it too (`check_resource_allowed`), asking for the
+  resource its metadata names.
+- **The server's address as `resource` in requests, whatever the metadata
+  names:** an authorization server that checks resource indicators
+  (RFC 8707) knows the resource of its metadata, not the server's address.
 - **The origin itself as Home Assistant's client ID, given by hand:** works
   with its IndieAuth sign-in, but asks the admin to know it.
 - **Signing in once for the household:** the shared credential ADR-0099
