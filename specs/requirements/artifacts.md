@@ -58,6 +58,4 @@ must not hand that content the user's session (threat T-22).
 - **Verification:** security
 
 An artifact MUST belong to the conversation whose workspace holds it and be
-private to its owner, as the workspace is (SBX-010). Other users of the
-tenant MAY receive a read-only copy only when the owner sends it to them
-(CNV-010).
+private to its owner, as the workspace is (SBX-010).

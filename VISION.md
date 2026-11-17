@@ -31,8 +31,9 @@ household**. One installation serves one family. Every member has:
   hosted assistants: rich answers, files and photos, artifacts, versions,
   notifications.
 
-The family can also have **shared spaces** — a shared calendar, a shopping
-list, household documents — that are explicitly shared, never by accident.
+One day the family may also have **shared spaces** — a shared calendar, a
+shopping list, household documents — that are explicitly shared, never by
+accident. This is an idea for later, not a plan.
 
 The project's first user is its author, who needs it every day. It is built
 in the open so that anyone can have the same: a local, private and secure

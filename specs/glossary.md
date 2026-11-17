@@ -19,7 +19,7 @@ new entry here first (ADR-0005).
 | Source address | The network address a request comes from: the address of the connecting peer, or the client address reported by a trusted proxy (ADR-0050). |
 | Trusted proxy | A reverse proxy, named by the instance admin in the configuration, whose report of the client address the server believes (ADR-0050). |
 | Private data | Data owned by one user and visible only to that user. The default for all data. |
-| Shared space | A container of data explicitly shared among some or all users of a tenant (e.g. household documents, family calendar, shopping list). |
+| Shared space | A container of data explicitly shared among some or all users of a tenant (e.g. household documents, family calendar, shopping list). The data model has them (TEN-001), but no feature uses them yet (ROADMAP, Later). |
 
 ## Conversations and agent
 
@@ -33,7 +33,6 @@ new entry here first (ADR-0005).
 | Fork | A new conversation started from a copy of another conversation up to a turn, which records where it came from (CNV-005, ADR-0073). |
 | Pin | A mark that keeps a conversation or a folder at the top of the conversation list (CNV-008). |
 | Rewind | Making an earlier turn the end of a conversation, so it continues from there; what followed is deleted (CNV-004, ADR-0068). |
-| File library | The private collection of files a user has uploaded, usable from any of their conversations; shown as "Files" (CNV-012). |
 | Base instructions | The assistant's main instructions, which a user may replace and restore; shown as "System prompt" (CNV-014). |
 | Additional instructions | Instructions a user adds after the base instructions; shown as "Additional prompt" (CNV-014). |
 | Working instructions | The part of the assistant's instructions that tells it how to use its workspace and the tools enabled for a run; not part of the base instructions, and kept whatever the user writes (CNV-014, ADR-0081). |
@@ -49,7 +48,6 @@ new entry here first (ADR-0005).
 | Compaction | Reducing the history sent to the model when it approaches the context window, without changing the stored conversation (ADR-0041). |
 | Compaction checkpoint | The stored result of a compaction for one path, attached to the run at which it happened (ADR-0041). |
 | Temporary conversation | A conversation that is not listed or searched, does not use memory, and is deleted when the user leaves it or a day after its last activity (CNV-011, ADR-0082). |
-| Attachment | A file of the file library referenced by a message; uploading an attachment adds it to the library (CNV-012). |
 | Parent run | The run whose messages a run continues; the runs of a conversation form one chain (ADR-0037, ADR-0068). |
 | Active path | The chain of runs, from the first to the active run: the history the user sees and that a new run continues (ADR-0037, ADR-0068). |
 | Artifact | A file of the conversation's workspace that the assistant makes for the user and shows in the conversation, such as a document, code, a diagram or a web page, opened in the viewer (ADR-0086). Not to be confused with a repository artifact, a file of this repository. |
@@ -132,7 +130,7 @@ new entry here first (ADR-0005).
 | Local model | A model served from inside the instance or the household's network. |
 | Remote model | A model served by a third party over the internet. |
 | Cost ledger | The record of every model request made for a user, with tokens and cost but no content (MOD-006, ADR-0042). |
-| Data egress policy | The rule that decides whether a user's data may be sent to remote models: any model, or local models only. Set for the household and for each user by a tenant admin, and by each user for themself; the strictest applies (MOD-003, ADR-0091). Shared spaces will have their own (MOD-016). |
+| Data egress policy | The rule that decides whether a user's data may be sent to remote models: any model, or local models only. Set for the household and for each user by a tenant admin, and by each user for themself; the strictest applies (MOD-003, ADR-0091). |
 | Served context window | The context window a model's server actually runs the model with, as an Ollama server reports it; it may be smaller than its connection's (MOD-019, ADR-0093). |
 
 ## Process

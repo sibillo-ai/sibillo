@@ -132,7 +132,7 @@ security like any other read (TEN-003).
 
 ## CNV-010: Sharing within the household
 
-- **Status:** draft
+- **Status:** deprecated
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** security, integration
@@ -143,6 +143,9 @@ artifact, to other users of their tenant. Sharing MUST be explicit
 conversation, a file or an artifact without authentication.
 
 Rationale: journey J4.
+
+Set aside: sharing data between users, and the file library, are a possible
+later evolution, not planned (ROADMAP, Later).
 
 ## CNV-011: Temporary conversations
 
@@ -164,7 +167,7 @@ Rationale: journey J10.
 
 ## CNV-012: File library
 
-- **Status:** draft
+- **Status:** deprecated
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -180,6 +183,9 @@ and MUST be subject to the data egress policy when sent to a remote model
 (MOD-003). The user MUST be able to list, rename and delete their files.
 
 Rationale: journey J5.
+
+Set aside: sharing data between users, and the file library, are a possible
+later evolution, not planned (ROADMAP, Later).
 
 ## CNV-013: Conversation settings
 

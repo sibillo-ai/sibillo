@@ -45,8 +45,8 @@ on the phone (installable web app).
 Includes: the web client as an installable web app (UX) with externalized
 strings (I18N-001), notifications, voice turns (UX-005, API-006), live context
 and cost (UX-008, MOD-007), the conversation list with folders, forks, search,
-the file library, conversation settings, custom instructions, temporary
-conversations and sharing within the household (CNV), artifacts (ART),
+conversation settings, custom instructions and temporary conversations
+(CNV), artifacts (ART),
 automatic compaction, skills and questions to the user (AGT), web search and
 page reading, persistent workspaces in ephemeral sandboxes (ADR-0076), a
 sandbox image with a selection of common tools for documents, media and
@@ -115,5 +115,10 @@ Ideas kept for after these phases, not planned yet:
 - a credential of the household for remote MCP servers reached through one
   shared account, and revoking a server's
   tokens when a user removes them (ADR-0099, ADR-0100);
-- sessions of external coding agents shown as Sibillo conversations.
+- sessions of external coding agents shown as Sibillo conversations;
+- sharing data between users: copies of conversations and artifacts sent to
+  another user, shared spaces and their data egress policy (CNV-010,
+  MOD-016), and a file library that lets a user's conversations use the same
+  files (CNV-012). Set aside because the privacy risks outweigh the value for
+  now; not confirmed.
 

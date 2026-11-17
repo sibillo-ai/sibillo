@@ -86,7 +86,7 @@ beyond keeping them configurable and updatable.
 | T-08 | **Lethal trifecta:** injected instructions make the agent send private data to an attacker (e.g. "forward the last invoices to …") | X1 | AGT-001, AGT-003, AGT-004, AGT-005, EVL-003 |
 | T-09 | Injected instructions trigger irreversible or physical actions (delete files, buy, open the gate) | X1 | AGT-005, AGT-006, AGT-007, AGT-002 |
 | T-10 | A user's actions on their behalf are not visible, so abuse goes unnoticed | X1, X2 | AGT-008 |
-| T-11 | Private data is sent to a remote model against the household's wishes | X1, X2 | MOD-003, MOD-005, MOD-010, MOD-016 |
+| T-11 | Private data is sent to a remote model against the household's wishes | X1, X2 | MOD-003, MOD-005, MOD-010 |
 | T-12 | Personal data leaks through logs, traces or telemetry | X4, X5 | OBS-001, OBS-002, OBS-003, OBS-004, OBS-005 |
 | T-13 | A user cannot see or remove what the assistant retained about them | — | MEM-001, MEM-002, MEM-003, MEM-004 |
 | T-14 | Unauthenticated access or account takeover through the exposed endpoint | X4 | AUTH-001, AUTH-002, AUTH-004, AUTH-005, AUTH-006, AUTH-007, AUTH-010, OPS-003 |
@@ -101,7 +101,6 @@ beyond keeping them configurable and updatable.
 | T-23 | Notifications leak conversation content to the push services of browser vendors | — | UX-004 |
 | T-24 | Content the user rewound past, or of a temporary conversation, reaches the model, memory or another conversation | X1 | CNV-002, CNV-004, CNV-011, MEM-007 |
 | T-25 | An imported skill carries injected instructions or malicious scripts | X1 | AGT-003, AGT-004, AGT-017, AGT-025, SBX-022 |
-| T-26 | A file of one user's library is read by another user or reaches another user's sandbox | X2 | CNV-012, TEN-008 |
 | T-35 | Injected instructions are stored as memory items and reach later conversations as if the user had written them | X1 | AGT-003, AGT-004, MEM-001, MEM-008 |
 | T-36 | Injected instructions are saved as a skill, or planted in a skill's files, and reach later conversations | X1 | AGT-003, AGT-004, AGT-025, AGT-026, SBX-022 |
 | T-37 | A user's credential for a remote MCP server is used in another user's runs, or read by a tenant admin, so that one person acts on a service as another | X2 | AGT-030, TEN-007 |

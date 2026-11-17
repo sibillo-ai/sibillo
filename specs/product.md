@@ -73,13 +73,13 @@ came from. Old conversations are found by searching their content.
 
 Sends a member of the household a copy of a conversation or an artifact, or
 puts information in a shared space. Nothing is shared unless they share it
-explicitly.
+explicitly. Set aside: a possible later evolution, not planned (ROADMAP,
+Later).
 
 ### J5 — Show, don't just tell (P2, P3, P4)
 
 Sends a photo, a screenshot or a PDF taken on the phone, or shares a page or a
-file into the app from another app, and asks about it. Every uploaded file
-goes into their files, where any later conversation can use it again.
+file into the app from another app, and asks about it.
 
 ### J6 — Make something (P1, P3)
 

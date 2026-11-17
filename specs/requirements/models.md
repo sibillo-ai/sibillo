@@ -45,8 +45,7 @@ sent, so that a change applies from the next request, also during a run. A
 request the policy refuses, or one whose policy cannot be read, MUST be
 refused before any data leaves the instance, with the code
 `model.egress_refused`: a run fails with it, and the server MUST NOT use
-another model instead (MOD-012). The policy of a shared space is MOD-016
-(ADR-0017, ADR-0091).
+another model instead (MOD-012) (ADR-0017, ADR-0091).
 
 ## MOD-004: Budgets for paid providers
 
@@ -274,7 +273,7 @@ windows and how to raise the server's (ADR-0093).
 
 ## MOD-016: Data egress policy of a shared space
 
-- **Status:** draft
+- **Status:** deprecated
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration
@@ -283,3 +282,6 @@ A tenant admin MUST be able to set the data egress policy of a shared space
 (TEN-007), and a model request carrying data of a shared space MUST follow
 the strictest of the space's policy and the policy that applies to the user
 (MOD-003, ADR-0091).
+
+Set aside: sharing data between users, and the file library, are a possible
+later evolution, not planned (ROADMAP, Later).
