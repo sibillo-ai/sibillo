@@ -18,6 +18,7 @@ from sibillo_server import (
     health,
     mcp_servers,
     memory,
+    notifications,
     passkeys,
     permissions,
     runs,
@@ -60,6 +61,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(sign_in.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(passkeys.router, prefix=API_PREFIX)
+    app.include_router(notifications.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(memory.router, prefix=API_PREFIX)
     app.include_router(skills.router, prefix=API_PREFIX)

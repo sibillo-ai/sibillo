@@ -58,6 +58,7 @@ WORKER_VARIABLES = frozenset(
         "SIBILLO_APPROVAL_SWEEP_SECONDS",
         "SIBILLO_RUN_REQUEST_LIMIT",
         "SIBILLO_MCP_CALL_SECONDS",
+        "SIBILLO_PUBLIC_ORIGIN",
     }
 )
 MINIMUM_DRIVER_TOKEN_LENGTH = 32
@@ -111,6 +112,8 @@ class WorkerConfiguration:
     run_request_limit: int = 200
     # How long a call to a remote MCP server's tool may take (AGT-019, ADR-0099).
     mcp_call_seconds: int = 120
+    # The origin users open: the contact of notifications, which are not sent without it (ADR-0101).
+    public_origin: str | None = None
 
 
 def _database_url(environment: Mapping[str, str]) -> str:
@@ -207,6 +210,7 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
         approval_sweep_seconds=int(approvals),
         run_request_limit=int(limit),
         mcp_call_seconds=int(mcp_seconds),
+        public_origin=_public_origin(environment),
     )
 
 

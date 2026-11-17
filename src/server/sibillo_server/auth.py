@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from sibillo_server import errors, schemas
 from sibillo_server.credentials import new_token, token_hash, verify_password
@@ -192,12 +192,20 @@ async def open_session(
     )
 
 
+async def _forget_subscription(connection: AsyncConnection, session_id: uuid.UUID) -> None:
+    """A revoked session is notified no more: its notification subscription goes with it (UX-004, ADR-0101)."""
+    await connection.execute(
+        text("DELETE FROM notification_subscriptions WHERE device_session_id = :id"), {"id": session_id}
+    )
+
+
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def logout(identity: Authenticated, engine: Engine) -> Response:
     async with transaction(engine, identity) as connection:
         await connection.execute(
             text("UPDATE device_sessions SET revoked_at = now() WHERE id = :id"), {"id": identity.session_id}
         )
+        await _forget_subscription(connection, identity.session_id)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     return response
@@ -248,6 +256,7 @@ async def revoke_my_session(session_id: uuid.UUID, identity: Authenticated, engi
             text("UPDATE device_sessions SET revoked_at = now() WHERE id = :id AND revoked_at IS NULL"),
             {"id": session_id},
         )
+        await _forget_subscription(connection, session_id)
     # Another user's session is invisible, so it is reported as not found (TEN-006).
     if result.rowcount == 0:
         raise errors.not_found()

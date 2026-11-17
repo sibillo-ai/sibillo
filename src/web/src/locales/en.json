@@ -636,6 +636,36 @@
     "removeLabel": "Remove {{name}}",
     "removeHint": "Your password confirms that it is you. Without passkeys, your password alone signs you in."
   },
+  "notifications": {
+    "title": "Notifications",
+    "hint": "When an answer is ready, or the assistant needs your approval or an answer while you are away, this device can tell you. A notification never shows what the conversation says.",
+    "thisDevice": "Notifications on this device",
+    "privacy": "They go through your browser's push service, which learns when Sibillo notifies this device, never what about.",
+    "blocked": "This browser blocks notifications from Sibillo. Allow them in the browser's site settings, then turn them on here.",
+    "unavailable": "Notifications are not available on this server yet. The instance admin can enable them by setting the address people use to open Sibillo.",
+    "unsupported": "This browser can't receive notifications. On an iPhone or iPad, add Sibillo to the Home Screen and open it from there.",
+    "deniedTitle": "Notifications are off",
+    "denied": "The browser did not allow notifications. You can allow them in its site settings.",
+    "failed": "Notifications could not be changed on this device. Try again.",
+    "kinds": {
+      "run_finished": {
+        "title": "Your answer is ready",
+        "body": "Open Sibillo to read it."
+      },
+      "run_failed": {
+        "title": "An answer could not be finished",
+        "body": "Open Sibillo to see what happened."
+      },
+      "approval_pending": {
+        "title": "The assistant needs your approval",
+        "body": "It is waiting for you before it goes on."
+      },
+      "question_pending": {
+        "title": "The assistant has a question",
+        "body": "It is waiting for your answer before it goes on."
+      }
+    }
+  },
   "members": {
     "title": "Members",
     "hint": "The people of the household. A member who lost the device with their passkey can sign in again once you remove their passkeys.",

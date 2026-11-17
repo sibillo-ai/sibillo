@@ -24,6 +24,7 @@ CONTRACT_TABLES = (
     "tenants",
     "users",
     "device_sessions",
+    "notification_subscriptions",
     "login_attempts",
     "passkeys",
     "passkey_challenges",
@@ -40,6 +41,7 @@ CONTRACT_TABLES = (
     "conversations",
     "conversation_plans",
     "runs",
+    "run_followers",
     "conversation_messages",
     "compaction_checkpoints",
     "usage_ledger",
@@ -65,10 +67,12 @@ PRIVATE_TABLES = (
     "conversations",
     "conversation_plans",
     "runs",
+    "run_followers",
     "conversation_messages",
     "compaction_checkpoints",
     "usage_ledger",
     "audit_events",
+    "notification_subscriptions",
     "mcp_credentials",
     "mcp_sign_ins",
 )
@@ -181,10 +185,26 @@ TABLES = [
       last_used_at timestamptz NOT NULL,
       expires_at timestamptz NOT NULL,
       revoked_at timestamptz,
+      UNIQUE (tenant_id, user_id, id),
       FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id)
     )
     """,
     "CREATE INDEX device_sessions_user_idx ON device_sessions (tenant_id, user_id)",
+    # The Web Push subscription of a device session (UX-004, ADR-0101).
+    """
+    CREATE TABLE notification_subscriptions (
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      device_session_id uuid PRIMARY KEY,
+      endpoint text NOT NULL,
+      p256dh text NOT NULL,
+      auth text NOT NULL,
+      created_at timestamptz NOT NULL,
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id, device_session_id)
+        REFERENCES device_sessions (tenant_id, user_id, id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE login_attempts (
       id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -527,6 +547,19 @@ TABLES = [
         REFERENCES runs (tenant_id, owner_id, conversation_id, id) ON DELETE CASCADE
     )
     """,
+    # An open event stream of a run: the run is followed while one is seen (UX-004, ADR-0101).
+    """
+    CREATE TABLE run_followers (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      run_id uuid NOT NULL,
+      seen_at timestamptz NOT NULL,
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id, run_id) REFERENCES runs (tenant_id, owner_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX run_followers_run_idx ON run_followers (tenant_id, owner_id, run_id)",
     "CREATE INDEX runs_conversation_idx ON runs (conversation_id)",
     # The runs of a conversation form one chain (ADR-0068): one child per run, one first run.
     "CREATE UNIQUE INDEX runs_one_child ON runs (parent_run_id) WHERE parent_run_id IS NOT NULL",
@@ -1205,6 +1238,7 @@ PRIVILEGES = [
     "GRANT INSERT ON users TO sibillo_app",
     "GRANT UPDATE (display_name, password_hash, role, disabled_at) ON users TO sibillo_app",
     "GRANT SELECT, INSERT, DELETE ON device_sessions TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON notification_subscriptions TO sibillo_app",
     "GRANT UPDATE (revoked_at) ON device_sessions TO sibillo_app",
     "GRANT SELECT, INSERT, DELETE ON passkeys TO sibillo_app",
     "GRANT UPDATE (sign_count, last_used_at) ON passkeys TO sibillo_app",
@@ -1220,6 +1254,7 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT ON conversation_messages TO sibillo_app",
     # Rewinding deletes runs (ADR-0068).
     "GRANT SELECT, INSERT, UPDATE, DELETE ON runs TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON run_followers TO sibillo_app",
     "GRANT SELECT, INSERT ON usage_ledger TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON connections, connection_models TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON mcp_servers, mcp_server_tools, mcp_credentials TO sibillo_app",

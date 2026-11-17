@@ -52,6 +52,16 @@ def passkeys_unavailable() -> ApiError:
     return ApiError(503, "auth.passkeys_unavailable", "Passkeys unavailable")
 
 
+def notifications_unavailable() -> ApiError:
+    """The instance has no public origin, which notifications need (ADR-0101)."""
+    return ApiError(503, "notification.unavailable", "Notifications unavailable")
+
+
+def notification_endpoint_refused() -> ApiError:
+    """A subscription whose endpoint is not on a push service of ADR-0101 (T-39)."""
+    return ApiError(422, "notification.endpoint_refused", "Endpoint refused")
+
+
 def passkey_rejected() -> ApiError:
     return ApiError(422, "auth.passkey_rejected", "Passkey rejected")
 

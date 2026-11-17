@@ -56,6 +56,27 @@ class DeviceSession(Response):
     current: bool
 
 
+class NotificationSettings(Response):
+    """Whether notifications are available, and on for the current device session (UX-004, ADR-0101)."""
+
+    available: bool
+    subscribed: bool
+    # Absent when notifications are unavailable.
+    public_key: str | None = None
+
+
+class NotificationKeys(BaseModel):
+    p256dh: Annotated[str, Field(min_length=1, max_length=256)]
+    auth: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class NotificationSubscription(BaseModel):
+    """A browser's push subscription, as `PushSubscription.toJSON()` gives it; other fields are ignored."""
+
+    endpoint: Annotated[str, Field(min_length=1, max_length=2048)]
+    keys: NotificationKeys
+
+
 class LoginResponse(Response):
     # Absent when the session was set as a cookie.
     token: Annotated[str | None, Field(exclude_if=lambda value: value is None)] = None

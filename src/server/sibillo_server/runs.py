@@ -27,6 +27,7 @@ from sibillo_server.connections import allowed, default_model
 from sibillo_server.conversations import Durable, find_conversation
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
 from sibillo_server.durable import APPLICATION_VERSION, EVENTS_STREAM, RUN_QUEUE, RUN_WORKFLOW
+from sibillo_server.notifications import add_follower, following
 from sibillo_server.questions import Answers, answer
 from sibillo_server.sandbox import SandboxDriver, stop_conversation_sandbox
 from sibillo_server.settings import new_conversation
@@ -127,10 +128,11 @@ async def stream_events(
 
 
 def _streaming(
-    durable: DBOSClient, engine: AsyncEngine, identity: Identity, run_id: uuid.UUID, after: int
+    durable: DBOSClient, engine: AsyncEngine, identity: Identity, run_id: uuid.UUID, after: int, follower: uuid.UUID
 ) -> StreamingResponse:
+    """The run's events, for a client that follows the run while it reads them (UX-004, ADR-0101)."""
     return StreamingResponse(
-        stream_events(durable, engine, identity, run_id, after),
+        following(stream_events(durable, engine, identity, run_id, after), engine, identity, follower),
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )
@@ -362,7 +364,8 @@ async def start_run(
             ).one_or_none()
             if existing is not None:
                 # A retried request: the same run's stream, from the beginning.
-                return _streaming(durable, engine, identity, body.run_id, 0)
+                follower = await add_follower(connection, identity, body.run_id)
+                return _streaming(durable, engine, identity, body.run_id, 0, follower)
             active = (
                 await connection.execute(
                     text("SELECT 1 FROM runs WHERE conversation_id = :id AND status IN ('queued', 'running')"),
@@ -389,6 +392,8 @@ async def start_run(
                 attachments=attachments,
                 voice=body.voice,
             )
+            # The client follows the run from before it is queued, so that a quick run notifies nobody.
+            follower = await add_follower(connection, identity, body.run_id)
     except DBAPIError as error:
         if sqlstate(error) == UNIQUE_VIOLATION:
             # The run ID is taken by a run the user cannot see, or another run started meanwhile.
@@ -399,7 +404,7 @@ async def start_run(
     except Exception:
         await fail_unqueued(engine, identity, body.run_id)
         raise
-    return _streaming(durable, engine, identity, body.run_id, 0)
+    return _streaming(durable, engine, identity, body.run_id, 0, follower)
 
 
 @router.get("/runs/{run_id}", response_model=schemas.Run)
@@ -448,4 +453,7 @@ async def stream_run_events(
     # Workflows of old runs are deleted after the retention period (ADR-0052).
     if not await _workflow_exists(durable, run_id):
         raise errors.not_found()
-    return _streaming(durable, engine, identity, run_id, last_event_id if last_event_id is not None else after or 0)
+    async with transaction(engine, identity) as connection:
+        follower = await add_follower(connection, identity, run_id)
+    start = last_event_id if last_event_id is not None else after or 0
+    return _streaming(durable, engine, identity, run_id, start, follower)

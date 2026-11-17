@@ -87,6 +87,7 @@ from sibillo_server.mcp_runs import CHANGED, McpServers, offered_names
 from sibillo_server.mcp_runs import prepare as prepare_servers
 from sibillo_server.memory import MEMORY_INSTRUCTIONS, MEMORY_TOOLS, memory_section, run_memory
 from sibillo_server.memory import TOOLS as MEMORY_TOOL_LIST
+from sibillo_server.notifications import Kind, is_followed, notify
 from sibillo_server.offers import TOOLS as OFFER_TOOLS
 from sibillo_server.permissions import permissions_of
 from sibillo_server.plans import ConversationPlanStore, plan_steps
@@ -237,6 +238,8 @@ class _Worker:
     run_request_limit: int = 200
     # How long a call to a remote MCP server's tool may take (AGT-019, ADR-0099).
     mcp_call_seconds: int = 120
+    # The contact of notifications; none are sent without it (UX-004, ADR-0101).
+    public_origin: str | None = None
     # Queues the runs the worker starts itself, such as those that deny expired approvals (ADR-0090).
     durable: DBOSClient | None = None
 
@@ -509,8 +512,10 @@ async def run_workflow(serialized_input: str) -> None:
     except Exception as error:
         code = _error_code(error)
         logger.exception("run %s failed: %s", run.run_id, code)
+        followed = await _followed(identity, run_id)
         await _write_error(run.run_id, code)
         await _set_status(identity, run_id, "failed", code)
+        await _notify(identity, run, "run_failed", followed)
     except BaseException:
         # Cancelled: the API has recorded it and stops the sandbox, and the stream ends with the workflow (CNV-003).
         _ENCODERS.pop(run.run_id, None)
@@ -588,8 +593,10 @@ async def _execute(
         logger.warning("run %s failed: %s", run.run_id, code)
         if run.run_id in _TITLES:
             await _announce_title(run.run_id)
+        followed = await _followed(identity, deps.run_id)
         await _write_error(run.run_id, code, _reason(error))
         await _set_status(identity, deps.run_id, "failed", code)
+        await _notify(identity, run, "run_failed", followed)
         return False
     except BaseException:
         if (title := _TITLES.pop(run.run_id, None)) is not None:
@@ -623,13 +630,43 @@ async def _execute(
                     },
                 )
             ).scalar_one()
+    # Whether a client follows the run is read before its last event, which ends the client's stream (ADR-0101).
+    followed = await _followed(identity, deps.run_id)
     async for event in encoder.after_stream():
         encoded = _encoded(event)
         if pending is not None and encoded["type"] == "RUN_FINISHED":
             encoded["outcome"] = {"type": "interrupt", "interrupts": interrupts(pending, expires_at)}
         await _write(run.run_id, encoded)
     await _set_status(identity, deps.run_id, "completed" if pending is None else "interrupted")
+    kind: Kind = "run_finished"
+    if isinstance(output, DeferredToolRequests):
+        kind = "approval_pending" if output.approvals else "question_pending"
+    await _notify(identity, run, kind, followed)
     return pending is not None
+
+
+async def _followed(identity: Identity, run_id: uuid.UUID) -> bool:
+    """Whether a client follows the run; when that cannot be read, it counts as followed, and nothing is sent."""
+    try:
+        return await is_followed(_engine(), identity, run_id)
+    except Exception:
+        logger.warning("run %s: whether a client follows it could not be read", run_id)
+        return True
+
+
+async def _notify(identity: Identity, run: RunWorkflowInput, kind: Kind, followed: bool) -> None:
+    """Tell the user's devices how the run ended, unless a client follows it (UX-004, ADR-0101)."""
+    if followed:
+        return
+    await notify(
+        _engine(),
+        identity,
+        secret_key=_WORKER.secret_key,
+        contact=_WORKER.public_origin,
+        kind=kind,
+        conversation_id=uuid.UUID(run.conversation_id),
+        run_id=uuid.UUID(run.run_id),
+    )
 
 
 # An approval request is denied after a day without an answer (AGT-007, ADR-0090).
@@ -892,6 +929,7 @@ def run_worker(configuration: WorkerConfiguration) -> None:
     _WORKER.search_url = configuration.search_url
     _WORKER.run_request_limit = configuration.run_request_limit
     _WORKER.mcp_call_seconds = configuration.mcp_call_seconds
+    _WORKER.public_origin = configuration.public_origin
     _WORKER.durable = create_client(configuration.database_url)
     DBOS(
         config=DBOSConfig(

@@ -10,10 +10,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     // Installable on phones and computers (UX-001); the service worker caches
-    // only the app's own files and never the API.
+    // only the app's own files and never the API, and shows notifications (UX-004, ADR-0101).
     VitePWA({
       registerType: "autoUpdate",
-      filename: "sw.js",
+      strategies: "injectManifest",
+      srcDir: "src/sw",
+      filename: "sw.ts",
       includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "Sibillo",
@@ -30,9 +32,7 @@ export default defineConfig({
           { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
-      workbox: {
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/v1\//],
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },

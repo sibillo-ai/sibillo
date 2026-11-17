@@ -1658,6 +1658,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "argon2-cffi" },
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "jsonschema", extra = ["format-nongpl"] },
     { name = "playwright" },
@@ -1677,6 +1678,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "argon2-cffi", specifier = "==25.1.0" },
+    { name = "cryptography", specifier = "==50.0.2" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "jsonschema", extras = ["format-nongpl"], specifier = "==4.26.0" },
     { name = "playwright", specifier = "==1.64.0" },

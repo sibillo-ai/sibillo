@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Blocks, Bot, Brain, Cable, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { Activity, Bell, Blocks, Bot, Brain, Cable, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
@@ -14,6 +14,7 @@ import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
 import { McpServersSection, ServicesSection } from "./McpSettings";
 import { MemorySection } from "./MemorySettings";
+import { NotificationsSection } from "./NotificationSettings";
 import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
@@ -27,7 +28,7 @@ const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
-type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "memory" | "skills" | "services" | "activity" | "security" | "appearance";
+type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
@@ -36,8 +37,8 @@ interface TabItem {
 }
 
 /**
- * The settings: for everyone their assistant (CNV-013, CNV-014), their memory (UX-027), their passkeys (UX-026) and the
- * theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
+ * The settings: for everyone their assistant (CNV-013, CNV-014), their memory (UX-027), notifications on this device
+ * (UX-004), their passkeys (UX-026) and the theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
  */
 export function Settings({ me }: { me: User }) {
   const { t } = useTranslation();
@@ -48,6 +49,7 @@ export function Settings({ me }: { me: User }) {
     { id: "skills", label: t("settings.skills"), icon: <Sparkles className="size-[18px]" aria-hidden="true" /> },
     { id: "services", label: t("mcp.services.title"), icon: <Cable className="size-[18px]" aria-hidden="true" /> },
     { id: "activity", label: t("activity.page.title"), icon: <Activity className="size-[18px]" aria-hidden="true" /> },
+    { id: "notifications", label: t("notifications.title"), icon: <Bell className="size-[18px]" aria-hidden="true" /> },
     { id: "security", label: t("settings.security"), icon: <KeyRound className="size-[18px]" aria-hidden="true" /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette className="size-[18px]" aria-hidden="true" /> },
   ];
@@ -83,6 +85,8 @@ export function Settings({ me }: { me: User }) {
             <MembersSection />
           ) : tab === "security" ? (
             <PasskeysSection />
+          ) : tab === "notifications" ? (
+            <NotificationsSection />
           ) : tab === "assistant" ? (
             <AssistantSection />
           ) : tab === "memory" ? (
