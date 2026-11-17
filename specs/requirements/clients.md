@@ -518,7 +518,7 @@ Rationale: journey J13.
 
 ## UX-030: The thread follows the answer only from its end
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** e2e
