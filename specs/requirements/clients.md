@@ -48,7 +48,7 @@ Rationale: personas P2 and P4 need clarity; persona P1 needs the details.
 
 ## UX-004: Notifications
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security, e2e
