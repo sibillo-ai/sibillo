@@ -41,7 +41,9 @@ def test_the_manifest_and_the_offline_cache_name_only_local_files(web_build: Pat
     manifest = json.loads((web_build / "manifest.webmanifest").read_text())
     assert _remote([icon["src"] for icon in manifest["icons"]]) == []
     worker = (web_build / "sw.js").read_text()
-    cached = re.findall(r"""url\s*:\s*["']([^"']+)""", worker)
+    # Its precache list, written `url:"…"` by a generated worker and `"url":"…"` when injected into one of the
+    # app's own, as for notifications (ADR-0101).
+    cached = re.findall(r"""["']?\burl["']?\s*:\s*["']([^"']+)""", worker)
     assert cached, "the service worker caches nothing"
     assert _remote(cached) == []
 
