@@ -124,7 +124,7 @@ def test_the_worker_checks_the_endpoint_again_before_it_sends(
                 (account.tenant_id, account.id, session_id, bad["endpoint"], keys["p256dh"], keys["auth"]),
             )
         conversation_id = create_conversation(server, token)["id"]
-        start_run(server, token, conversation_id, "wait:2 ||| hello", stop_after=1)
+        start_run(server, token, conversation_id, "wait:1 ||| hello", stop_after=1)
         deadline = time.monotonic() + PUSH_TIMEOUT_SECONDS
         while not push_service.pushes(good):
             assert time.monotonic() < deadline, "the run sent no notification"

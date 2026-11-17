@@ -26,9 +26,9 @@ from tests.support.server import Server
 
 PUSH_TIMEOUT_SECONDS = 15
 # How long a test waits to be sure that no notification comes.
-QUIET_SECONDS = 2
+QUIET_SECONDS = 1
 # Long enough for the client to leave the run's stream before the run ends.
-WAIT = "wait:2 ||| "
+WAIT = "wait:1 ||| "
 QUESTION = {
     "header": "Colour",
     "question": "Which colour?",
@@ -157,7 +157,8 @@ def test_a_run_that_a_client_follows_to_its_end_sends_nothing(
             "high",
             id="question",
         ),
-        pytest.param("fail", "failed", "run_failed", "normal", id="failure"),
+        # Refused as a content filter refuses: the run fails at once, with no retries (MOD-015).
+        pytest.param("refuse", "failed", "run_failed", "normal", id="failure"),
     ],
 )
 def test_each_kind_of_run_end_has_its_notification(
