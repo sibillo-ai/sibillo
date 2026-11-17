@@ -67,7 +67,8 @@ database procedure (ADR-0050):
    `SIBILLO_APPROVAL_SWEEP_SECONDS` set to `1`, so that tests of temporary
    conversations and of expired approvals need not wait (ADR-0082,
    ADR-0090), and `SIBILLO_RUN_REQUEST_LIMIT` set to `20`, so that a test
-   reaches it quickly (ADR-0097). The worker has no readiness signal: tests wait for the
+   reaches it quickly (ADR-0097), and `SIBILLO_PUBLIC_ORIGIN` as for the
+   API, so that it sends notifications (ADR-0101). The worker has no readiness signal: tests wait for the
    outcome of runs, with a timeout.
 4. Tests call the API over HTTP at `http://127.0.0.1:PORT/v1` and stop both
    processes at the end of the session. To check recovery (AGT-010), a test
@@ -142,7 +143,8 @@ scripts under `/ollama/v1`, `/ollama/api/version` with a version,
 with every model that has answered a request, loaded with the context window
 the test sets. Outside `/ollama`, `/api/version` is not found, as on any other
 server. It records the headers of each request, so
-tests can check what the gateway sends.
+tests can check what the gateway sends. A test can also have it wait before
+it answers, so that a client can leave a run before the run ends (ADR-0101).
 
 It also serves speech (ADR-0088). As an OpenAI-compatible server it lists
 `test-transcribe` and `test-tts` among its models, named so that their kind
@@ -154,6 +156,26 @@ OpenRouter's JSON with base64 audio, and answers
 `/audio/speech` answers a short WAV file of silence, as OpenRouter with an
 `X-Generation-Id`, whose cost its `/generation` reports. It records each
 speech request, so tests can check the text, model and voice sent.
+
+## Push services
+
+Tests never reach a real push service. The test suite serves its own on
+`127.0.0.1`, over HTTPS, with a certificate for the hosts of ADR-0101
+issued by a certificate authority it makes for the session. It starts the
+worker with `SSL_CERT_FILE` naming that authority's certificate, and with
+`TEST_PUSH_ADDRESS`, the service's address and port, which the harness's
+`sitecustomize` uses to answer lookups of those hosts with that address and
+to send connections to them on port 443 to that port. The server needs no
+code for it, but verifies push services against the certificates that
+`SSL_CERT_FILE` names when it is set, as httpx does by default. Neither
+variable is an `SIBILLO_*` one.
+
+The service accepts Web Push requests as push services do (RFC 8030),
+answers `201`, or `404` or `410` for a subscription a test says is gone, and
+records each request with its headers and body. Tests subscribe as a browser
+does: they make the P-256 key pair and the authentication secret of each
+subscription, decrypt what arrives (RFC 8291), and check its VAPID
+signature against the instance's public key (RFC 8292).
 
 ## MCP servers
 
@@ -219,6 +241,14 @@ without asking. In hands-free mode the app marks its large button with
 `reading` or `failed`, and with `data-voice-cue`, the last sound it played:
 `start`, `end`, `tick`, `answer` or `error` (ADR-0088). Media buttons reach
 the app in tests as the keyboard's media keys.
+
+Chromium in tests reaches no push service. Tests of notifications grant
+the app the notification permission, replace the page's
+`PushManager.subscribe` with one that returns a subscription the test made,
+whose endpoint is on the test push service's hosts, deliver pushes to the
+service worker with the DevTools protocol's
+`ServiceWorker.deliverPushMessage`, and read the notifications it shows with
+`ServiceWorkerRegistration.getNotifications()` (ADR-0101).
 
 Tests of passkeys open the app at `http://localhost:PORT/`, the origin the
 API is given, and answer the browser's WebAuthn prompts with Chromium's

@@ -446,7 +446,6 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `connection_id` | uuid | the connection that answered; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`) |
 | `model_provider`, `model_name` | text | set when known (MOD-005) |
 | `last_event_seq` | integer | sequence number of the last event written to the run's stream |
-| `followed_at` | timestamptz | when a client last read the run's event stream; set when the stream opens and at least every 10 seconds while it is open (ADR-0101); null when never followed |
 | `created_at`, `started_at`, `finished_at` | timestamptz | |
 
 Constraints:
@@ -458,6 +457,19 @@ Constraints:
 - a run has at most one child, and a conversation at most one run without a
   parent, so its runs form one chain (ADR-0068); a run of kind `resume` has
   the interrupted run as parent.
+
+### `run_followers` (private)
+
+An open event stream of a run (UX-004, ADR-0101).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | as in `runs` |
+| `run_id` | uuid | not null; (`tenant_id`, `owner_id`, `run_id`) references `runs` on delete cascade; indexed |
+| `seen_at` | timestamptz | not null; when the stream opened, then refreshed at least every 10 seconds while it is open |
+
+The API deletes the row when its stream closes.
 
 ### `usage_ledger` (private)
 
@@ -714,7 +726,7 @@ connection.
 ### Policies for private tables
 
 `device_sessions`, `notification_subscriptions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
-`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `usage_ledger`,
+`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `run_followers`, `usage_ledger`,
 `audit_events`, `mcp_credentials` and `mcp_sign_ins` use the same policy for
 every operation:
 
@@ -751,6 +763,7 @@ keys, not by privileges of `sibillo_app`.
 | `compaction_checkpoints` | `SELECT`, `INSERT`: checkpoints never change (ADR-0041) |
 | `conversation_messages` | `SELECT`, `INSERT`: stored messages never change (ADR-0041) |
 | `runs` | `SELECT`, `INSERT`, `UPDATE`, `DELETE`: rewinding deletes runs (ADR-0068) |
+| `run_followers` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `usage_ledger` | `SELECT`, `INSERT`: entries never change (ADR-0042) |
 | `tool_permissions` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `egress_policies` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |

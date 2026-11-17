@@ -33,11 +33,15 @@ Sibillo:
 
    A run the user stopped sends none. The payload is a JSON object with
    exactly `kind`, `conversation_id` and `run_id`.
-2. **Following a run.** While a client reads a run's event stream, the API
-   sets `runs.followed_at` to the current time when the stream opens and at
-   least every 10 seconds until it closes. The worker sends no notification
-   for a run whose `followed_at` is less than 30 seconds old when it ends.
-   A run that has never been followed is not being followed.
+2. **Following a run.** Each open event stream of a run, the one that starts
+   it or one that reads it later, is a row of `run_followers`. The API adds
+   the row when the stream opens, before the run is queued for the stream
+   that starts it, refreshes its `seen_at` at least every 10 seconds, and
+   deletes it when the stream closes, also when the client goes away. The
+   run is followed while it has a row seen in the last 30 seconds, so that
+   the rows of an API that stopped do not count for long. The worker decides
+   whether to notify before it writes the run's final event, so that a client
+   that reads the end of the run has not closed its stream yet.
 3. **Subscriptions belong to a device session.** A device session has at most
    one notification subscription. Turning notifications on in a client saves
    the browser's subscription for the current session, and turning them off
@@ -79,11 +83,11 @@ Sibillo:
   notify as soon as it is upgraded. Changing `SIBILLO_SECRET_KEY` changes the
   VAPID key, and every subscription must be made again; this is already true
   of stored API keys.
-- The API writes to `runs` while a client follows a run, every 10 seconds per
+- The API writes a row while a client follows a run, every 10 seconds per
   open stream.
-- A user who leaves a run and comes back within 30 seconds of its end gets no
-  notification; a user who follows a run on one device gets none on the
-  others.
+- A user who follows a run on one device gets no notification on the others.
+  When the API stops without closing its streams, runs it was streaming count
+  as followed for up to 30 more seconds.
 - The web client's service worker gains its own code for push and
   notification clicks, next to the cached app files (ADR-0067).
 - A browser whose push service is not in the list cannot subscribe until the
@@ -94,6 +98,11 @@ Sibillo:
 - **Track followers in memory in the API:** the worker sends the
   notifications and cannot see the API's memory; a row in the database is
   what both share.
+- **One timestamp on the run, refreshed while it is followed:** a client that
+  goes away would count as following for up to the timeout, and a run that
+  ends soon after the user closes the app, the case notifications are for,
+  would send nothing. A closing stream cannot clear it either, while another
+  stream of the same run is open.
 - **Always send, and let the service worker hide notifications while the
   conversation is visible:** simpler on the server, but the push service
   would learn about every run, and the user's other devices would ring while
