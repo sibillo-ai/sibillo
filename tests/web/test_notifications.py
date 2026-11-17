@@ -38,6 +38,15 @@ FAKE_PUSH_MANAGER = """(subscription) => {
   PushManager.prototype.getSubscription = async function () { return current; };
   PushManager.prototype.permissionState = async function () { return "granted"; };
 }"""
+# Counts, in the service worker, the notifications it has finished showing. Chromium's `getNotifications()`
+# can lose a notification that is still being shown while it reads, so tests read the list once, after
+# every notification is shown, rather than poll it.
+COUNT_SHOWN = """() => {
+  self.__shown = 0;
+  const show = self.registration.showNotification.bind(self.registration);
+  self.registration.showNotification = (title, options) =>
+    show(title, options).then(() => { self.__shown += 1; });
+}"""
 # The notifications the service worker shows.
 SHOWN = """async () => {
   const registration = await navigator.serviceWorker.ready;
@@ -130,6 +139,8 @@ def test_a_push_shows_a_notification_that_reveals_nothing(page: Page, member: Ac
         page.wait_for_timeout(100)
     registration_id = registrations[0]["registrationId"]
     origin = page.evaluate("location.origin")
+    (worker,) = page.context.service_workers
+    worker.evaluate(COUNT_SHOWN)
     for kind in KINDS:
         payload = {"kind": kind, "conversation_id": conversations[kind], "run_id": str(uuid7())}
         send(
@@ -138,9 +149,10 @@ def test_a_push_shows_a_notification_that_reveals_nothing(page: Page, member: Ac
         )
 
     deadline = time.monotonic() + 15
-    while len(shown := cast("list[dict[str, str]]", page.evaluate(SHOWN))) < len(KINDS):
-        assert time.monotonic() < deadline, f"{len(shown)} of {len(KINDS)} notifications shown"
+    while (count := cast("int", worker.evaluate("self.__shown"))) < len(KINDS):
+        assert time.monotonic() < deadline, f"{count} of {len(KINDS)} notifications shown"
         page.wait_for_timeout(100)
+    shown = cast("list[dict[str, str]]", page.evaluate(SHOWN))
     # One per conversation, each with its own text, and none naming the conversation.
     assert sorted(item["tag"] for item in shown) == sorted(conversations.values())
     texts = {(item["title"], item["body"]) for item in shown}
