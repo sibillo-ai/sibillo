@@ -37,6 +37,8 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "audit_events": ("id",),
     "mcp_credentials": ("id",),
     "mcp_sign_ins": ("id",),
+    "notification_subscriptions": ("device_session_id",),
+    "run_followers": ("id",),
 }
 
 
@@ -93,7 +95,8 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         mcp_server_id,
         credential_id,
         sign_in_id,
-    ) = (uuid7() for _ in range(14))
+        follower_id,
+    ) = (uuid7() for _ in range(15))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -207,6 +210,16 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         " created_at, expires_at) VALUES (%s, %s, %s, %s, %s, %s, 'verifier', now(), now() + interval '10 minutes')",
         (sign_in_id, tenant_id, user_id, mcp_server_id, mcp_server_id, sign_in_id.bytes * 2),
     )
+    # The device session's notification subscription, and a stream that follows the run (UX-004, ADR-0101).
+    conn.execute(
+        "INSERT INTO notification_subscriptions (tenant_id, owner_id, device_session_id, endpoint, p256dh, auth,"
+        " created_at) VALUES (%s, %s, %s, %s, 'p256dh', 'auth', now())",
+        (tenant_id, user_id, session_id, f"https://fcm.googleapis.com/fcm/send/{session_id}"),
+    )
+    conn.execute(
+        "INSERT INTO run_followers (id, tenant_id, owner_id, run_id, seen_at) VALUES (%s, %s, %s, %s, now())",
+        (follower_id, tenant_id, user_id, run_id),
+    )
     rows: dict[str, tuple[object, ...]] = {
         "device_sessions": (session_id,),
         "passkey_challenges": (challenge_id,),
@@ -224,6 +237,8 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "audit_events": (audit_id,),
         "mcp_credentials": (credential_id,),
         "mcp_sign_ins": (sign_in_id,),
+        "notification_subscriptions": (session_id,),
+        "run_followers": (follower_id,),
     }
     assert set(rows) == set(PRIVATE_TABLES)
     return User(user_id, tenant_id, username, role, token_hash, conversation_id, run_id, mcp_server_id, rows)

@@ -38,6 +38,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
         "UPDATE": Columns(only=("display_name", "password_hash", "role", "disabled_at")),
     },
     "device_sessions": {"SELECT": EVERY, "INSERT": EVERY, "DELETE": EVERY, "UPDATE": Columns(only=("revoked_at",))},
+    # A device session's notification subscription (UX-004, ADR-0101).
+    "notification_subscriptions": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "login_attempts": {},
     "passkeys": {
         "SELECT": EVERY,
@@ -56,6 +58,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "compaction_checkpoints": {"SELECT": EVERY, "INSERT": EVERY},
     "conversation_messages": {"SELECT": EVERY, "INSERT": EVERY},
     "runs": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    # The open event streams of runs (UX-004, ADR-0101).
+    "run_followers": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "usage_ledger": {"SELECT": EVERY, "INSERT": EVERY},
     "connections": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "connection_models": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},

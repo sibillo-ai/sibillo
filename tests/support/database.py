@@ -46,6 +46,9 @@ PRIVATE_TABLES = (
     # Each user's own credential for a remote MCP server, and their sign-ins (AGT-030, AGT-031, ADR-0099).
     "mcp_credentials",
     "mcp_sign_ins",
+    # A device session's notification subscription, and the open event streams of runs (UX-004, ADR-0101).
+    "notification_subscriptions",
+    "run_followers",
 )
 # Configuration of the instance, without a tenant.
 INSTANCE_TABLES = ("tenants",)

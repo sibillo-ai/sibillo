@@ -167,6 +167,19 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " code_verifier, created_at, expires_at) VALUES (%s, %s, %s, %s, %s, %s, 'intruder', now(), now())",
                 (uuid7(), tenant, user, owner.mcp_server_id, owner.mcp_server_id, uuid.uuid4().bytes * 2),
             )
+        case "notification_subscriptions":
+            # Row-level security refuses it before the victim's existing subscription would conflict.
+            return (
+                "INSERT INTO notification_subscriptions (tenant_id, owner_id, device_session_id, endpoint, p256dh,"
+                " auth, created_at) VALUES (%s, %s, %s, 'https://fcm.googleapis.com/fcm/send/intruder', 'p', 'a',"
+                " now())",
+                (tenant, user, owner.rows["device_sessions"][0]),
+            )
+        case "run_followers":
+            return (
+                "INSERT INTO run_followers (id, tenant_id, owner_id, run_id, seen_at) VALUES (%s, %s, %s, %s, now())",
+                (uuid7(), tenant, user, owner.run_id),
+            )
         case _:
             raise AssertionError(f"no row builder for {table}")
 
