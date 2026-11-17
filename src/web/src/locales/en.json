@@ -187,6 +187,7 @@
     "image": "image",
     "fork": "Fork from here",
     "forkedFrom": "Forked from another conversation",
+    "newText": "New text",
     "reasoning": "Reasoning"
   },
   "activity": {

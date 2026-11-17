@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, Brain, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 
@@ -32,6 +32,9 @@ type AgUiMessage = MessagePage["items"][number] & {
   toolCallId?: string;
   attachments?: AttachedFile[];
 };
+
+/** How near its end, in pixels, the thread still counts as at its end (UX-030). */
+const END_SLACK_PX = 16;
 
 interface Turn {
   run: PathRun;
@@ -214,11 +217,32 @@ export function ConversationView() {
     });
   }, [activeRunId, running, follow]);
 
-  // The thread follows the answer as it streams.
-  useEffect(() => {
+  // The thread follows the answer as it streams, but only while the user is at its end;
+  // scrolled up, new text leaves it in place and a sign at its end says so (UX-030).
+  const atEnd = useRef(true);
+  const [behind, setBehind] = useState(false);
+  const toEnd = useCallback(() => {
     const element = thread.current;
+    atEnd.current = true;
+    setBehind(false);
     if (element) element.scrollTop = element.scrollHeight;
+  }, []);
+  // Another conversation, or a run the user just started, begins at the end.
+  const liveRunId = live?.runId;
+  useLayoutEffect(toEnd, [conversationId, liveRunId, toEnd]);
+  // A layout effect, so that the thread grows and scrolls before the browser reports a scroll.
+  useLayoutEffect(() => {
+    const element = thread.current;
+    if (!element) return;
+    if (atEnd.current) element.scrollTop = element.scrollHeight;
+    else if (live) setBehind(true);
   }, [live, history.data]);
+  function onThreadScroll() {
+    const element = thread.current;
+    if (!element) return;
+    atEnd.current = element.scrollHeight - element.clientHeight - element.scrollTop <= END_SLACK_PX;
+    if (atEnd.current) setBehind(false);
+  }
 
   /** A new conversation from a copy of this one up to the turn (CNV-005). */
   async function fork(turn: Turn) {
@@ -279,7 +303,7 @@ export function ConversationView() {
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-      <div ref={thread} className="relative min-h-0 flex-1 overflow-y-auto" aria-busy={running}>
+      <div ref={thread} onScroll={onThreadScroll} className="relative min-h-0 flex-1 overflow-y-auto" aria-busy={running}>
         <ol className="mx-auto w-full max-w-[740px] px-4 pt-2 pb-6">
           {temporary && (
             <li className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] text-muted">
@@ -329,6 +353,18 @@ export function ConversationView() {
             </li>
           )}
         </ol>
+        {behind && (
+          <div className="pointer-events-none sticky bottom-3 flex h-0 items-end justify-center">
+            <button
+              type="button"
+              onClick={toEnd}
+              className="slide pointer-events-auto flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold shadow-md hover:bg-hover"
+            >
+              <ArrowDown className="size-4 motion-safe:animate-bounce" aria-hidden="true" />
+              {t("message.newText")}
+            </button>
+          </div>
+        )}
       </div>
       <div className="flex-none px-4 pt-1.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-[740px]">
