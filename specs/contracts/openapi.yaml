@@ -2710,6 +2710,8 @@ components:
         - model.tool_misuse
         - model.context_exceeded
         - speech.unavailable
+        - notification.unavailable
+        - notification.endpoint_refused
         - file.too_large
         - file.not_previewable
         - workspace.quota_exceeded
