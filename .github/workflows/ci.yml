@@ -90,8 +90,9 @@ jobs:
               --ignore=tests/integration/test_forks.py --ignore=tests/integration/test_conversation_list.py
               --ignore=tests/integration/test_workspace_files.py --ignore=tests/integration/test_conversation_files.py
               --ignore=tests/integration/test_ollama.py --ignore=tests/integration/test_skills.py
-            # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds.
-            budget: 300
+            # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
+            # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
+            budget: 360
           - part: runs
             paths: tests/integration/test_runs_api.py tests/integration/test_agent_tools.py
             budget: 240
@@ -137,7 +138,8 @@ jobs:
           # browser tests grew with the daily-use conversations (ADR-0073).
           - part: web
             paths: tests/web --ignore=tests/web/test_workspace_panel.py
-            budget: 300
+            # Raised from 300 with the remote MCP servers' browser tests (UX-029), about 25 seconds.
+            budget: 360
           # The workspace panel in Chromium (ADR-0079): its files live in a
           # sandbox, which each test starts.
           - part: web-files
