@@ -138,17 +138,19 @@ def _streaming(
     )
 
 
-async def _instructions(connection: AsyncConnection, conversation: Any) -> tuple[str | None, str | None]:
-    """The conversation's own instructions, or else its user's defaults as they are now (CNV-014, ADR-0081)."""
+async def _instructions(connection: AsyncConnection, conversation: Any) -> tuple[str | None, str | None, str | None]:
+    """The conversation's own instructions, or else its user's defaults as they are now, and the user's
+    preferred language as it is now (CNV-014, I18N-003, ADR-0081, ADR-0103)."""
     defaults = (
-        await connection.execute(text("SELECT base_instructions, additional_instructions FROM user_settings"))
+        await connection.execute(text("SELECT base_instructions, additional_instructions, language FROM user_settings"))
     ).one_or_none()
     base = conversation.base_instructions
     additional = conversation.additional_instructions
-    if defaults is not None:
-        base = defaults.base_instructions if base is None else base
-        additional = defaults.additional_instructions if additional is None else additional
-    return base, additional
+    if defaults is None:
+        return base, additional, None
+    base = defaults.base_instructions if base is None else base
+    additional = defaults.additional_instructions if additional is None else additional
+    return base, additional, defaults.language
 
 
 async def _run_model(connection: AsyncConnection, conversation: Any) -> Any:
@@ -212,7 +214,7 @@ async def create_run(
     """
     parent = conversation.active_run_id
     model = await _run_model(connection, conversation)
-    base, additional = await _instructions(connection, conversation)
+    base, additional, language = await _instructions(connection, conversation)
     resuming = answers is not None
     turn = False
     if resuming and parent is not None:
@@ -301,6 +303,7 @@ async def create_run(
         disabled_servers=[str(server) for server in conversation.disabled_servers],
         base_instructions=base,
         additional_instructions=additional,
+        language=language,
         temporary=conversation.temporary,
         answers=None if answers is None else answers.calls,
         approvals=approvals,

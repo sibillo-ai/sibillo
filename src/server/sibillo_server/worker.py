@@ -202,8 +202,19 @@ VOICE_INSTRUCTIONS = {
 }
 
 
+def language_instructions(language: str | None) -> str:
+    """What the run says of the user's preferred language, a BCP 47 tag; nothing without one (I18N-003, ADR-0103)."""
+    if language is None:
+        return ""
+    return (
+        f"The user's preferred language is the one with the BCP 47 tag `{language}`. Answer in it, unless the user"
+        " writes in another language or asks for one; then answer in that one."
+    )
+
+
 def instructions(ctx: RunContext[RunDeps]) -> str:
-    """The base instructions, the working instructions for the tools that are on, then the user's additions."""
+    """The base instructions, the preferred language, the working instructions for the tools that are on, then
+    the user's additions."""
     deps = ctx.deps
     on = TOOL_NAMES - deps.disabled_tools if deps.tools else frozenset[str]()
     working = [
@@ -216,6 +227,7 @@ def instructions(ctx: RunContext[RunDeps]) -> str:
     keeping = deps.memory is not None and bool(on & MEMORY_TOOLS)
     parts = [
         base,
+        language_instructions(deps.language),
         " ".join(part for part in working[:2] if part),
         working[2],
         VOICE_INSTRUCTIONS.get(deps.voice or "", ""),
@@ -487,6 +499,7 @@ async def run_workflow(serialized_input: str) -> None:
         disabled_tools=frozenset(run.disabled_tools),
         base_instructions=run.base_instructions,
         additional_instructions=run.additional_instructions,
+        language=run.language,
         voice=run.voice,
         permissions=permissions,
         allowances=Allowances(

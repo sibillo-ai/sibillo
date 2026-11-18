@@ -472,6 +472,10 @@ class RunApproval(Response):
 type Instructions = Annotated[str, Field(max_length=20000, pattern=r"^[^\x00]*$")]
 
 
+# A BCP 47 language tag: a language, then an optional script and region (I18N-003, ADR-0103).
+type LanguageTag = Annotated[str, Field(max_length=35, pattern=r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$")]
+
+
 class UserSettings(Request):
     """A user's defaults for their conversations (CNV-013, CNV-014)."""
 
@@ -482,6 +486,8 @@ class UserSettings(Request):
     disabled_servers: DisabledServers = Field(default_factory=list[uuid.UUID])
     base_instructions: Instructions | None
     additional_instructions: Instructions | None
+    # The preferred language; leaving it out sets none (I18N-003).
+    language: LanguageTag | None = None
 
 
 class UserSettingsOut(Response):
@@ -491,6 +497,7 @@ class UserSettingsOut(Response):
     disabled_servers: list[uuid.UUID]
     base_instructions: str | None
     additional_instructions: str | None
+    language: str | None
     built_in_base_instructions: str
 
 

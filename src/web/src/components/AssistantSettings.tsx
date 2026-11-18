@@ -1,4 +1,5 @@
-// The settings of conversations: the user's defaults and one conversation's own (CNV-013, CNV-014, ADR-0081).
+// The settings of conversations: the user's defaults and one conversation's own (CNV-013, CNV-014, I18N-003,
+// ADR-0081, ADR-0103).
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, X } from "lucide-react";
@@ -7,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { api, unwrap, type Allowances, type Conversation, type ModelChoice, type Reasoning, type ToolName, type UserSettings, type UserSettingsView } from "../api/client";
 import { updateConversation } from "../conversations";
+import { languageOptions } from "../languages";
 import { findModel, useModels } from "../models";
 import { skillsOn, useSkills } from "../skills";
 import { useNotify } from "../notices";
@@ -47,6 +49,37 @@ function useReasons(choice: ModelChoice | null | undefined): boolean {
 /** A text left as the one it inherits is no text of its own, so it keeps following its default (ADR-0081). */
 function own(text: string, inherited: string): string | null {
   return text === inherited ? null : text;
+}
+
+/** The preferred language: none, or one of the common languages, each named by the platform (I18N-003, ADR-0103). */
+function LanguageField({ value, onChange }: { value: string | null; onChange: (language: string | null) => void }) {
+  const { t, i18n } = useTranslation();
+  const id = useId();
+  const hint = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-sm font-bold">
+        {t("assistant.language")}
+      </label>
+      <p id={hint} className="mb-2.5 max-w-[62ch] text-sm text-muted">
+        {t("assistant.languageHint")}
+      </p>
+      <select
+        id={id}
+        aria-describedby={hint}
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+        className="h-[38px] w-full max-w-[460px] rounded-[10px] border border-line-strong bg-bg px-3 text-sm outline-none focus:border-accent"
+      >
+        <option value="">{t("assistant.languageOfMessages")}</option>
+        {languageOptions(i18n.language, value).map((option) => (
+          <option key={option.tag} value={option.tag} lang={option.tag}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function ReasoningField({ value, onChange, reasons }: { value: Reasoning; onChange: (value: Reasoning) => void; reasons: boolean }) {
@@ -292,6 +325,7 @@ function AssistantForm({ view }: { view: UserSettingsView }) {
         />
       </div>
       <OwnEgressSwitch />
+      <LanguageField value={settings.language ?? null} onChange={(language) => void save({ language })} />
       <ReasoningField value={settings.reasoning ?? "on"} onChange={(reasoning) => void save({ reasoning })} reasons={reasons} />
       <ToolSwitches disabled={settings.disabled_tools} onChange={(disabled_tools) => void save({ disabled_tools })} />
       <ServerSwitches off={settings.disabled_servers ?? []} onChange={(disabled_servers) => void save({ disabled_servers })} />

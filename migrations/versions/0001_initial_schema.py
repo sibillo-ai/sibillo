@@ -450,6 +450,10 @@ TABLES = [
       disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
       base_instructions text,
       additional_instructions text,
+      -- The preferred language, a BCP 47 language tag (I18N-003, ADR-0103).
+      language text CHECK (
+        length(language) <= 35 AND language ~ '^[a-z]{{2,3}}(-[A-Z][a-z]{{3}})?(-([A-Z]{{2}}|[0-9]{{3}}))?$'
+      ),
       memory_enabled boolean NOT NULL DEFAULT true,
       disabled_builtin_skills text[] NOT NULL DEFAULT '{{}}',
       updated_at timestamptz NOT NULL,

@@ -106,6 +106,8 @@ class RunDeps:
     # The instructions of the run: null base instructions are the built-in ones (CNV-014).
     base_instructions: str | None = None
     additional_instructions: str | None = None
+    # The user's preferred language, a BCP 47 tag (I18N-003, ADR-0103).
+    language: str | None = None
     # How the run's message came, when it was not typed (UX-005, ADR-0088).
     voice: str | None = None
     # The user's tool permissions, what they allowed, and whether the path before this run holds untrusted

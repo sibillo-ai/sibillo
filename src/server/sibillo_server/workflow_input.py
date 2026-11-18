@@ -37,6 +37,8 @@ class RunWorkflowInput:
     disabled_servers: list[str] = field(default_factory=list[str])
     base_instructions: str | None = None
     additional_instructions: str | None = None
+    # The user's preferred language as the run starts, a BCP 47 tag (I18N-003, ADR-0103).
+    language: str | None = None
     # A temporary conversation gets no title (CNV-011, ADR-0082).
     temporary: bool = False
     # For a run that answers questions: what the model receives, by tool call ID (AGT-015, ADR-0083).

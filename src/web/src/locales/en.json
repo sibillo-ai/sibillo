@@ -431,6 +431,9 @@
     "modelHint": "For your new chats, it overrides the household's default model, which applies while you choose none.",
     "householdModel": "Household default: {{name}}",
     "noHouseholdModel": "The household has no default model",
+    "language": "Language",
+    "languageHint": "The language the assistant answers in, unless you write in another one or ask for it.",
+    "languageOfMessages": "The language of your messages",
     "reasoning": "Reasoning",
     "reasoningHint": "How much the model thinks before it answers. Deep is slower, and costs more on paid models.",
     "levels": {

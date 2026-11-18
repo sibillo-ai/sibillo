@@ -1,7 +1,8 @@
-"""A user's defaults for their conversations (CNV-013, CNV-014, ADR-0081).
+"""A user's defaults for their conversations (CNV-013, CNV-014, I18N-003, ADR-0081, ADR-0103).
 
 New conversations copy the model, reasoning and tools; conversations without
-instructions of their own use the instructions as they are at each run. There
+instructions of their own use the instructions as they are at each run, and
+every conversation uses the preferred language as it is at each run. There
 are no defaults but the user's: without them, the tenant's default model,
 reasoning on and every tool.
 """
@@ -30,7 +31,8 @@ BUILT_IN_BASE_INSTRUCTIONS = (
     "Answer helpfully, clearly and briefly, in the language the user writes in."
 )
 SETTINGS_COLUMNS = (
-    "connection_id, model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions"
+    "connection_id, model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions,"
+    " language"
 )
 
 
@@ -59,6 +61,7 @@ def _response(row: Any) -> schemas.UserSettingsOut:
             disabled_servers=[],
             base_instructions=None,
             additional_instructions=None,
+            language=None,
             built_in_base_instructions=BUILT_IN_BASE_INSTRUCTIONS,
         )
     return schemas.UserSettingsOut(
@@ -70,6 +73,7 @@ def _response(row: Any) -> schemas.UserSettingsOut:
         disabled_servers=list(row.disabled_servers),
         base_instructions=row.base_instructions,
         additional_instructions=row.additional_instructions,
+        language=row.language,
         built_in_base_instructions=BUILT_IN_BASE_INSTRUCTIONS,
     )
 
@@ -108,12 +112,13 @@ async def set_settings(body: schemas.UserSettings, identity: Authenticated, engi
                 text(
                     f"INSERT INTO user_settings (tenant_id, owner_id, {SETTINGS_COLUMNS}, updated_at)"  # noqa: S608
                     " VALUES (:tenant_id, :owner_id, :connection_id, :model, :reasoning, :disabled_tools,"
-                    " :disabled_servers, :base_instructions, :additional_instructions, now())"
+                    " :disabled_servers, :base_instructions, :additional_instructions, :language, now())"
                     " ON CONFLICT (tenant_id, owner_id) DO UPDATE SET connection_id = excluded.connection_id,"
                     " model = excluded.model, reasoning = excluded.reasoning,"
                     " disabled_tools = excluded.disabled_tools, disabled_servers = excluded.disabled_servers,"
                     " base_instructions = excluded.base_instructions,"
-                    " additional_instructions = excluded.additional_instructions, updated_at = now()"
+                    " additional_instructions = excluded.additional_instructions, language = excluded.language,"
+                    " updated_at = now()"
                     f" RETURNING {SETTINGS_COLUMNS}"
                 ),
                 {
@@ -126,6 +131,7 @@ async def set_settings(body: schemas.UserSettings, identity: Authenticated, engi
                     "disabled_servers": body.disabled_servers,
                     "base_instructions": body.base_instructions,
                     "additional_instructions": body.additional_instructions,
+                    "language": body.language,
                 },
             )
         ).one()
