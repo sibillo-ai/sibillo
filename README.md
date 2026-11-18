@@ -262,6 +262,16 @@ Microsoft), which learns that your server notified a device and when, but
 nothing of the conversation. No notification comes for a chat that is open
 on one of the person's devices.
 
+**Sharing into Sibillo**
+
+On Android, Sibillo installed on the home screen appears in the share sheet
+of other apps (UX-006, ADR-0102). Sharing a page, a photo or a file to it
+opens a new chat with the text and link in the message box and the files
+attached; nothing is sent until you send it. What was shared stays on the
+phone until then, and is offered only if you sign in within an hour. iPhones,
+iPads and most computers do not let web apps join the share sheet: there,
+attach files in the chat as usual.
+
 **Memory**
 
 The assistant remembers what each person would want it to know in their
