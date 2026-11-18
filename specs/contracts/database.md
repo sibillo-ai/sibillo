@@ -345,6 +345,7 @@ most one row per user, and none until they set one.
 | `disabled_tools` | text[] | not null, default empty; as in `conversations` |
 | `disabled_servers` | uuid[] | not null, default empty; as in `conversations` |
 | `base_instructions`, `additional_instructions` | text | null when unset |
+| `language` | text | the preferred language, a BCP 47 language tag of at most 35 characters that matches `^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$`; null when unset (I18N-003, ADR-0103) |
 | `memory_enabled` | boolean | not null, default true; whether memory is on for the user (MEM-006, ADR-0095); a user without a row has it on |
 | `disabled_builtin_skills` | text[] | not null, default empty; the built-in skills the user turned off (AGT-024, ADR-0096) |
 | `updated_at` | timestamptz | not null |

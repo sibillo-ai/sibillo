@@ -153,7 +153,7 @@ paths:
       description: |
         Every field is `null`, or empty for `disabled_tools` and
         `disabled_servers`, until the user sets it (ADR-0081).
-      x-requirements: [CNV-013, CNV-014, TEN-006]
+      x-requirements: [CNV-013, CNV-014, I18N-003, TEN-006]
       responses:
         "200":
           description: The user's defaults.
@@ -168,8 +168,9 @@ paths:
       description: |
         New conversations copy the model, reasoning, tools and servers; conversations
         without instructions of their own use the instructions from their
-        next run (ADR-0081).
-      x-requirements: [CNV-013, CNV-014, TEN-006]
+        next run (ADR-0081). Every conversation uses the preferred language
+        from its next run (ADR-0103).
+      x-requirements: [CNV-013, CNV-014, I18N-003, TEN-006]
       requestBody:
         required: true
         content:
@@ -3649,6 +3650,14 @@ components:
       type: [string, "null"]
       maxLength: 20000
 
+    LanguageTag:
+      description: |
+        A BCP 47 language tag: a language, then an optional script and an
+        optional region, such as `it`, `pt-BR` or `zh-Hant-TW` (ADR-0103).
+      type: [string, "null"]
+      maxLength: 35
+      pattern: "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
+
     Memory:
       type: object
       description: A user's memory (MEM-001, MEM-006, MEM-007, ADR-0095).
@@ -3927,11 +3936,18 @@ components:
         additional_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
           description: Added after the assistant's instructions; `null` for none.
+        language:
+          allOf: [{ $ref: "#/components/schemas/LanguageTag" }]
+          description: |
+            The preferred language the assistant answers in, unless the user
+            writes in or asks for another one; `null` for none, when it answers
+            in the language the user writes in (I18N-003, ADR-0103). Optional
+            in a request, where leaving it out sets none.
 
     UserSettingsView:
       type: object
       description: A user's defaults, with the built-in base instructions that clients show (CNV-014, ADR-0081).
-      required: [model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions, built_in_base_instructions]
+      required: [model, reasoning, disabled_tools, disabled_servers, base_instructions, additional_instructions, language, built_in_base_instructions]
       additionalProperties: false
       properties:
         model:
@@ -3942,6 +3958,7 @@ components:
         disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
         base_instructions: { $ref: "#/components/schemas/Instructions" }
         additional_instructions: { $ref: "#/components/schemas/Instructions" }
+        language: { $ref: "#/components/schemas/LanguageTag" }
         built_in_base_instructions:
           type: string
           description: The base instructions that apply when neither the user nor the conversation replaced them.

@@ -39,6 +39,7 @@ new entry here first (ADR-0005).
 | Working instructions | The part of the assistant's instructions that tells it how to use its workspace and the tools enabled for a run; not part of the base instructions, and kept whatever the user writes (CNV-014, ADR-0081). |
 | Conversation settings | A conversation's model, reasoning and enabled tools, copied from the user's defaults when it starts, and its own instructions, if any (CNV-013, CNV-014). |
 | User defaults | The settings and instructions a user chooses for their conversations: new conversations copy the settings, and conversations without instructions of their own use the instructions (CNV-013, CNV-014, ADR-0081). |
+| Preferred language | The language a user wants the assistant to answer in, one of their user defaults, named by a BCP 47 language tag; it gives way to the language the user writes in, or asks for (I18N-003, ADR-0103). |
 | Reasoning | What a model works out before it answers, set per conversation to off, on or deep, and shown folded above the answer (CNV-013). |
 | Question | A question the assistant asks the user during a run, with choices; it ends the run with an interrupt, and the answer starts the next run (AGT-015, ADR-0083). |
 | Task list | The steps the assistant plans for a long task and marks as it works, kept per conversation; shown as a checklist (UX-009, ADR-0083). |
