@@ -176,9 +176,13 @@ def _arrange(database: Database, user: User, column: str, value: object) -> None
         conn.execute(sql.SQL("UPDATE users SET {} = %s WHERE id = %s").format(sql.Identifier(column)), (value, user.id))
 
 
+# Another Argon2id hash than the one every user of the world has, so that setting it is a change.
+OTHER_ARGON2_HASH = "$argon2id$v=19$m=65536,t=3,p=4$b3RoZXI$aGFzaA"
+
+
 def _password_applies(conn: psycopg.Connection, user: User) -> bool:
     # The password hash cannot be read back by the application.
-    return _applies(conn, "UPDATE users SET password_hash = %s WHERE id = %s", (ARGON2_HASH, user.id))
+    return _applies(conn, "UPDATE users SET password_hash = %s WHERE id = %s", (OTHER_ARGON2_HASH, user.id))
 
 
 @pytest.mark.spec("AUTH-011", "TEN-007")

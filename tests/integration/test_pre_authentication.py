@@ -40,8 +40,8 @@ def test_login_lookup_ignores_the_case_of_the_username(database: Database, world
 @pytest.mark.spec("AUTH-001")
 def test_usernames_are_unique_ignoring_case(database: Database, world: World) -> None:
     insert = (
-        "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
-        " VALUES (%s, %s, %s, 'New user', %s, 'member', false, now())"
+        "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin,"
+        " password_change_required, created_at) VALUES (%s, %s, %s, 'New user', %s, 'member', false, true, now())"
     )
     with app_transaction(database, Context(world.tenant_a, world.anna.id, "tenant_admin")) as conn:
         # Control: a new username is accepted.

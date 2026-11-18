@@ -35,7 +35,7 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "users": {
         "SELECT": Columns(excluding=("password_hash",)),
         "INSERT": EVERY,
-        "UPDATE": Columns(only=("display_name", "password_hash", "role", "disabled_at")),
+        "UPDATE": Columns(only=("display_name", "password_hash", "password_change_required", "role", "disabled_at")),
     },
     "device_sessions": {"SELECT": EVERY, "INSERT": EVERY, "DELETE": EVERY, "UPDATE": Columns(only=("revoked_at",))},
     # A device session's notification subscription (UX-004, ADR-0101).
