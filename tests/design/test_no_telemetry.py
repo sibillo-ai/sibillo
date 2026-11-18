@@ -1,4 +1,4 @@
-"""Nothing is sent to external services by default (OBS-001, ADR-0058)."""
+"""Nothing is sent out by default, and no metrics are collected (OBS-001, OBS-002, ADR-0058, ADR-0104)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,23 @@ DENIED_PACKAGES = re.compile(
     r"^(sentry-sdk|logfire|opentelemetry-sdk|opentelemetry-exporter-.*|posthog|ddtrace|datadog|newrelic"
     r"|rollbar|bugsnag|honeybadger|analytics-python|segment-analytics-python|mixpanel|amplitude-analytics)$"
 )
+# Packages whose purpose is to collect metrics or instrument code with
+# OpenTelemetry (OBS-002, ADR-0104). `opentelemetry-api` does nothing without
+# an SDK, and dependencies bring it in.
+METRICS_PACKAGES = re.compile(
+    r"^(prometheus-client|prometheus-fastapi-instrumentator|starlette-exporter|aioprometheus|statsd|aiostatsd"
+    r"|opentelemetry-sdk|opentelemetry-instrumentation.*|opentelemetry-exporter-.*|opentelemetry-distro)$"
+)
+# Top-level modules of those packages, and OpenTelemetry itself.
+METRICS_MODULES = {
+    "prometheus_client",
+    "prometheus_fastapi_instrumentator",
+    "starlette_exporter",
+    "aioprometheus",
+    "statsd",
+    "aiostatsd",
+    "opentelemetry",
+}
 SOURCES = ROOT / "src"
 WORKER = SOURCES / "server" / "sibillo_server" / "worker.py"
 # DBOS settings that would send data to a service.
@@ -69,4 +86,20 @@ def test_nothing_instruments_pydantic_ai_or_imports_an_exporter() -> None:
                 offenders.append(f"{path}: calls instrument_all")
             elif isinstance(node, ast.keyword) and node.arg == "instrument":
                 offenders.append(f"{path}: passes instrument=")
+    assert offenders == []
+
+
+@pytest.mark.spec("OBS-002")
+def test_no_metrics_or_instrumentation_package_is_installed() -> None:
+    assert sorted(name for name in _locked_packages() if METRICS_PACKAGES.match(name)) == []
+
+
+@pytest.mark.spec("OBS-002")
+def test_no_component_imports_metrics_or_opentelemetry() -> None:
+    offenders: list[str] = []
+    for path, tree in _trees():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import | ast.ImportFrom):
+                modules = [alias.name for alias in node.names] if isinstance(node, ast.Import) else [node.module or ""]
+                offenders += [f"{path}: imports {name}" for name in modules if name.split(".")[0] in METRICS_MODULES]
     assert offenders == []
