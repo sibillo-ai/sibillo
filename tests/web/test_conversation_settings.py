@@ -1,4 +1,4 @@
-"""Conversation settings and instructions in the web client (CNV-013, CNV-014, ADR-0081).
+"""Conversation settings and instructions in the web client (CNV-013, CNV-014, I18N-003, ADR-0081, ADR-0103).
 
 The model the tests serve reasons when a message starts with `think:`
 (tests/support/model.py).
@@ -11,7 +11,7 @@ import uuid
 from uuid import uuid4
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, Response, expect
 
 from tests.support.accounts import Account
 from tests.support.fixtures import HarnessModel
@@ -33,6 +33,11 @@ def _request(page: Page, model: HarnessModel, text: str) -> ModelRequest:
     _send(page, text)
     _answer(page, f"Echo: {text}")
     return model.endpoint.requests_with(text)[0]
+
+
+def _saved(response: Response) -> bool:
+    """The user's defaults, saved."""
+    return response.url.endswith("/me/settings") and response.request.method == "PUT" and response.ok
 
 
 def _add_openrouter(server: Server, model: HarnessModel, tenant_id: uuid.UUID) -> None:
@@ -77,6 +82,33 @@ def test_my_defaults_shape_every_new_chat(page: Page, member: Account, default_m
     assert request.reasoning_effort() == "high"
     assert "web_search" not in request.tool_names()
     assert f"Sign as Ada {mark}." in request.system_text()
+
+
+@pytest.mark.spec("I18N-003", "UX-007")
+def test_my_preferred_language_reaches_every_chat(page: Page, member: Account, default_model: HarnessModel) -> None:
+    sign_in(page, member)
+    mark = uuid4().hex[:8]
+    _request(page, default_model, f"before {mark}")
+    page.get_by_role("link", name="Settings").click()
+    language = page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True)
+    # None at first: the assistant answers in the language of the user's messages.
+    expect(language).to_have_value("")
+    # Each language is named in its own language and in the interface's.
+    expect(language.locator("option[value='it']")).to_have_text(re.compile("italiano.*Italian", re.IGNORECASE))
+    with page.expect_response(_saved):
+        language.select_option("it")
+    assert accessibility_violations(page) == []
+    page.reload()
+    expect(page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True)).to_have_value("it")
+    # The chat started before uses it from its next answer.
+    page.go_back()
+    expect(page.get_by_role("main")).to_contain_text(f"Echo: before {mark}", timeout=30_000)
+    assert "`it`" in _request(page, default_model, f"after {mark}").system_text()
+    page.get_by_role("link", name="Settings").click()
+    with page.expect_response(_saved):
+        page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True).select_option("")
+    page.get_by_role("link", name="New chat").click()
+    assert "preferred language" not in _request(page, default_model, f"cleared {mark}").system_text()
 
 
 @pytest.mark.spec("CNV-013", "CNV-014", "UX-007")

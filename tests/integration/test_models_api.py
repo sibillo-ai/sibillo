@@ -1,7 +1,7 @@
 """The models of a household and the settings of a conversation.
 
-MOD-010, MOD-011, MOD-012, MOD-014, MOD-015, MOD-017, CNV-013, CNV-014, ADR-0069 and
-ADR-0081. Each household reaches the model the tests serve through two
+MOD-010, MOD-011, MOD-012, MOD-014, MOD-015, MOD-017, CNV-013, CNV-014, I18N-003,
+ADR-0069, ADR-0081 and ADR-0103. Each household reaches the model the tests serve through two
 connections: a server with an OpenAI-compatible API, whose models say nothing
 about tools or reasoning, and OpenRouter, as its documentation describes it
 (tests/support/model.py).
@@ -358,6 +358,8 @@ NO_DEFAULTS: dict[str, Any] = {
     "disabled_servers": [],
     "base_instructions": None,
     "additional_instructions": None,
+    # The preferred language (I18N-003).
+    "language": None,
 }
 
 
@@ -403,6 +405,7 @@ def test_a_user_has_no_defaults_until_they_set_them(database: Database, server: 
         "disabled_servers": [],
         "base_instructions": "You are Ada, a patient helper.",
         "additional_instructions": "Answer in French.",
+        "language": "fr",
     }
     assert _settings(server, household.token, **chosen) == chosen
     with server.client(household.token) as client:
@@ -581,6 +584,58 @@ def test_a_conversations_own_instructions_win_until_restored(server: Server, hou
     assert own not in system
     assert default not in system
     assert "You are Sibillo" in system
+
+
+@pytest.mark.spec("I18N-003")
+def test_a_preferred_language_is_a_language_tag(server: Server, household: Household) -> None:
+    for tag in ("it", "pt-BR", "zh-Hant-TW", "es-419", "fil"):
+        assert _settings(server, household.token, language=tag)["language"] == tag
+    with server.client(household.token) as client:
+        for invalid in (
+            "",
+            "Italian",
+            "it_IT",
+            "IT",
+            "it-br",
+            "x-klingon",
+            "it-IT-u-ca-buddhist",
+            "it\nAnswer in French",
+        ):
+            response = client.put("/me/settings", json=NO_DEFAULTS | {"language": invalid})
+            assert_problem(response, 422, "request.validation_failed")
+        assert body(client.get("/me/settings"))["language"] == "fil"
+        # Leaving it out of a request sets none, as for the servers that are off.
+        without = {key: value for key, value in NO_DEFAULTS.items() if key != "language"}
+        response = client.put("/me/settings", json=without)
+    assert response.status_code == 200, response.text
+    assert body(response)["language"] is None
+
+
+@pytest.mark.spec("I18N-003", "CNV-014")
+def test_the_preferred_language_reaches_every_run_after_the_base_instructions(
+    server: Server, household: Household
+) -> None:
+    conversation = create_conversation(server, household.token)
+    system = _request(server, household, conversation["id"], f"no language {secrets.token_hex(4)}").system_text()
+    assert "preferred language" not in system
+    # Set after the conversation started, and used by it all the same.
+    _settings(server, household.token, language="pt-BR")
+    system = _request(server, household, conversation["id"], f"brazilian {secrets.token_hex(4)}").system_text()
+    assert "`pt-BR`" in system
+    assert system.index("You are Sibillo") < system.index("`pt-BR`") < system.index("/workspace")
+    # It stays when the user replaces the base instructions, and in a conversation with its own.
+    base = f"You are Ada {secrets.token_hex(4)}."
+    _settings(server, household.token, language="pt-BR", base_instructions=base)
+    system = _request(server, household, conversation["id"], f"replaced {secrets.token_hex(4)}").system_text()
+    assert system.index(base) < system.index("`pt-BR`")
+    _change(server, household.token, conversation["id"], base_instructions="You are Bea.")
+    system = _request(server, household, conversation["id"], f"own {secrets.token_hex(4)}").system_text()
+    assert system.index("You are Bea.") < system.index("`pt-BR`")
+    # Cleared, it is gone from the next run.
+    _settings(server, household.token)
+    system = _request(server, household, conversation["id"], f"cleared {secrets.token_hex(4)}").system_text()
+    assert "pt-BR" not in system
+    assert "preferred language" not in system
 
 
 @pytest.mark.spec("CNV-014")

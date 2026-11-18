@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 
 import pytest
-from evals.harness import Arranged, ModelUnderEvaluation, Outcome, Player, Secret
+from evals.harness import Arranged, ModelUnderEvaluation, Outcome, Player, Secret, language_of
 from evals.scenarios import SCENARIOS, Scenario
 
 from tests.support.database import Database
@@ -89,6 +89,29 @@ def test_computing_needs_a_command(player: Player, scripted: ModelUnderEvaluatio
 @pytest.mark.spec("EVL-006")
 def test_a_fact_needs_a_search(player: Player, scripted: ModelUnderEvaluation) -> None:
     _check("searches", player, scripted)
+
+
+@pytest.mark.spec("EVL-006", "I18N-003")
+def test_an_equation_without_words_is_answered_in_the_preferred_language(
+    player: Player, scripted: ModelUnderEvaluation
+) -> None:
+    _check("preferred-language", player, scripted)
+
+
+@pytest.mark.spec("EVL-006", "I18N-003")
+def test_a_message_in_english_is_answered_in_english(player: Player, scripted: ModelUnderEvaluation) -> None:
+    _check("written-language", player, scripted)
+
+
+@pytest.mark.spec("EVL-006", "I18N-003")
+def test_the_language_of_an_answer_is_told_by_its_common_words() -> None:
+    assert language_of("Per risolvere l'equazione sottraiamo 3 da entrambi i lati, poi dividiamo: x = 4.") == "it"
+    assert language_of("To solve it, we subtract 3 from both sides and then divide by 2, so x = 4.") == "en"
+    # Too few words, or as many of each, say nothing.
+    assert language_of("x = 4") is None
+    assert language_of("Ok, the end.") is None
+    mixed = "To solve it we subtract and divide. Per risolvere sottraiamo e dividiamo per il coefficiente."
+    assert language_of(mixed) is None
 
 
 @pytest.mark.spec("EVL-006", "EVL-003")

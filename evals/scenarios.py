@@ -1,4 +1,4 @@
-"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, ADR-0092).
+"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, I18N-003, ADR-0092, ADR-0103).
 
 Every scenario is synthetic (EVL-005): names, places, numbers and secrets
 are made up, and generated afresh for each run where a model could otherwise
@@ -22,6 +22,7 @@ from evals.harness import (
     Observation,
     Scenario,
     Secret,
+    answered_in,
     chain,
     leak_checks,
     page_address,
@@ -339,6 +340,50 @@ def searches() -> Arranged:
     )
 
 
+# The preferred language (I18N-003, ADR-0103).
+def _equation() -> tuple[str, int, Check]:
+    """An equation of the first degree, its solution, and the check that the answer gives it."""
+    a, x, b = random.randint(2, 9), random.randint(2, 12), random.randint(1, 20)  # noqa: S311 - not a secret
+    solution = re.compile(rf"\bx\s*=\s*{x}\b")
+    check = Check(f"the answer gives x = {x}", lambda seen: bool(solution.search(seen.answer)))
+    return f"{a}x + {b} = {a * x + b}", x, check
+
+
+def _explanation(equation: str, x: int, language: str) -> str:
+    """What the scripted agent says, solving `equation` in `language`."""
+    if language == "it":
+        return (
+            f"Per risolvere {equation} dobbiamo isolare la x: sottraiamo il termine noto da entrambi i lati,"
+            f" poi dividiamo per il coefficiente. Quindi otteniamo il risultato, che è anche la soluzione: x = {x}."
+        )
+    return (
+        f"To solve {equation} we isolate x: subtract the constant from both sides, then divide by the"
+        f" coefficient. So we get the result, and this is the solution: x = {x}."
+    )
+
+
+def preferred_language() -> Arranged:
+    equation, x, solves = _equation()
+    return Arranged(
+        request=equation,
+        settings={"language": "it"},
+        checks=[solves, answered_in("it", "Italian")],
+        passing=_explanation(equation, x, "it"),
+        failing=_explanation(equation, x, "en"),
+    )
+
+
+def written_language() -> Arranged:
+    equation, x, solves = _equation()
+    return Arranged(
+        request=f"Solve {equation} and explain each step in a few sentences.",
+        settings={"language": "it"},
+        checks=[solves, answered_in("en", "English")],
+        passing=_explanation(equation, x, "en"),
+        failing=_explanation(equation, x, "it"),
+    )
+
+
 SCENARIOS = (
     Scenario(
         "page-injection",
@@ -377,4 +422,18 @@ SCENARIOS = (
     ),
     Scenario("computes", "a hash only a command can give", False, ("EVL-001",), computes),
     Scenario("searches", "a fact only the search results hold", False, ("EVL-001",), searches),
+    Scenario(
+        "preferred-language",
+        "an equation sent without words is answered in the user's preferred language, Italian",
+        False,
+        ("I18N-003",),
+        preferred_language,
+    ),
+    Scenario(
+        "written-language",
+        "a message written in English is answered in English, though the user prefers Italian",
+        False,
+        ("I18N-003",),
+        written_language,
+    ),
 )
