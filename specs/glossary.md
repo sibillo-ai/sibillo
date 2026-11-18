@@ -16,6 +16,7 @@ new entry here first (ADR-0005).
 | User | A person with an account in exactly one tenant. |
 | Device session | An authenticated session of one user on one device, identified by an opaque token and revocable by the user (ADR-0025). |
 | Passkey | A WebAuthn credential kept by a user's device, often unlocked with a fingerprint or a face; a second factor on top of the password (ADR-0065). |
+| Initial password | The password an administrator chose when creating an account; its user replaces it at their first sign-in (ADR-0105). |
 | Source address | The network address a request comes from: the address of the connecting peer, or the client address reported by a trusted proxy (ADR-0050). |
 | Trusted proxy | A reverse proxy, named by the instance admin in the configuration, whose report of the client address the server believes (ADR-0050). |
 | Private data | Data owned by one user and visible only to that user. The default for all data. |

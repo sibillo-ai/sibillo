@@ -17,6 +17,9 @@ info:
       `not_found`, never as `forbidden`, so their existence is not disclosed
       (TEN-006).
     - Lists are paginated with opaque cursors.
+    - A session of a user whose password is an initial password is refused
+      every operation with `403` and `auth.password_change_required`, except
+      `getMe`, `changeMyPassword` and `logout` (AUTH-012, ADR-0105).
     - Runs stream AG-UI 1.0 events over Server-Sent Events (ADR-0032). Each
       SSE message has `id` = sequence number (from 1 within a run), `event` =
       the AG-UI event type and `data` = the JSON-encoded AG-UI event.
@@ -137,6 +140,10 @@ paths:
       tags: [auth]
       operationId: getMe
       summary: The authenticated user.
+      description: |
+        Answered also while the user must replace an initial password, which
+        `password_change_required` tells (AUTH-012).
+      x-requirements: [AUTH-012]
       responses:
         "200":
           description: The authenticated user.
@@ -144,6 +151,31 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/password:
+    post:
+      tags: [auth]
+      operationId: changeMyPassword
+      summary: Change the user's own password, with the current one.
+      description: |
+        The current password is checked and rate-limited like a sign-in
+        (ADR-0047, ADR-0094); a wrong one answers `403` and the session stays
+        valid. The new password differs from the current one. The change
+        revokes every other session of the user and forgets their
+        notification subscriptions; the session that made it stays. It
+        clears `password_change_required` (AUTH-011, AUTH-012, ADR-0105).
+      x-requirements: [AUTH-006, AUTH-011, AUTH-012]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordChange" }
+      responses:
+        "204": { description: Password changed; the other sessions are revoked. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/WrongPassword" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /me/settings:
     get:
@@ -2575,6 +2607,12 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
           example: { type: "about:blank", title: "Invalid credentials", status: 403, code: "auth.invalid_credentials" }
+    PasswordChangeRequired:
+      description: The user must replace their initial password with `changeMyPassword` first (AUTH-012).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Password change required", status: 403, code: "auth.password_change_required" }
     NotificationsUnavailable:
       description: The instance has no `SIBILLO_PUBLIC_ORIGIN`, so it cannot send notifications (ADR-0101).
       content:
@@ -2692,6 +2730,7 @@ components:
         - auth.rate_limited
         - auth.passkeys_unavailable
         - auth.passkey_rejected
+        - auth.password_change_required
         - permission.denied
         - resource.not_found
         - resource.conflict
@@ -2812,6 +2851,19 @@ components:
       properties:
         password: { type: string, minLength: 1, maxLength: 1024, writeOnly: true }
 
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      additionalProperties: false
+      properties:
+        current_password: { type: string, minLength: 1, maxLength: 1024, writeOnly: true }
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          writeOnly: true
+          description: Differs from the current password; otherwise `request.validation_failed`.
+
     PasskeyRegistration:
       type: object
       required: [registration_id, options]
@@ -2909,7 +2961,7 @@ components:
 
     User:
       type: object
-      required: [id, tenant_id, username, display_name, role, instance_admin, created_at]
+      required: [id, tenant_id, username, display_name, role, instance_admin, password_change_required, created_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         tenant_id: { $ref: "#/components/schemas/Id" }
@@ -2917,6 +2969,9 @@ components:
         display_name: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         instance_admin: { type: boolean }
+        password_change_required:
+          type: boolean
+          description: The user must replace an initial password before anything else (AUTH-012, ADR-0105).
         created_at: { $ref: "#/components/schemas/Timestamp" }
 
     UserPage:

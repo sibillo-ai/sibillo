@@ -77,7 +77,7 @@ minimum needed and nothing else.
 | Function | Returns | Purpose |
 |---|---|---|
 | `auth_find_login(username text)` | `user_id, tenant_id, password_hash, role, instance_admin, disabled` | Password verification (AUTH-001); matches the username ignoring case |
-| `auth_find_session(token_hash bytea)` | `session_id, user_id, tenant_id, role, instance_admin, expires_at, revoked` | Token verification on every request (AUTH-004) |
+| `auth_find_session(token_hash bytea)` | `session_id, user_id, tenant_id, role, instance_admin, password_change_required, expires_at, revoked` | Token verification on every request (AUTH-004); no row for a session of a disabled account (AUTH-009, ADR-0105) |
 | `auth_touch_session(session_id uuid)` | — | Sets `last_used_at` to now and `expires_at` to 90 days later, for a session that is neither revoked nor expired (ADR-0049) |
 | `auth_record_login_attempt(username text, source inet, success boolean)` | `allowed boolean, retry_after_seconds integer` | Rate limiting (AUTH-006), by the rules below |
 | `default_model_configured()` | `boolean` | Whether any tenant has a default model, for `/health` before any sign-in (OPS-002, ADR-0054, ADR-0069) |
@@ -160,25 +160,32 @@ Policies: `SELECT` where `id = app_tenant_id()` or `app_is_instance_admin()`;
 | `instance_admin` | boolean | not null, default false |
 | `created_at` | timestamptz | not null |
 | `disabled_at` | timestamptz | null while active |
+| `password_change_required` | boolean | not null, default false; true while the password is an initial password (AUTH-012, ADR-0105) |
 
 Policies:
 - `SELECT` where `tenant_id = app_tenant_id()`.
-- `INSERT` where (`tenant_id = app_tenant_id()` and `app_is_tenant_admin()`
-  and not `instance_admin`) or `app_is_instance_admin()` (to create a new
-  tenant's first admin). Only an instance admin creates instance admins
-  (AUTH-008).
+- `INSERT` where `password_change_required` and ((`tenant_id =
+  app_tenant_id()` and `app_is_tenant_admin()` and not `instance_admin`) or
+  `app_is_instance_admin()`) (to create a new tenant's first admin). Only an
+  instance admin creates instance admins (AUTH-008). Every account created
+  through the application has an initial password (AUTH-012).
 - `UPDATE` where `tenant_id = app_tenant_id()` and (`id = app_user_id()` or
   `app_is_tenant_admin()`).
 
 Column privileges: `sibillo_app` cannot `SELECT` `password_hash`; only
 `auth_find_login` reads it. `sibillo_app` may `UPDATE` only `display_name`,
-`password_hash`, `role` and `disabled_at`; identifiers, `username` and
-`instance_admin` never change through the application.
+`password_hash`, `password_change_required`, `role` and `disabled_at`;
+identifiers, `username` and `instance_admin` never change through the
+application.
 
 Changing `role` or `disabled_at` requires `app_is_tenant_admin()`, so that
-users cannot promote themselves or re-enable their account (AUTH-008). Row-level
+users cannot promote themselves or re-enable their account, and of an
+instance admin's row also `app_is_instance_admin()` (AUTH-008). Changing
+`password_hash` or `password_change_required` requires `id = app_user_id()`,
+so that only the user changes their password, and `password_change_required`
+never changes from false to true (AUTH-011, AUTH-012, ADR-0105). Row-level
 security cannot compare a row's old and new values, so a `BEFORE UPDATE`
-trigger on `users` enforces this rule.
+trigger on `users` enforces these rules.
 
 Disabling an account revokes its sessions (AUTH-009, ADR-0048). When
 `disabled_at` changes from null to a value, an `AFTER UPDATE` trigger on

@@ -84,9 +84,10 @@ ship or accept any default credentials.
 - **Verification:** security
 
 Changing a user's role, and disabling or re-enabling their account, MUST
-require a tenant admin of the user's tenant. Creating an instance admin MUST
-require an instance admin. A user MUST NOT be able to raise their own
-privileges or re-enable their own account.
+require a tenant admin of the user's tenant; changing the role or the account
+state of an instance admin MUST require an instance admin. Creating an
+instance admin MUST require an instance admin. A user MUST NOT be able to
+raise their own privileges or re-enable their own account.
 
 ## AUTH-009: Disabling an account ends its sessions
 
@@ -96,8 +97,9 @@ privileges or re-enable their own account.
 - **Verification:** security
 
 Disabling an account MUST revoke every session of that account in the same
-change, so that none of its tokens is accepted afterwards. Re-enabling the
-account MUST NOT restore any session.
+change, so that none of its tokens is accepted afterwards, including a token
+of a sign-in that was in progress as the account was disabled. Re-enabling
+the account MUST NOT restore any session.
 
 ## AUTH-010: Passkeys as a second factor
 
@@ -115,3 +117,26 @@ never locks a user out for good (ADR-0065). Passkeys MUST be bound to the
 configured origin of the instance, and registering or removing one's own
 passkey MUST require the user's password (ADR-0094).
 
+## AUTH-011: Changing one's password
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+A user MUST be able to change their own password by giving their current
+one, which is checked and rate-limited like a sign-in. The change MUST
+revoke every other session of the user. Only the user MUST be able to change
+their password: no tenant admin and no other user (ADR-0105).
+
+## AUTH-012: An initial password is replaced at the first sign-in
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** integration, security
+
+An account created by a tenant admin or the instance admin MUST have its
+user choose a new password at their first sign-in. Until they do, every
+request of their sessions MUST be refused, except reading their own account,
+changing their password and signing out (ADR-0105).

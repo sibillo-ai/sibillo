@@ -74,26 +74,36 @@ private data, or any data of another tenant, through any API endpoint.
 Security tests MUST attempt such access for every endpoint that handles
 tenant-scoped data.
 
-## TEN-007: Private by default, explicit sharing
+## TEN-007: Private by default
 
-- **Status:** draft
-- **Priority:** MUST
-- **Phase:** 1
-- **Verification:** integration
-
-New data MUST be private to the user who creates it, unless the user
-explicitly creates it in, or moves it to, a shared space they belong to.
-
-## TEN-008: Partitioned file storage
-
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** security
 
-Stored files MUST be partitioned by tenant and user. Storage paths MUST NOT be
-built from unvalidated user input, and a user MUST NOT be able to access a
-file outside their own partition or the shared spaces they belong to.
+Data a user creates MUST be private to them: no other user of their tenant,
+a tenant admin included, may read, list, change or delete it. A tenant admin
+MUST NOT be able to reach it by signing in as the user with a password the
+admin chose (AUTH-011, AUTH-012). The only data that the users of a tenant
+share MUST be the tenant's configuration that its tenant admins manage
+(ADR-0069). Sharing a user's data with other users is not offered
+(ADR-0105).
+
+## TEN-008: Partitioned file storage
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 1
+- **Verification:** security
+
+Files stored for a user — a conversation's workspace, its disk, and the
+skills given to its sandbox — MUST be kept apart per tenant, user and
+conversation. The names of their storage MUST be built only from the
+identifiers of the tenant, the user and the conversation, which the control
+plane takes from the authenticated identity and from rows it reads under
+row-level security, and which the sandbox driver accepts only as UUIDs. A
+file operation MUST NOT reach outside the conversation's own workspace
+(SBX-014).
 
 ## TEN-009: Durable execution data
 
