@@ -272,6 +272,15 @@ phone until then, and is offered only if you sign in within an hour. iPhones,
 iPads and most computers do not let web apps join the share sheet: there,
 attach files in the chat as usual.
 
+**The assistant's language**
+
+The assistant answers in the language you write in. In Settings, Assistant,
+each person can choose a preferred language (I18N-003, ADR-0103): the
+assistant then uses it for messages without a language of their own, such as
+a shared link, a pasted equation or a file sent without a word, while a
+message in another language, or a request for one, still gets its answer in
+that language. The interface itself is in English for now.
+
 **Memory**
 
 The assistant remembers what each person would want it to know in their
