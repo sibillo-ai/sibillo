@@ -1,7 +1,7 @@
 # OBS — Observability and privacy
 
 What the system records about its own behavior, and what it never records.
-Background: ADR-0014, ADR-0058, ADR-0072.
+Background: ADR-0014, ADR-0058, ADR-0072, ADR-0104.
 
 ## OBS-001: Nothing sent to external services by default
 
@@ -13,15 +13,18 @@ Background: ADR-0014, ADR-0058, ADR-0072.
 The system MUST NOT send telemetry, analytics, crash reports, logs or traces
 to any external service unless the instance admin explicitly configures it.
 
-## OBS-002: Metrics without content
+## OBS-002: No metrics
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
-- **Verification:** unit
+- **Verification:** design
 
-Metrics MUST NOT contain message text, tool arguments or outputs, memory
-items or any other user content.
+The system MUST NOT collect metrics, and MUST NOT instrument its components
+with OpenTelemetry (ADR-0104).
+
+Rationale: metrics that nobody in a household reads are only code,
+dependencies and one more way for data to leave.
 
 ## OBS-003: Content redacted in logs and traces
 
@@ -44,15 +47,19 @@ A user SHOULD be able to enable, for themselves only, a debug mode that
 records unredacted traces locally. It SHOULD be visibly indicated and turn
 itself off automatically after at most 24 hours.
 
-## OBS-005: Bounded retention
+## OBS-005: Logs bounded by size
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 1
-- **Verification:** integration
+- **Verification:** design
 
-Logs and traces MUST be deleted after a retention period configurable by the
-instance admin, with a default of at most 14 days.
+The logs of every service of the deployment MUST stay within a bounded size,
+the oldest lines dropped first, without any change to the host; they MUST
+stay readable with `docker compose logs` (ADR-0104).
+
+Rationale: logs carry no content (OBS-003), so how long they last is not a
+privacy matter; a disk filled by logs stops the whole instance.
 
 ## OBS-006: Outbound requests only to declared destinations
 

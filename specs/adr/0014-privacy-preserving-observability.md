@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-29
 - **Deciders:** @tapionx
-- **Related:** OBS-001, OBS-002, OBS-003, OBS-004, OBS-005
+- **Related:** ADR-0104, OBS-001, OBS-002, OBS-003, OBS-004, OBS-005
 
 ## Context
 
@@ -19,15 +19,18 @@ We will:
 1. Send **nothing** to external services by default: no telemetry, no
    analytics, no crash reporting, no remote tracing.
 2. Collect **metrics without content** (counts, durations, error rates)
-   locally.
+   locally. Amended by ADR-0104: no metrics are collected.
 3. **Redact content by default** in logs and traces: message text, tool
    arguments and outputs, memory items.
 4. Offer a **per-user debug mode**, enabled by the user for themselves,
    stored only locally, visibly indicated, and expiring automatically.
 5. Bound log and trace **retention**, configurable by the instance admin.
+   Amended by ADR-0104: logs are bounded by size in Docker, and there are no
+   traces.
 
 Instrumentation uses OpenTelemetry so that operators can wire their own,
-self-hosted backends.
+self-hosted backends. Amended by ADR-0104: nothing is instrumented with
+OpenTelemetry.
 
 ## Consequences
 
