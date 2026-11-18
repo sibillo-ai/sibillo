@@ -417,6 +417,16 @@ Workspaces from before sandboxes were per conversation are no longer used:
 `docker volume ls --filter label=dev.sibillo.sandbox=workspace` lists
 them, and those without a third identifier in their name can be removed.
 
+**Logs**
+
+Every service logs to Docker, so `docker compose logs` shows them, for
+example `docker compose logs --follow worker`. Docker keeps at most three
+files of 10 MB per service and drops the oldest lines first (OBS-005), with
+no change to the host: services created before this setting get it when they
+are recreated, as `docker compose up --detach --build --wait` does. Logs
+never carry messages, files, memory or credentials (OBS-003), and nothing
+sends them anywhere. Sibillo collects no metrics (OBS-002, ADR-0104).
+
 **Backups**
 
 The `backup` service backs everything up every night at 03:00 UTC
