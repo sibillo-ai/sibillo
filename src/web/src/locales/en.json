@@ -644,6 +644,22 @@
     "removeLabel": "Remove {{name}}",
     "removeHint": "Your password confirms that it is you. Without passkeys, your password alone signs you in."
   },
+  "password": {
+    "title": "Password",
+    "hint": "Changing it signs you out on your other devices.",
+    "current": "Current password",
+    "new": "New password",
+    "newHint": "At least {{minimum}} characters, different from the current one.",
+    "again": "Repeat the new password",
+    "change": "Change password",
+    "changing": "Changing…",
+    "changed": "Password changed",
+    "mismatch": "The new passwords do not match.",
+    "wrongCurrent": "The current password is wrong.",
+    "invalid": "The new password is too short, or the same as the current one.",
+    "chooseTitle": "Choose your password",
+    "chooseSubtitle": "Your account was made with a password someone else chose. Choose one that only you know."
+  },
   "notifications": {
     "title": "Notifications",
     "hint": "When an answer is ready, or the assistant needs your approval or an answer while you are away, this device can tell you. A notification never shows what the conversation says.",

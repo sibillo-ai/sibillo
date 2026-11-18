@@ -47,6 +47,11 @@ def wrong_password() -> ApiError:
     return ApiError(403, "auth.invalid_credentials", "Invalid credentials")
 
 
+def password_change_required() -> ApiError:
+    """The user must replace their initial password first (AUTH-012, ADR-0105)."""
+    return ApiError(403, "auth.password_change_required", "Password change required")
+
+
 def passkeys_unavailable() -> ApiError:
     """The instance has no public origin to check passkeys against (ADR-0094)."""
     return ApiError(503, "auth.passkeys_unavailable", "Passkeys unavailable")

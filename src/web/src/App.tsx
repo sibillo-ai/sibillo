@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 
 import { ConversationView } from "./components/ConversationView";
 import { McpSignIn } from "./components/McpSettings";
+import { ChoosePassword } from "./components/Password";
 import { Settings } from "./components/Settings";
 import { Shell } from "./components/Shell";
 import { SignIn } from "./components/SignIn";
@@ -16,6 +17,9 @@ export function App() {
     <NoticeProvider>
       {me === null ? (
         <SignIn />
+      ) : me.password_change_required ? (
+        // Nothing else answers until the initial password is replaced (AUTH-012, ADR-0105).
+        <ChoosePassword />
       ) : (
         <Routes>
           <Route element={<Shell me={me} />}>

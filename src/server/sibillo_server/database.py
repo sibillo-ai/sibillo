@@ -28,6 +28,8 @@ class Identity:
     tenant_id: uuid.UUID
     role: str
     instance_admin: bool
+    # True while the user's password is an initial password (AUTH-012, ADR-0105).
+    password_change_required: bool = False
 
     @property
     def tenant_admin(self) -> bool:

@@ -130,7 +130,7 @@ export function SignIn() {
   );
 }
 
-function Frame({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+export function Frame({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-full overflow-y-auto bg-bg px-4 py-6 text-fg">
       <div className="m-auto flex w-full max-w-[360px] flex-col items-center gap-1">

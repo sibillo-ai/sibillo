@@ -1,4 +1,4 @@
-"""Users and tenants (AUTH-001, AUTH-002, TEN-001).
+"""Users and tenants (AUTH-001, AUTH-002, AUTH-012, TEN-001).
 
 Which rows each request reaches is decided by row-level security from the
 request context; the role checks here only choose between `403` and trying.
@@ -51,9 +51,11 @@ def _tenant(row: Any) -> schemas.Tenant:
     return schemas.Tenant(id=row.id, name=row.name, created_at=row.created_at)
 
 
+# The password an admin chooses is an initial password, which its user replaces (AUTH-012, ADR-0105).
 _INSERT_USER = text(
-    "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
-    " VALUES (:id, :tenant_id, :username, :display_name, :password_hash, :role, false, now())"
+    "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin,"
+    " password_change_required, created_at)"
+    " VALUES (:id, :tenant_id, :username, :display_name, :password_hash, :role, false, true, now())"
 )
 
 

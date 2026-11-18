@@ -6,7 +6,16 @@ import datetime
 import uuid
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, HttpUrl, PlainSerializer, UrlConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    PlainSerializer,
+    UrlConstraints,
+    model_validator,
+)
 
 type Role = Literal["member", "tenant_admin"]
 
@@ -44,6 +53,8 @@ class User(Response):
     display_name: str
     role: Role
     instance_admin: bool
+    # The user must replace an initial password before anything else (AUTH-012, ADR-0105).
+    password_change_required: bool
     created_at: Timestamp
 
 
@@ -106,6 +117,19 @@ class PasskeyLoginRequest(Request):
 
 class PasswordConfirmation(Request):
     password: Annotated[str, Field(min_length=1, max_length=1024)]
+
+
+class PasswordChange(Request):
+    """The current password and a new one, as long as a new account's, that differs from it (AUTH-011)."""
+
+    current_password: Annotated[str, Field(min_length=1, max_length=1024)]
+    new_password: Annotated[str, Field(min_length=12, max_length=1024)]
+
+    @model_validator(mode="after")
+    def _new_password_differs(self) -> PasswordChange:
+        if self.new_password == self.current_password:
+            raise ValueError("the new password is the current password")
+        return self
 
 
 class PasskeyRegistration(Response):

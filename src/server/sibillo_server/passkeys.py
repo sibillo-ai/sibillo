@@ -32,7 +32,7 @@ from webauthn.helpers.structs import (
 )
 
 from sibillo_server import errors, schemas
-from sibillo_server.auth import Authenticated, Engine, check_password, record_attempt, request_source
+from sibillo_server.auth import Authenticated, Engine, confirm_password
 from sibillo_server.config import ApiConfiguration
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
@@ -160,19 +160,6 @@ async def verify_assertion(
     return row.id, verified.new_sign_count
 
 
-async def _confirm_password(request: Request, engine: AsyncEngine, identity: Identity, password: str) -> None:
-    """The user's own password, checked and rate-limited like a sign-in (ADR-0094)."""
-    async with transaction(engine, identity) as connection:
-        username = (
-            await connection.execute(text("SELECT username FROM users WHERE id = :id"), {"id": identity.user_id})
-        ).scalar_one()
-    account = await check_password(engine, username, password)
-    succeeded = account is not None and account.user_id == identity.user_id
-    await record_attempt(engine, username, request_source(request), succeeded)
-    if not succeeded:
-        raise errors.wrong_password()
-
-
 def _transports(credential: dict[str, Any]) -> list[str]:
     """The transports a registering device reported, those WebAuthn defines."""
     response: object = credential.get("response")
@@ -208,7 +195,7 @@ async def start_passkey_registration(
     body: schemas.PasswordConfirmation, request: Request, identity: Authenticated, engine: Engine
 ) -> schemas.PasskeyRegistration:
     _, rp_id = relying_party(request)
-    await _confirm_password(request, engine, identity, body.password)
+    await confirm_password(request, engine, identity, body.password)
     challenge, registration_id = secrets.token_bytes(CHALLENGE_BYTES), uuid7()
     async with transaction(engine, identity) as connection:
         user = (
@@ -317,7 +304,7 @@ async def add_my_passkey(
 async def remove_my_passkey(
     passkey_id: uuid.UUID, body: schemas.PasswordConfirmation, request: Request, identity: Authenticated, engine: Engine
 ) -> Response:
-    await _confirm_password(request, engine, identity, body.password)
+    await confirm_password(request, engine, identity, body.password)
     async with transaction(engine, identity) as connection:
         result = await connection.execute(
             text("DELETE FROM passkeys WHERE id = :id AND user_id = :user"),

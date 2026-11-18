@@ -15,6 +15,7 @@ import { HouseholdEgressSection } from "./EgressSettings";
 import { McpServersSection, ServicesSection } from "./McpSettings";
 import { MemorySection } from "./MemorySettings";
 import { NotificationsSection } from "./NotificationSettings";
+import { PasswordSection } from "./Password";
 import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
@@ -84,7 +85,10 @@ export function Settings({ me }: { me: User }) {
           ) : tab === "members" && admin ? (
             <MembersSection />
           ) : tab === "security" ? (
-            <PasskeysSection />
+            <>
+              <PasswordSection />
+              <PasskeysSection />
+            </>
           ) : tab === "notifications" ? (
             <NotificationsSection />
           ) : tab === "assistant" ? (

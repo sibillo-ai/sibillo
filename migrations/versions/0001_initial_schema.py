@@ -169,6 +169,8 @@ TABLES = [
       instance_admin boolean NOT NULL DEFAULT false,
       created_at timestamptz NOT NULL,
       disabled_at timestamptz,
+      -- True while the password is an initial password (AUTH-012, ADR-0105).
+      password_change_required boolean NOT NULL DEFAULT false,
       UNIQUE (tenant_id, id)
     )
     """,
@@ -743,16 +745,32 @@ TABLES = [
 
 TRIGGERS = [
     # Row-level security cannot compare old and new values, so this trigger
-    # keeps users from changing their own role or account state (AUTH-008,
-    # ADR-0046). It runs as the caller, whose request context it reads.
+    # keeps users from changing their own role or account state, tenant admins
+    # from changing an instance admin's (AUTH-008, ADR-0046), and anyone but
+    # the user from changing their password (AUTH-011, AUTH-012, ADR-0105). It
+    # runs as the caller, whose request context it reads.
     """
     CREATE FUNCTION users_guard() RETURNS trigger LANGUAGE plpgsql
     SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-      IF (NEW.role IS DISTINCT FROM OLD.role OR NEW.disabled_at IS DISTINCT FROM OLD.disabled_at)
-         AND NOT public.app_is_tenant_admin() THEN
-        RAISE EXCEPTION 'changing a role or disabling an account requires a tenant admin'
+      IF NEW.role IS DISTINCT FROM OLD.role OR NEW.disabled_at IS DISTINCT FROM OLD.disabled_at THEN
+        IF NOT public.app_is_tenant_admin() THEN
+          RAISE EXCEPTION 'changing a role or disabling an account requires a tenant admin'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF OLD.instance_admin AND NOT public.app_is_instance_admin() THEN
+          RAISE EXCEPTION 'changing the role or the account of an instance admin requires an instance admin'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
+      END IF;
+      IF (NEW.password_hash IS DISTINCT FROM OLD.password_hash
+          OR NEW.password_change_required IS DISTINCT FROM OLD.password_change_required)
+         AND OLD.id IS DISTINCT FROM public.app_user_id() THEN
+        RAISE EXCEPTION 'only the user changes their password' USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      IF NEW.password_change_required AND NOT OLD.password_change_required THEN
+        RAISE EXCEPTION 'a password is initial only when the account is created'
           USING ERRCODE = 'insufficient_privilege';
       END IF;
       RETURN NEW;
@@ -894,16 +912,18 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     $$
     """,
     """
+    -- No session of a disabled account, even one opened as it was disabled (AUTH-009, ADR-0105).
     CREATE FUNCTION auth_find_session(token_hash bytea)
     RETURNS TABLE (session_id uuid, user_id uuid, tenant_id uuid, role text, instance_admin boolean,
-                   expires_at timestamptz, revoked boolean)
+                   password_change_required boolean, expires_at timestamptz, revoked boolean)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, pg_temp
     AS $$
-      SELECT s.id, s.user_id, s.tenant_id, u.role, u.instance_admin, s.expires_at, s.revoked_at IS NOT NULL
+      SELECT s.id, s.user_id, s.tenant_id, u.role, u.instance_admin, u.password_change_required, s.expires_at,
+             s.revoked_at IS NOT NULL
       FROM public.device_sessions s
       JOIN public.users u ON u.tenant_id = s.tenant_id AND u.id = s.user_id
-      WHERE s.token_hash = $1
+      WHERE s.token_hash = $1 AND u.disabled_at IS NULL
     $$
     """,
     # A session lasts 90 days from its last use; a revoked or expired one is
@@ -1094,11 +1114,13 @@ APPLICATION_POLICIES = [
     """,
     "CREATE POLICY tenants_app_insert ON tenants FOR INSERT TO sibillo_app WITH CHECK (app_is_instance_admin())",
     "CREATE POLICY users_app_select ON users FOR SELECT TO sibillo_app USING (tenant_id = app_tenant_id())",
-    # Only an instance admin creates instance admins (AUTH-008).
+    # Only an instance admin creates instance admins (AUTH-008), and every
+    # account created by the application has an initial password (AUTH-012).
     """
     CREATE POLICY users_app_insert ON users FOR INSERT TO sibillo_app
     WITH CHECK (
-      (tenant_id = app_tenant_id() AND app_is_tenant_admin() AND NOT instance_admin) OR app_is_instance_admin()
+      password_change_required
+      AND ((tenant_id = app_tenant_id() AND app_is_tenant_admin() AND NOT instance_admin) OR app_is_instance_admin())
     )
     """,
     """
@@ -1236,11 +1258,12 @@ PRIVILEGES = [
     "ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC",
     "GRANT SELECT, INSERT ON tenants TO sibillo_app",
     """
-    GRANT SELECT (id, tenant_id, username, display_name, role, instance_admin, created_at, disabled_at)
+    GRANT SELECT (id, tenant_id, username, display_name, role, instance_admin, created_at, disabled_at,
+                  password_change_required)
     ON users TO sibillo_app
     """,
     "GRANT INSERT ON users TO sibillo_app",
-    "GRANT UPDATE (display_name, password_hash, role, disabled_at) ON users TO sibillo_app",
+    "GRANT UPDATE (display_name, password_hash, password_change_required, role, disabled_at) ON users TO sibillo_app",
     "GRANT SELECT, INSERT, DELETE ON device_sessions TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON notification_subscriptions TO sibillo_app",
     "GRANT UPDATE (revoked_at) ON device_sessions TO sibillo_app",
