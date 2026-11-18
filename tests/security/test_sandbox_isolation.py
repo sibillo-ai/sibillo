@@ -190,7 +190,7 @@ def test_sandboxes_cannot_reach_each_other(sandboxes: Driver) -> None:
     assert not _connects(sandboxes, *intruder, address, port)
 
 
-@pytest.mark.spec("SBX-001")
+@pytest.mark.spec("SBX-001", "TEN-008")
 @pytest.mark.parametrize("whose", ["same-user", "same-tenant", "other-tenant"])
 def test_workspaces_are_separate(sandboxes: Driver, whose: str) -> None:
     owner = _sandbox()

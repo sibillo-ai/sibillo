@@ -184,7 +184,7 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
             raise AssertionError(f"no row builder for {table}")
 
 
-@pytest.mark.spec("TEN-006")
+@pytest.mark.spec("TEN-006", "TEN-007")
 @pytest.mark.parametrize("table", PRIVATE_TABLES)
 @pytest.mark.parametrize("attempt", ATTEMPTS, ids=lambda attempt: attempt.id)
 def test_private_rows_of_others_are_invisible(database: Database, world: World, table: str, attempt: Attempt) -> None:
@@ -201,7 +201,7 @@ def test_private_rows_of_others_are_invisible(database: Database, world: World, 
     assert set(visible) == {(actor.tenant_id, actor.id)}
 
 
-@pytest.mark.spec("TEN-006")
+@pytest.mark.spec("TEN-006", "TEN-007")
 @pytest.mark.parametrize("table", PRIVATE_TABLES)
 @pytest.mark.parametrize("attempt", ATTEMPTS, ids=lambda attempt: attempt.id)
 def test_private_rows_of_others_cannot_be_modified(
@@ -216,7 +216,7 @@ def test_private_rows_of_others_cannot_be_modified(
         assert_changes_nothing(conn, delete, victim.rows[table])
 
 
-@pytest.mark.spec("TEN-006")
+@pytest.mark.spec("TEN-006", "TEN-007")
 @pytest.mark.parametrize("table", PRIVATE_TABLES)
 @pytest.mark.parametrize("attempt", ATTEMPTS, ids=lambda attempt: attempt.id)
 def test_private_rows_cannot_be_created_for_others(
@@ -228,7 +228,7 @@ def test_private_rows_cannot_be_created_for_others(
         assert_denied(conn, query, params)
 
 
-@pytest.mark.spec("TEN-006")
+@pytest.mark.spec("TEN-006", "TEN-007")
 @pytest.mark.parametrize("table", PRIVATE_TABLES)
 @pytest.mark.parametrize("attempt", ATTEMPTS, ids=lambda attempt: attempt.id)
 def test_own_private_rows_cannot_be_given_to_others(

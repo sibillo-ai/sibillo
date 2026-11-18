@@ -1,8 +1,8 @@
 """Changes the application must refuse although the row is visible to the actor.
 
 Row-level security decides which rows a user reaches; these tests cover what
-a user may do to rows they reach: change their own role or account state, or
-attach their rows to another user's data (specs/contracts/database.md,
+a user may do to rows they reach: change their own role or account state,
+another user's password, or attach their rows to another user's data (specs/contracts/database.md,
 ADR-0046). A refusal may come from privileges, policies, triggers or
 constraints; each test checks the outcome, and a control shows that the same
 statement works where the contract allows it.
@@ -124,14 +124,16 @@ def test_identity_columns_never_change_through_the_application(
         assert not _applies(conn, update, (value(world), world.alice.id))
 
 
-def _new_user(conn: psycopg.Connection, tenant_id: uuid.UUID, *, instance_admin: bool) -> bool:
+def _new_user(
+    conn: psycopg.Connection, tenant_id: uuid.UUID, *, instance_admin: bool, initial_password: bool = True
+) -> bool:
     """Create a user and return whether the actor sees it afterwards."""
     user_id = uuid7()
     _applies(
         conn,
-        "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
-        " VALUES (%s, %s, %s, 'New user', %s, 'member', %s, now())",
-        (user_id, tenant_id, f"user-{user_id}", ARGON2_HASH, instance_admin),
+        "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin,"
+        " password_change_required, created_at) VALUES (%s, %s, %s, 'New user', %s, 'member', %s, %s, now())",
+        (user_id, tenant_id, f"user-{user_id}", ARGON2_HASH, instance_admin, initial_password),
     )
     return conn.execute("SELECT 1 FROM users WHERE id = %s", (user_id,)).fetchone() is not None
 
@@ -154,6 +156,68 @@ def test_members_create_no_users(database: Database, world: World) -> None:
 def test_instance_admins_create_instance_admins(database: Database, world: World) -> None:
     with app_transaction(database, Context(world.tenant_b, world.bob.id, instance_admin=True)) as conn:
         assert _new_user(conn, world.tenant_b, instance_admin=True)
+
+
+@pytest.mark.spec("AUTH-012")
+@pytest.mark.parametrize("instance_admin", [False, True], ids=["tenant-admin", "instance-admin"])
+def test_users_created_through_the_application_have_an_initial_password(
+    database: Database, world: World, instance_admin: bool
+) -> None:
+    with app_transaction(database, _tenant_admin(world, instance_admin=instance_admin)) as conn:
+        assert not _new_user(conn, world.tenant_a, instance_admin=False, initial_password=False)
+        # Control: the same user with an initial password.
+        assert _new_user(conn, world.tenant_a, instance_admin=False)
+
+
+def _arrange(database: Database, user: User, column: str, value: object) -> None:
+    """Set a column of a user as arranged data, without the triggers that guard changes."""
+    with database.superuser() as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute(sql.SQL("UPDATE users SET {} = %s WHERE id = %s").format(sql.Identifier(column)), (value, user.id))
+
+
+def _password_applies(conn: psycopg.Connection, user: User) -> bool:
+    # The password hash cannot be read back by the application.
+    return _applies(conn, "UPDATE users SET password_hash = %s WHERE id = %s", (ARGON2_HASH, user.id))
+
+
+@pytest.mark.spec("AUTH-011", "TEN-007")
+@pytest.mark.parametrize("instance_admin", [False, True], ids=["tenant-admin", "instance-admin"])
+def test_admins_cannot_set_the_password_of_another_user(database: Database, world: World, instance_admin: bool) -> None:
+    with app_transaction(database, _tenant_admin(world, instance_admin=instance_admin)) as conn:
+        assert not _password_applies(conn, world.alice)
+        # Control: their own.
+        assert _password_applies(conn, world.anna)
+
+
+@pytest.mark.spec("AUTH-012")
+def test_the_mark_of_an_initial_password_is_cleared_only_by_its_user(database: Database, world: World) -> None:
+    _arrange(database, world.alice, "password_change_required", True)
+    with app_transaction(database, _tenant_admin(world, instance_admin=True)) as conn:
+        assert not _update_applies(conn, world.alice, "password_change_required", False)
+    with app_transaction(database, _member(world)) as conn:
+        assert _update_applies(conn, world.alice, "password_change_required", False)
+
+
+@pytest.mark.spec("AUTH-012")
+def test_nobody_marks_an_existing_password_as_initial(database: Database, world: World) -> None:
+    with app_transaction(database, _member(world)) as conn:
+        assert not _update_applies(conn, world.alice, "password_change_required", True)
+    with app_transaction(database, _tenant_admin(world, instance_admin=True)) as conn:
+        assert not _update_applies(conn, world.alice, "password_change_required", True)
+
+
+@pytest.mark.spec("AUTH-008")
+@pytest.mark.parametrize(("column", "value"), [("role", "member"), ("disabled_at", A_TIME)])
+def test_only_instance_admins_change_the_role_or_account_state_of_an_instance_admin(
+    database: Database, world: World, column: str, value: object
+) -> None:
+    _arrange(database, world.alice, "role", "tenant_admin")
+    _arrange(database, world.alice, "instance_admin", True)
+    with app_transaction(database, _tenant_admin(world)) as conn:
+        assert not _update_applies(conn, world.alice, column, value)
+    with app_transaction(database, _tenant_admin(world, instance_admin=True)) as conn:
+        assert _update_applies(conn, world.alice, column, value)
 
 
 @dataclass(frozen=True)

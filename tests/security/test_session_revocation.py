@@ -1,4 +1,4 @@
-"""Disabling an account ends its sessions (AUTH-009, ADR-0048).
+"""Disabling an account ends its sessions (AUTH-009, ADR-0048, ADR-0105).
 
 The tenant admin disables the account as `sibillo_app`; whether a session is
 revoked is read as the server reads it on every request, through
@@ -13,7 +13,7 @@ import psycopg
 import pytest
 
 from tests.support.database import Context, Database, app_transaction, uuid7
-from tests.support.world import User, World
+from tests.support.world import User, World, disable_user
 
 A_TIME = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
 
@@ -32,6 +32,10 @@ def _add_session(database: Database, user: User) -> bytes:
             (uuid7(), user.tenant_id, user.id, token_hash),
         )
     return token_hash
+
+
+def _found(conn: psycopg.Connection, token_hash: bytes) -> list[tuple[object, ...]]:
+    return conn.execute("SELECT session_id FROM auth_find_session(%s)", (token_hash,)).fetchall()
 
 
 def _revoked(conn: psycopg.Connection, token_hash: bytes) -> bool:
@@ -55,9 +59,25 @@ def test_disabling_an_account_revokes_every_session(database: Database, world: W
     with app_transaction(database, _tenant_admin(world)) as conn:
         assert not _revoked(conn, world.alice.token_hash)
         _set_disabled(conn, world.alice, disabled=True)
-        # In the same transaction as the change.
+        # A disabled account has no session at all; re-enabling it shows that
+        # the sessions were revoked, in the same transaction as the change.
+        assert _found(conn, world.alice.token_hash) == []
+        _set_disabled(conn, world.alice, disabled=False)
         assert _revoked(conn, world.alice.token_hash)
         assert _revoked(conn, second)
+
+
+@pytest.mark.spec("AUTH-009")
+def test_sessions_opened_as_the_account_was_disabled_are_rejected(database: Database, world: World) -> None:
+    # A sign-in in flight: its session is created after the account was
+    # disabled, so the revoking trigger never saw it.
+    disable_user(database, world.alice)
+    late = _add_session(database, world.alice)
+    with app_transaction(database, None) as conn:
+        assert _found(conn, late) == []
+        assert _found(conn, world.alice.token_hash) == []
+        # Control: another user's session is found.
+        assert len(_found(conn, world.anna.token_hash)) == 1
 
 
 @pytest.mark.spec("AUTH-009")
