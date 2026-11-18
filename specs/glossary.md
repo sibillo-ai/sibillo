@@ -27,6 +27,7 @@ new entry here first (ADR-0005).
 |---|---|
 | Conversation | An independent chat between a user and the assistant, with its own history. A user has many. |
 | Attachment | A file the user adds to a message, uploaded into `/workspace/uploads/` of the conversation's workspace (CNV-017, ADR-0079). |
+| Share | What another app hands to the installed web app through the system's share sheet: a title, a text, a link and files, kept on the device until the app offers them as a new chat (UX-006, ADR-0102). |
 | Message | One entry in a conversation, from the user or the assistant. |
 | Turn | A user message and the runs that answer it: the run the message starts, and the resume runs that continue it (ADR-0090). |
 | Folder | A user's named group of conversations in the conversation list; carries no instructions or settings (CNV-007). |

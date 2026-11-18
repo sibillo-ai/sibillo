@@ -252,6 +252,13 @@ service worker with the DevTools protocol's
 `ServiceWorker.deliverPushMessage`, and read the notifications it shows with
 `ServiceWorkerRegistration.getNotifications()` (ADR-0101).
 
+Chromium in tests has no share sheet. Tests of sharing into the app
+(ADR-0102) wait until the app's service worker controls the page, then
+submit from the page a form to `/share`, as the system does: a
+`multipart/form-data` POST with the fields `title`, `text`, `url` and
+`files`, whose files the test sets on the form's file input. The
+navigation it starts reaches the service worker as a share would.
+
 Tests of passkeys open the app at `http://localhost:PORT/`, the origin the
 API is given, and answer the browser's WebAuthn prompts with Chromium's
 virtual authenticator, through the DevTools protocol: a platform

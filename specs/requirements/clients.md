@@ -122,14 +122,21 @@ Rationale: journey J9; persona P2 brainstorms while driving.
 
 ## UX-006: Sharing into the app
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 1
-- **Verification:** e2e
+- **Verification:** integration, e2e
 
 On devices that support it, the installed web app SHOULD accept text, links,
 images and files shared from other apps, and offer to start a conversation
-with them as attachments.
+with them: a new chat whose message box holds the shared text and link, with
+the shared files attached (CNV-017). Clients MUST NOT send anything shared
+until the user sends it, and MUST say above the message box that its content
+was shared from another app. A share MUST stay on the device until it is
+offered, and MUST be offered only to a user signed in within an hour of
+sharing. When nothing arrives, clients MUST say so (UX-014) (ADR-0102).
+
+Rationale: journey J5.
 
 ## UX-007: Accessibility
 
