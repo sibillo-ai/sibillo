@@ -76,7 +76,7 @@ tenant-scoped data.
 
 ## TEN-007: Private by default
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** security
@@ -91,7 +91,7 @@ share MUST be the tenant's configuration that its tenant admins manage
 
 ## TEN-008: Partitioned file storage
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** security

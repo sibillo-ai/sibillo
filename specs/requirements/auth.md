@@ -119,7 +119,7 @@ passkey MUST require the user's password (ADR-0094).
 
 ## AUTH-011: Changing one's password
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
@@ -131,7 +131,7 @@ their password: no tenant admin and no other user (ADR-0105).
 
 ## AUTH-012: An initial password is replaced at the first sign-in
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** integration, security
