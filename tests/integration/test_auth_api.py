@@ -61,6 +61,7 @@ def test_login_creates_a_device_session(server: Server, account: Account) -> Non
         "display_name": "Test user",
         "role": "member",
         "instance_admin": False,
+        "password_change_required": False,
         "created_at": user["created_at"],
     }
 
