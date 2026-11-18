@@ -85,6 +85,11 @@
     "hint": "This chat won't be in your list or your search, and it's deleted when you leave it.",
     "notice": "Temporary chat: not in your list, and deleted when you leave it."
   },
+  "share": {
+    "fromAnotherApp": "Shared from another app. Check the message and its files before you send them.",
+    "nothing": "Nothing arrived from the other app.",
+    "nothingHint": "You can share it again, or attach the files in this chat."
+  },
   "welcome": {
     "morning": "Good morning, {{name}}.",
     "afternoon": "Good afternoon, {{name}}.",

@@ -1,7 +1,9 @@
 """The web app, served at `/` next to the API (UX-001, ADR-0067).
 
 The app is a static single-page app: its files are served as they are, and
-any other path outside the API loads the app, which routes it itself. Every
+any other path outside the API loads the app, which routes it itself. A share
+from another app that reaches the API rather than the app's service worker
+opens the app, which says that nothing arrived (UX-006, ADR-0102). Every
 response carries a Content Security Policy that allows only the app's own
 scripts (UX-002).
 """
@@ -47,6 +49,11 @@ def router(root: Path) -> APIRouter:
     root = root.resolve()
     index = root / "index.html"
     routes = APIRouter(include_in_schema=False)
+
+    @routes.post("/share")
+    async def share() -> Response:  # pyright: ignore[reportUnusedFunction]
+        # What was shared is not read: the service worker keeps shares on the device, never the server.
+        return Response(status_code=303, headers=HEADERS | {"Location": "/?shared=1", "Cache-Control": "no-store"})
 
     @routes.get("/{path:path}")
     async def serve(path: str) -> Response:  # pyright: ignore[reportUnusedFunction]

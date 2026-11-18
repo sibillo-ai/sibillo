@@ -26,6 +26,13 @@ export default defineConfig({
         display: "standalone",
         background_color: "#faf9f6",
         theme_color: "#faf9f6",
+        // Other apps share text, links and files into a new chat (UX-006, ADR-0102).
+        share_target: {
+          action: "/share",
+          method: "POST",
+          enctype: "multipart/form-data",
+          params: { title: "title", text: "text", url: "url", files: [{ name: "files", accept: ["*/*"] }] },
+        },
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },

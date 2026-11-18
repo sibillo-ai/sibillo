@@ -24,9 +24,11 @@ export function Composer(props: {
   placeholder: string;
   // Take the focus when shown, on devices with a keyboard (UX-018).
   autoFocus?: boolean;
+  // The text the box starts with, as what another app shared (UX-006).
+  initialText?: string;
 }) {
   const { t } = useTranslation();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(props.initialText ?? "");
   const models = useModels();
   const chosen = findModel(models.data?.items, props.model);
   const area = useRef<HTMLTextAreaElement>(null);

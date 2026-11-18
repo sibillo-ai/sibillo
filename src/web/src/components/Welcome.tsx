@@ -1,11 +1,13 @@
-import { Ghost, RefreshCw } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { Ghost, RefreshCw, Share2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import type { ModelChoice, User } from "../api/client";
 import { createConversation, useRefreshConversations } from "../conversations";
 import { useModels } from "../models";
+import { useNotify } from "../notices";
+import { messageOf, takeShare } from "../share";
 import { type AttachedFile, useAttachments } from "../workspace";
 import { Composer } from "./Composer";
 import { Sprite } from "./Sprite";
@@ -42,6 +44,30 @@ export function Welcome({ me }: { me: User }) {
     return created.current;
   }, [chosen, temporary]);
   const attachments = useAttachments(conversation);
+
+  // A share from another app, which the service worker kept: offered once, and sent only by the user (UX-006, ADR-0102).
+  const [params] = useSearchParams();
+  const shared = params.get("shared") === "1";
+  const notify = useNotify();
+  const [draft, setDraft] = useState<{ text: string; key: number } | null>(null);
+  const taking = useRef(false);
+  const add = attachments.add;
+  useEffect(() => {
+    if (!shared || taking.current) return;
+    taking.current = true;
+    void (async () => {
+      const share = await takeShare().catch(() => undefined);
+      taking.current = false;
+      await navigate("/", { replace: true });
+      const text = share === undefined ? "" : messageOf(share);
+      if (share === undefined || (text === "" && share.files.length === 0)) {
+        notify({ kind: "error", title: t("share.nothing"), text: t("share.nothingHint") });
+        return;
+      }
+      setDraft({ text, key: Date.now() });
+      if (share.files.length > 0) add(share.files);
+    })();
+  }, [shared, navigate, notify, t, add]);
 
   async function start(text: string, files: AttachedFile[], voice?: VoiceMode) {
     const id = await conversation();
@@ -93,7 +119,23 @@ export function Welcome({ me }: { me: User }) {
             </figure>
           )}
         </div>
-        <Composer onSend={(text, files, voice) => void start(text, files, voice)} attachments={attachments} running={false} model={model} onModel={setChosen} placeholder={t("welcome.placeholder")} autoFocus />
+        {draft !== null && (
+          <p className="-mb-4 flex items-center gap-2 px-2 text-sm text-muted">
+            <Share2 className="size-4 flex-none" aria-hidden="true" />
+            {t("share.fromAnotherApp")}
+          </p>
+        )}
+        <Composer
+          key={draft?.key ?? 0}
+          initialText={draft?.text ?? ""}
+          onSend={(text, files, voice) => void start(text, files, voice)}
+          attachments={attachments}
+          running={false}
+          model={model}
+          onModel={setChosen}
+          placeholder={t("welcome.placeholder")}
+          autoFocus
+        />
       </div>
     </div>
   );

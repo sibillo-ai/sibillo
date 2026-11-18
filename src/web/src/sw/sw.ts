@@ -1,12 +1,32 @@
-// The app's service worker (UX-001, ADR-0067): it caches only the app's own files and never the API, and
-// shows notifications, which carry no content, with a fixed text for each kind (UX-004, ADR-0101).
+// The app's service worker (UX-001, ADR-0067): it caches only the app's own files and never the API, shows
+// notifications, which carry no content, with a fixed text for each kind (UX-004, ADR-0101), and receives
+// shares from other apps (UX-006, ADR-0102).
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 
 import { notifications as strings } from "../locales/en.json";
 import { notificationOf } from "../notifications";
+import { keepShare, shareOf } from "../share";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<string | { url: string; revision: string | null }> };
+
+// A share from another app: kept on the device, and offered by the app as a new chat. Only a navigation, as
+// the share sheet makes, so that no script leaves a share behind without opening the app. Nothing is sent.
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== "POST" || request.mode !== "navigate" || url.origin !== self.location.origin || url.pathname !== "/share") return;
+  event.respondWith(
+    (async () => {
+      try {
+        await keepShare(shareOf(await request.formData(), Date.now()));
+      } catch {
+        // Too large to keep, or unreadable: the app says that nothing arrived.
+      }
+      return Response.redirect(new URL("/?shared=1", self.location.origin).href, 303);
+    })(),
+  );
+});
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
