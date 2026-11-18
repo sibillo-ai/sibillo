@@ -72,6 +72,22 @@ def test_the_app_runs_only_its_own_scripts(web: str) -> None:
     assert directives["frame-ancestors"] == "frame-ancestors 'none'"
 
 
+@pytest.mark.spec("UX-006")
+def test_a_share_that_reaches_the_api_opens_the_app_which_says_nothing_arrived(web: str) -> None:
+    # The service worker answers a share itself; one that reaches the API is not kept (ADR-0102).
+    response = httpx.post(
+        f"{web}/share",
+        data={"title": "A recipe", "text": "Try this one", "url": "https://example.org/recipe"},
+        files={"files": ("photo.jpg", b"\xff\xd8\xff" + b"0" * 1024, "image/jpeg")},
+        timeout=10,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?shared=1"
+    assert response.headers["content-security-policy"]
+    # Only the share address takes a POST.
+    assert httpx.post(f"{web}/settings", data={"text": "x"}, timeout=10).status_code in {404, 405}
+
+
 @pytest.mark.spec("UX-001")
 def test_without_a_built_app_only_the_api_is_served(server: Server) -> None:
     origin = server.base_url.removesuffix("/v1")

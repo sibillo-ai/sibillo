@@ -1,4 +1,5 @@
-"""The web app loads everything from the instance (OBS-006, ADR-0072, ADR-0070).
+"""The web app loads everything from the instance, and is a share target (OBS-006, UX-006, ADR-0070, ADR-0072,
+ADR-0102).
 
 The built app is read as files: its pages, styles, manifest and the list of
 files the service worker caches. None may name a script, style, font, icon
@@ -53,3 +54,15 @@ def test_the_fonts_are_part_of_the_app(web_build: Path) -> None:
     fonts = [path.name for path in web_build.rglob("*") if path.suffix in {".woff2", ".woff"}]
     for family in ("hanken", "newsreader", "jetbrains"):
         assert any(family in name.lower() for name in fonts), f"no {family} font in the build: {sorted(fonts)}"
+
+
+@pytest.mark.spec("UX-006")
+def test_the_app_is_a_share_target_for_text_links_and_files(web_build: Path) -> None:
+    manifest = json.loads((web_build / "manifest.webmanifest").read_text())
+    target = manifest["share_target"]
+    assert target["action"] == "/share"
+    assert target["method"] == "POST"
+    assert target["enctype"] == "multipart/form-data"
+    params = target["params"]
+    assert (params["title"], params["text"], params["url"]) == ("title", "text", "url")
+    assert params["files"] == [{"name": "files", "accept": ["*/*"]}]
