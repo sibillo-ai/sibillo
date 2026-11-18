@@ -122,7 +122,7 @@ Rationale: journey J9; persona P2 brainstorms while driving.
 
 ## UX-006: Sharing into the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** integration, e2e
