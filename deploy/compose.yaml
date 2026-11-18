@@ -9,6 +9,14 @@
 
 name: sibillo
 
+# Logs stay in Docker, for `docker compose logs`, at most 3 files of 10 MB
+# per service, the oldest dropped first (OBS-005, ADR-0104).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 x-server: &server
   image: sibillo/server:local
   build:
@@ -16,6 +24,7 @@ x-server: &server
     dockerfile: deploy/images/server/Dockerfile
   networks: [internal]
   restart: unless-stopped
+  logging: *logging
 
 x-app-database: &app-database
   SIBILLO_DATABASE_URL: postgresql://sibillo_app:${SIBILLO_APP_PASSWORD:-}@postgres:5432/sibillo
@@ -44,6 +53,7 @@ volumes:
 services:
   postgres:
     image: postgres:17.6
+    logging: *logging
     environment:
       POSTGRES_PASSWORD: ${SIBILLO_POSTGRES_PASSWORD:-}
       SIBILLO_OWNER_PASSWORD: ${SIBILLO_OWNER_PASSWORD:-}
@@ -120,6 +130,7 @@ services:
 
   sandboxd:
     image: sibillo/sandboxd:local
+    logging: *logging
     build:
       context: ..
       dockerfile: deploy/images/sandboxd/Dockerfile
@@ -217,6 +228,7 @@ services:
 
   netguard:
     image: sibillo/netguard:local
+    logging: *logging
     build:
       context: ..
       dockerfile: deploy/images/netguard/Dockerfile
@@ -233,6 +245,7 @@ services:
   # Builds the sandbox image for the driver, then exits.
   sandbox:
     image: sibillo/sandbox:local
+    logging: *logging
     build:
       context: ..
       dockerfile: deploy/images/sandbox/Dockerfile
