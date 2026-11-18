@@ -15,7 +15,7 @@ to any external service unless the instance admin explicitly configures it.
 
 ## OBS-002: No metrics
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** design
@@ -49,7 +49,7 @@ itself off automatically after at most 24 hours.
 
 ## OBS-005: Logs bounded by size
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 1
 - **Verification:** design
