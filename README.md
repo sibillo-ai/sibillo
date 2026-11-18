@@ -218,6 +218,20 @@ can be up to 1 GB (`SIBILLO_UPLOAD_MAX_MB`), and nginx refuses anything over
 client_max_body_size 1g;
 ```
 
+**Passwords**
+
+A household's administrator creates each member's account with a first
+password (AUTH-002). That password only signs them in the first time: the
+app then asks them to choose their own and shows nothing else until they do,
+so that the administrator never knows the password they use (AUTH-012,
+ADR-0105). Through the API, such an account is answered `403` with
+`auth.password_change_required` until it calls `POST /v1/me/password`.
+
+Anyone changes their password in **Settings**, then **Security**, with their
+current one; their other devices are then signed out (AUTH-011). Nobody else
+can change it, not even an administrator, so a forgotten password cannot be
+recovered yet.
+
 **Passkeys**
 
 Each person can protect their account with passkeys, so that signing in
