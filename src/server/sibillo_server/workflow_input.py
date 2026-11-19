@@ -48,6 +48,10 @@ class RunWorkflowInput:
     approvals: dict[str, Any] = field(default_factory=dict[str, Any])
     # How the message came, when it was not typed: `dictated` or `hands_free` (UX-005, ADR-0088).
     voice: str | None = None
+    # For the first run of a task's firing: the event that fired it, untrusted content, and whether the run
+    # uses memory (TSK-002, ADR-0106).
+    event: dict[str, Any] | None = None
+    use_memory: bool = True
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))

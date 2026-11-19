@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, Blocks, Bot, Brain, Cable, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
@@ -18,6 +18,7 @@ import { NotificationsSection } from "./NotificationSettings";
 import { PasswordSection } from "./Password";
 import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
+import { TasksSection } from "./TaskSettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
 
 type SpeechSettings = Schemas["SpeechSettings"];
@@ -29,7 +30,7 @@ const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[
 const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
-type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
+type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "tasks" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
@@ -38,7 +39,7 @@ interface TabItem {
 }
 
 /**
- * The settings: for everyone their assistant (CNV-013, CNV-014), their memory (UX-027), notifications on this device
+ * The settings: for everyone their assistant (CNV-013, CNV-014), their tasks (UX-031), their memory (UX-027), notifications on this device
  * (UX-004), their passkeys (UX-026) and the theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
  */
 export function Settings({ me }: { me: User }) {
@@ -46,6 +47,7 @@ export function Settings({ me }: { me: User }) {
   const admin = me.role === "tenant_admin";
   const yours: TabItem[] = [
     { id: "assistant", label: t("assistant.title"), icon: <Bot className="size-[18px]" aria-hidden="true" /> },
+    { id: "tasks", label: t("settings.tasks"), icon: <CalendarClock className="size-[18px]" aria-hidden="true" /> },
     { id: "memory", label: t("settings.memory"), icon: <Brain className="size-[18px]" aria-hidden="true" /> },
     { id: "skills", label: t("settings.skills"), icon: <Sparkles className="size-[18px]" aria-hidden="true" /> },
     { id: "services", label: t("mcp.services.title"), icon: <Cable className="size-[18px]" aria-hidden="true" /> },
@@ -93,6 +95,8 @@ export function Settings({ me }: { me: User }) {
             <NotificationsSection />
           ) : tab === "assistant" ? (
             <AssistantSection />
+          ) : tab === "tasks" ? (
+            <TasksSection />
           ) : tab === "memory" ? (
             <MemorySection />
           ) : tab === "skills" ? (

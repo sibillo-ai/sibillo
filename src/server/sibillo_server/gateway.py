@@ -130,6 +130,12 @@ class RunDeps:
     # as memory is. And how long a call to one may take (AGT-019, ADR-0099).
     mcp: Any = None
     mcp_call_seconds: float = 120
+    # Whether the run is of a task's first turn, which nobody watches, and the task's grants it follows, as
+    # `task_policy.Grant`s; typed loosely, as memory is (TSK-004, ADR-0106). And the origin users open, for
+    # what a proposed task says of its webhook address.
+    unattended: bool = False
+    grants: tuple[Any, ...] = ()
+    public_origin: str | None = None
     location: str = "remote"
     prices: dict[str, Any] = field(default_factory=dict[str, Any])
     # The model's context window, and what the run used so far (MOD-007, ADR-0073).

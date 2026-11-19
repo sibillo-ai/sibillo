@@ -2,8 +2,8 @@
 
 Tables, row-level security, policies, privileges and the pre-authentication
 functions (TEN-001 to TEN-004, TEN-006, AUTH-001, AUTH-004, AUTH-006 to
-AUTH-009, AUTH-010, MOD-008, MOD-009; ADR-0009, ADR-0046 to ADR-0049, ADR-0052,
-ADR-0068, ADR-0069, ADR-0094). Roles and the database itself are created before any
+AUTH-009, AUTH-010, MOD-008, MOD-009, TSK-001 to TSK-010; ADR-0009, ADR-0046 to
+ADR-0049, ADR-0052, ADR-0068, ADR-0069, ADR-0094, ADR-0106). Roles and the database itself are created before any
 migration, by the initialization of the contract. Until the first release,
 this one migration is rewritten whenever the contract changes (ADR-0071).
 
@@ -33,6 +33,10 @@ CONTRACT_TABLES = (
     "served_context_windows",
     "mcp_servers",
     "mcp_server_tools",
+    "mcp_server_events",
+    "tasks",
+    "task_grants",
+    "task_triggers",
     "folders",
     "user_settings",
     "memory_items",
@@ -50,6 +54,7 @@ CONTRACT_TABLES = (
     "audit_events",
     "mcp_credentials",
     "mcp_sign_ins",
+    "task_firings",
 )
 # Who may write a row of `egress_policies`: an admin what admins set, a user their own choice (MOD-003).
 EGRESS_WRITER = (
@@ -57,7 +62,7 @@ EGRESS_WRITER = (
     " OR (set_by = 'user' AND user_id = app_user_id()))"
 )
 # Tables of a tenant that every user of it reads and its tenant admins change (ADR-0069).
-TENANT_TABLES = ("connections", "connection_models", "mcp_servers", "mcp_server_tools")
+TENANT_TABLES = ("connections", "connection_models", "mcp_servers", "mcp_server_tools", "mcp_server_events")
 PRIVATE_TABLES = (
     "folders",
     "user_settings",
@@ -75,6 +80,10 @@ PRIVATE_TABLES = (
     "notification_subscriptions",
     "mcp_credentials",
     "mcp_sign_ins",
+    "tasks",
+    "task_grants",
+    "task_triggers",
+    "task_firings",
 )
 # The tools a user can switch off, every tool by its name (CNV-013, ADR-0081, ADR-0087).
 TOOL_NAMES = (
@@ -104,7 +113,8 @@ TOOL_NAMES = (
     "'remember', "
     "'update_memory', "
     "'forget', "
-    "'save_skill'"
+    "'save_skill', "
+    "'propose_task'"
     "]"
 )
 # The capability classes of tools (AGT-005, ADR-0012).
@@ -367,6 +377,107 @@ TABLES = [
       CHECK ((accepted IS NULL) = (accepted_at IS NULL))
     )
     """,
+    # The event types of a remote MCP server, as last listed and as accepted (TSK-008, ADR-0106).
+    """
+    CREATE TABLE mcp_server_events (
+      tenant_id uuid NOT NULL,
+      server_id uuid NOT NULL,
+      name text NOT NULL CHECK (name <> ''),
+      listed jsonb,
+      accepted jsonb,
+      problem text CHECK (
+        problem IN ('name', 'description_too_long', 'schema_too_large', 'too_many_events', 'no_supported_delivery')
+      ),
+      accepted_at timestamptz,
+      PRIMARY KEY (server_id, name),
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE,
+      CHECK ((accepted IS NULL) = (accepted_at IS NULL))
+    )
+    """,
+    # A user's tasks, which start conversations on their own (TSK-001, ADR-0106).
+    f"""
+    CREATE TABLE tasks (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 100),
+      instructions text NOT NULL CHECK (char_length(instructions) BETWEEN 1 AND 20000),
+      connection_id uuid,
+      model text CHECK (model <> ''),
+      reasoning text NOT NULL DEFAULT 'on' CHECK (reasoning IN ('off', 'on', 'deep')),
+      disabled_tools text[] NOT NULL DEFAULT '{{}}' CHECK (disabled_tools <@ {TOOL_NAMES}),
+      disabled_skills text[] NOT NULL DEFAULT '{{}}',
+      disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
+      uses_memory boolean NOT NULL DEFAULT false,
+      time_zone text NOT NULL CHECK (char_length(time_zone) BETWEEN 1 AND 64),
+      paused_at timestamptz,
+      skipped_count integer NOT NULL DEFAULT 0 CHECK (skipped_count >= 0),
+      last_skipped_at timestamptz,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      UNIQUE (tenant_id, owner_id, id),
+      UNIQUE (owner_id, name),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE SET NULL (connection_id)
+    )
+    """,
+    # The calls a task's runs may make without approval (TSK-004, TSK-005, ADR-0106).
+    """
+    CREATE TABLE task_grants (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      task_id uuid NOT NULL,
+      tool text NOT NULL CHECK (tool ~ '^[A-Za-z0-9_-]{1,64}$'),
+      server_id uuid,
+      arguments jsonb CHECK (arguments IS NULL OR (jsonb_typeof(arguments) = 'object'
+        AND octet_length(arguments::text) <= 4096)),
+      created_at timestamptz NOT NULL,
+      -- Open grants never cover a server's tool.
+      CHECK (server_id IS NULL OR arguments IS NOT NULL),
+      UNIQUE NULLS NOT DISTINCT (task_id, tool, arguments),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, owner_id, task_id) REFERENCES tasks (tenant_id, owner_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    # What fires a task (TSK-003, TSK-007, TSK-008, ADR-0106).
+    """
+    CREATE TABLE task_triggers (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      task_id uuid NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('schedule', 'webhook', 'mcp_event')),
+      schedule text,
+      next_fire_at timestamptz,
+      token_hash bytea UNIQUE,
+      server_id uuid,
+      server_generation uuid,
+      event_name text,
+      event_arguments jsonb CHECK (event_arguments IS NULL OR (jsonb_typeof(event_arguments) = 'object'
+        AND octet_length(event_arguments::text) <= 4096)),
+      delivery text CHECK (delivery IN ('poll', 'webhook')),
+      cursor text,
+      next_poll_at timestamptz,
+      secret_ciphertext bytea,
+      refresh_before timestamptz,
+      problem text CHECK (
+        problem IN ('not_accepted', 'credential_missing', 'unauthorized', 'unreachable', 'terminated')
+      ),
+      created_at timestamptz NOT NULL,
+      UNIQUE (tenant_id, owner_id, id),
+      CHECK ((kind = 'schedule') = (schedule IS NOT NULL)),
+      CHECK ((kind = 'webhook') = (token_hash IS NOT NULL)),
+      CHECK ((kind = 'mcp_event') = (server_id IS NOT NULL AND event_name IS NOT NULL AND delivery IS NOT NULL)),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, owner_id, task_id) REFERENCES tasks (tenant_id, owner_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX task_triggers_next_fire_at_idx ON task_triggers (next_fire_at)",
+    "CREATE INDEX task_triggers_next_poll_at_idx ON task_triggers (next_poll_at)",
+    "CREATE INDEX task_triggers_task_idx ON task_triggers (task_id)",
     # A user's memory: the only copy of what the assistant remembers about them (MEM-001 to MEM-008, ADR-0095).
     """
     CREATE TABLE memory_items (
@@ -475,6 +586,9 @@ TABLES = [
       pending_interrupts jsonb,
       approvals_expire_at timestamptz,
       temporary boolean NOT NULL DEFAULT false,
+      -- The task whose firing started it, and its name then (TSK-002, ADR-0106).
+      task_id uuid,
+      task_name text,
       archived_at timestamptz,
       -- The model of the conversation (MOD-012); a removed connection leaves the model without one.
       connection_id uuid,
@@ -506,9 +620,11 @@ TABLES = [
         REFERENCES folders (tenant_id, owner_id, id) ON DELETE SET NULL (folder_id),
       FOREIGN KEY (tenant_id, owner_id, forked_from_conversation_id)
         REFERENCES conversations (tenant_id, owner_id, id) ON DELETE SET NULL (forked_from_conversation_id),
-      FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE SET NULL (connection_id)
+      FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE SET NULL (connection_id),
+      FOREIGN KEY (tenant_id, owner_id, task_id) REFERENCES tasks (tenant_id, owner_id, id) ON DELETE SET NULL (task_id)
     )
     """,
+    "CREATE INDEX conversations_task_idx ON conversations (task_id)",
     # The task list of a conversation (UX-009, ADR-0083).
     """
     CREATE TABLE conversation_plans (
@@ -531,6 +647,8 @@ TABLES = [
       kind text NOT NULL CHECK (kind IN ('message', 'resume')),
       -- The web and commands allowed for the rest of the turn (ADR-0090).
       turn_allows_web_and_commands boolean NOT NULL DEFAULT false,
+      -- The calls of the run follow its conversation's task's grants (TSK-004, ADR-0106).
+      task_grants boolean NOT NULL DEFAULT false,
       status text NOT NULL CHECK (status IN ('queued', 'running', 'interrupted', 'completed', 'failed', 'cancelled')),
       error_code text,
       connection_id uuid,
@@ -684,6 +802,34 @@ TABLES = [
       FOREIGN KEY (tenant_id, server_id) REFERENCES mcp_servers (tenant_id, id) ON DELETE CASCADE
     )
     """,
+    # The firings of a task that wait, run or ran: one firing, one conversation (TSK-002, TSK-009, ADR-0106).
+    """
+    CREATE TABLE task_firings (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      task_id uuid NOT NULL,
+      trigger_id uuid,
+      trigger_kind text NOT NULL CHECK (trigger_kind IN ('schedule', 'webhook', 'mcp_event')),
+      fire_key text NOT NULL,
+      event jsonb,
+      status text NOT NULL CHECK (status IN ('waiting', 'running', 'done')),
+      without_grants boolean NOT NULL DEFAULT false,
+      conversation_id uuid,
+      created_at timestamptz NOT NULL,
+      started_at timestamptz,
+      finished_at timestamptz,
+      UNIQUE (task_id, fire_key),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, owner_id, task_id) REFERENCES tasks (tenant_id, owner_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, owner_id, trigger_id)
+        REFERENCES task_triggers (tenant_id, owner_id, id) ON DELETE SET NULL (trigger_id),
+      FOREIGN KEY (tenant_id, owner_id, conversation_id)
+        REFERENCES conversations (tenant_id, owner_id, id) ON DELETE SET NULL (conversation_id)
+    )
+    """,
+    "CREATE INDEX task_firings_task_created_at_idx ON task_firings (task_id, created_at)",
+    "CREATE UNIQUE INDEX task_firings_one_running_idx ON task_firings (task_id) WHERE status = 'running'",
     # A tenant admin's settings of tools for each user (AGT-002, ADR-0090).
     f"""
     CREATE TABLE tool_permissions (
@@ -729,10 +875,12 @@ TABLES = [
       tool_call_id text NOT NULL,
       tool text NOT NULL,
       outcome text NOT NULL
-        CHECK (outcome IN ('not_needed', 'allowed', 'approved', 'denied', 'expired', 'refused')),
+        CHECK (outcome IN ('not_needed', 'allowed', 'approved', 'denied', 'expired', 'refused', 'granted',
+                           'not_granted')),
       scope text CHECK (scope IN ('once', 'turn', 'conversation')),
       reason text
-        CHECK (reason IN ('untrusted_content', 'tool_default', 'permission', 'consequential', 'device')),
+        CHECK (reason IN ('untrusted_content', 'tool_default', 'permission', 'consequential', 'device',
+                          'task_proposal')),
       attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
       created_at timestamptz NOT NULL,
       UNIQUE (run_id, tool_call_id),
@@ -971,6 +1119,70 @@ PRE_AUTHENTICATION_FUNCTIONS = [
         AND NOT EXISTS (
           SELECT 1 FROM public.runs r WHERE r.conversation_id = c.id AND r.status IN ('queued', 'running')
         )
+    $$
+    """,
+    # The work of tasks, found before any request context (ADR-0106): only identifiers, so the worker does it
+    # under the owner's context. Nothing of a paused task or of a disabled account is due.
+    """
+    CREATE FUNCTION due_task_triggers()
+    RETURNS TABLE (trigger_id uuid, task_id uuid, tenant_id uuid, owner_id uuid, work text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+      SELECT g.id, g.task_id, g.tenant_id, g.owner_id,
+             CASE WHEN g.kind = 'schedule' THEN 'fire' WHEN g.delivery = 'poll' THEN 'poll' ELSE 'renew' END
+      FROM public.task_triggers g
+      JOIN public.tasks t ON t.id = g.task_id
+      JOIN public.users u ON u.tenant_id = g.tenant_id AND u.id = g.owner_id
+      WHERE t.paused_at IS NULL AND u.disabled_at IS NULL AND (
+        (g.kind = 'schedule' AND g.next_fire_at <= now())
+        OR (g.kind = 'mcp_event' AND g.delivery = 'poll' AND g.next_poll_at <= now())
+        OR (g.kind = 'mcp_event' AND g.delivery = 'webhook'
+            AND (g.refresh_before IS NULL OR g.refresh_before < now() + interval '10 minutes'))
+      )
+    $$
+    """,
+    # The oldest waiting firing of each task that runs none (TSK-009, ADR-0106).
+    """
+    CREATE FUNCTION waiting_task_firings()
+    RETURNS TABLE (firing_id uuid, task_id uuid, tenant_id uuid, owner_id uuid)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+      SELECT DISTINCT ON (f.task_id) f.id, f.task_id, f.tenant_id, f.owner_id
+      FROM public.task_firings f
+      JOIN public.users u ON u.tenant_id = f.tenant_id AND u.id = f.owner_id
+      WHERE f.status = 'waiting' AND u.disabled_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM public.task_firings r WHERE r.task_id = f.task_id AND r.status = 'running')
+      ORDER BY f.task_id, f.created_at, f.id
+    $$
+    """,
+    # The trigger of a request to a webhook trigger's address (TSK-007, ADR-0106).
+    """
+    CREATE FUNCTION find_webhook_trigger(token_hash bytea)
+    RETURNS TABLE (trigger_id uuid, task_id uuid, tenant_id uuid, owner_id uuid, paused boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+      SELECT g.id, g.task_id, g.tenant_id, g.owner_id, t.paused_at IS NOT NULL
+      FROM public.task_triggers g
+      JOIN public.tasks t ON t.id = g.task_id
+      JOIN public.users u ON u.tenant_id = g.tenant_id AND u.id = g.owner_id
+      WHERE g.kind = 'webhook' AND g.token_hash = $1 AND u.disabled_at IS NULL
+    $$
+    """,
+    # The subscription of a delivery of MCP events by webhook, with its secret to check (TSK-008, ADR-0106).
+    """
+    CREATE FUNCTION find_event_subscription(trigger_id uuid)
+    RETURNS TABLE (task_id uuid, tenant_id uuid, owner_id uuid, paused boolean, secret_ciphertext bytea)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+      SELECT g.task_id, g.tenant_id, g.owner_id, t.paused_at IS NOT NULL, g.secret_ciphertext
+      FROM public.task_triggers g
+      JOIN public.tasks t ON t.id = g.task_id
+      JOIN public.users u ON u.tenant_id = g.tenant_id AND u.id = g.owner_id
+      WHERE g.id = $1 AND g.kind = 'mcp_event' AND g.delivery = 'webhook' AND u.disabled_at IS NULL
     $$
     """,
     # Whether any household has a default model, for /health before any
@@ -1249,6 +1461,9 @@ OWNER_POLICIES = [
     "CREATE POLICY runs_owner_select ON runs FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY conversations_owner_select ON conversations FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY connections_owner_select ON connections FOR SELECT TO sibillo_owner USING (true)",
+    "CREATE POLICY tasks_owner_select ON tasks FOR SELECT TO sibillo_owner USING (true)",
+    "CREATE POLICY task_triggers_owner_select ON task_triggers FOR SELECT TO sibillo_owner USING (true)",
+    "CREATE POLICY task_firings_owner_select ON task_firings FOR SELECT TO sibillo_owner USING (true)",
 ]
 
 # "Privileges of sibillo_app" in the database contract (TEN-004).
@@ -1287,6 +1502,8 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, UPDATE, DELETE ON mcp_servers, mcp_server_tools, mcp_credentials TO sibillo_app",
     "GRANT SELECT, INSERT, DELETE ON mcp_sign_ins TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE ON served_context_windows TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON mcp_server_events, tasks, task_triggers, task_firings TO sibillo_app",
+    "GRANT SELECT, INSERT, DELETE ON task_grants TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON tool_permissions TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON egress_policies TO sibillo_app",
     # An audit event is written when its call is decided, and completed as it runs (ADR-0090).
@@ -1299,7 +1516,8 @@ PRIVILEGES = [
     """
     GRANT EXECUTE ON FUNCTION auth_find_login(text), auth_find_session(bytea), auth_touch_session(uuid),
       auth_record_login_attempt(text, inet, boolean), auth_take_sign_in(bytea), retention_expired_runs(integer),
-      expired_temporary_conversations(integer), expired_approvals(), default_model_configured()
+      expired_temporary_conversations(integer), expired_approvals(), default_model_configured(),
+      due_task_triggers(), waiting_task_firings(), find_webhook_trigger(bytea), find_event_subscription(uuid)
       TO sibillo_app
     """,
 ]
@@ -1337,6 +1555,10 @@ def downgrade() -> None:
             "DROP FUNCTION retention_expired_runs(integer)",
             "DROP FUNCTION expired_temporary_conversations(integer)",
             "DROP FUNCTION expired_approvals()",
+            "DROP FUNCTION due_task_triggers()",
+            "DROP FUNCTION waiting_task_firings()",
+            "DROP FUNCTION find_webhook_trigger(bytea)",
+            "DROP FUNCTION find_event_subscription(uuid)",
             "DROP FUNCTION revoke_sessions_of_disabled_user()",
             "DROP FUNCTION connections_guard()",
             "DROP FUNCTION mcp_servers_guard()",

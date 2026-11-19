@@ -40,7 +40,8 @@
     "pinned": "Pinned",
     "recent": "Recent",
     "dropToPin": "Drop here to pin",
-    "resizeList": "Resize the conversation list"
+    "resizeList": "Resize the conversation list",
+    "byTask": "Task: {{name}}"
   },
   "conversationMenu": {
     "label": "Options for {{title}}",
@@ -193,7 +194,9 @@
     "fork": "Fork from here",
     "forkedFrom": "Forked from another conversation",
     "newText": "New text",
-    "reasoning": "Reasoning"
+    "reasoning": "Reasoning",
+    "startedByTask": "Started by the task {{name}}",
+    "startedByDeletedTask": "Started by the task {{name}}, since deleted"
   },
   "activity": {
     "thinking": "Thinking…",
@@ -279,7 +282,8 @@
     "security": "Security",
     "members": "Members",
     "memory": "Memory",
-    "skills": "Skills"
+    "skills": "Skills",
+    "tasks": "Tasks"
   },
   "connection": {
     "title": "Add a connection",
@@ -452,7 +456,8 @@
       "questions": "Questions",
       "tasks": "Task list",
       "memory": "Memory",
-      "skills": "Skills"
+      "skills": "Skills",
+      "scheduled": "Tasks"
     },
     "toolNames": {
       "web_search": "Search the web",
@@ -480,7 +485,8 @@
       "remember": "Remember something",
       "update_memory": "Change a memory",
       "forget": "Forget a memory",
-      "save_skill": "Save a skill"
+      "save_skill": "Save a skill",
+      "propose_task": "Propose a task"
     },
     "cannotReason": "This model can't reason.",
     "additional": "Additional prompt",
@@ -563,7 +569,8 @@
       "tool_default": "This tool always asks before it runs.",
       "permission": "Your household's admin asked that this tool ask you before it runs.",
       "consequential": "This can't be undone, or acts in the real world, so it asks every time.",
-      "device": "Calls to your devices and connected services always ask."
+      "device": "Calls to your devices and connected services always ask.",
+      "task_proposal": "The assistant proposes a task that will run on its own, with the calls it may make without asking. Read them before you approve."
     },
     "outcomes": {
       "not_needed": "No approval needed",
@@ -573,13 +580,16 @@
       "expired": "Expired",
       "refused": "Turned off by your household's admin",
       "inChat": "Allowed in this chat",
-      "forTurn": "Allowed for this turn"
+      "forTurn": "Allowed for this turn",
+      "granted": "Granted to this task",
+      "not_granted": "Not allowed to this task"
     },
     "allowedInChat": "Allowed in this chat",
     "allowedHint": "What you allowed when the assistant asked. Withdraw it and it asks again.",
     "nothingAllowed": "Nothing allowed yet.",
     "webAndCommands": "Web and commands",
-    "withdraw": "Withdraw"
+    "withdraw": "Withdraw",
+    "proposalUntrusted": "This chat holds content from elsewhere, which may have asked for this task."
   },
   "permissions": {
     "title": "Tool permissions",
@@ -910,6 +920,106 @@
       "title": "Services",
       "hint": "Deny a service to take all of its tools away from this user.",
       "deny": "Deny"
+    }
+  },
+  "taskSettings": {
+    "title": "Tasks",
+    "hint": "Tasks start a conversation on their own, at the times you choose or when something happens, and you find the answer waiting. Each one may make only the calls you grant it, since nobody is there to approve them.",
+    "none": "No tasks yet.",
+    "list": "Your tasks",
+    "new": "New task",
+    "newHint": "Write what the assistant should do each time, as you would in a chat.",
+    "name": "Name",
+    "instructions": "Instructions",
+    "timeZone": "Time zone",
+    "triggers": "When it runs",
+    "addSchedule": "Add a schedule",
+    "addWebhook": "Add a webhook",
+    "addEvent": "Add an event",
+    "removeTrigger": "Remove",
+    "schedule": "Schedule",
+    "scheduleHint": "Five fields, as in cron: minute, hour, day of the month, month and day of the week. At most every 15 minutes.",
+    "event": "Event",
+    "eventArguments": "Its settings, as JSON",
+    "grants": "Grants",
+    "grantsHint": "What it may do without asking. A task can't use the web and read your private data at once: injected content could send your data out.",
+    "fixedGrant": "An exact call, as JSON",
+    "save": "Save",
+    "cancel": "Cancel",
+    "done": "Done",
+    "active": "Active",
+    "paused": "Paused",
+    "delete": "Delete",
+    "deleteLabel": "Delete {{name}}",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteBody": "It stops at once. The conversations it started stay.",
+    "replaceAddress": "Replace the webhook address",
+    "replaceTitle": "Replace the webhook address?",
+    "replaceBody": "The current address stops working at once, so anything that calls it must get the new one.",
+    "replace": "Replace",
+    "addressTitle": "Webhook address",
+    "addressBody": "Requests to this address start the task, with their body as the event. It is shown only once: copy it now.",
+    "address": "Address",
+    "webhookTrigger": "When its webhook address is called",
+    "eventTrigger": "When {{event}} happens",
+    "cron": "Schedule: {{schedule}}",
+    "next": "Next: {{when}}",
+    "everyMinutes": "Every {{count}} minutes",
+    "everyHour": "Every hour, at minute {{minute}}",
+    "everyDay": "Every day at {{time}}",
+    "weekdays": "At {{time}}, Monday to Friday",
+    "weekends": "At {{time}}, on weekends",
+    "onDays": "At {{time}}, on {{days}}",
+    "monthly": "At {{time}}, on day {{day}} of every month",
+    "days": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    },
+    "grantsSummary": "May do without asking: {{grants}}",
+    "withoutGrants": "Its grants could now send your data out, with your memory or its triggers as they are: it runs without them until you change it.",
+    "skipped": "{{count}} times it did not run, over its limit or while paused; the last on {{when}}.",
+    "trifecta": "These grants could send your data out without you knowing:",
+    "trifectaSources": "it would read private data ({{private}}), content from elsewhere ({{untrusted}}), and could send it out ({{out}}). Remove one of these.",
+    "grantNotAllowed": "One of the grants can't be given: {{detail}}",
+    "nameTaken": "You already have a task with this name, or too many tasks.",
+    "badJson": "The exact call, or an event's settings, are not valid JSON.",
+    "invalid": "Check the schedule, the time zone and the triggers.",
+    "back": "All tasks",
+    "conversations": "Conversations of this task",
+    "noConversations": "It hasn't run yet.",
+    "ranWithoutGrants": "Ran without its grants",
+    "outcomes": {
+      "queued": "Waiting",
+      "running": "Running",
+      "interrupted": "Waiting for you",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Stopped"
+    },
+    "problems": {
+      "not_accepted": "the event is no longer accepted",
+      "credential_missing": "connect your account to the service",
+      "unauthorized": "the service refused your account",
+      "unreachable": "the service can't be reached",
+      "terminated": "the service ended it"
+    },
+    "grantNames": {
+      "web_search": "Search the web",
+      "read_page": "Read web pages",
+      "read_file": "Read files",
+      "list_directory": "List folders",
+      "find_files": "Find files",
+      "search_files": "Search inside files",
+      "write_file": "Write files",
+      "edit_file": "Edit files",
+      "remember": "Remember things",
+      "memory": "your memory",
+      "event_trigger": "the event that starts it"
     }
   }
 }

@@ -33,6 +33,10 @@ from sibillo_server.credentials import uuid7
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
 from sibillo_server.encryption import decrypt, decrypt_labelled, encrypt, encrypt_labelled
 from sibillo_server.mcp_client import Listing, ServerError, Target, digest, list_tools, problems, reviewed
+from sibillo_server.mcp_events import EventType, list_event_types
+from sibillo_server.mcp_events import digest as event_digest
+from sibillo_server.mcp_events import problems as event_problems
+from sibillo_server.mcp_events import reviewed as event_reviewed
 from sibillo_server.mcp_oauth import (
     OAuthError,
     OAuthSettings,
@@ -331,6 +335,90 @@ async def _tools(connection: AsyncConnection, server: Server) -> list[schemas.Mc
     ]
 
 
+def event_status(listed: dict[str, Any] | None, accepted: dict[str, Any] | None, problem: str | None) -> str:
+    """Whether an event type may trigger tasks, and if not, why (TSK-008)."""
+    if accepted is not None:
+        if listed is None:
+            return "gone"
+        return "accepted" if problem is None and event_reviewed(listed) == accepted else "changed"
+    return "unusable" if problem is not None else "not_accepted"
+
+
+def _event_definition(listed: dict[str, Any]) -> schemas.McpEventTypeDefinition:
+    payload = listed.get("payloadSchema")
+    return schemas.McpEventTypeDefinition(
+        description=listed.get("description"),
+        input_schema=cast(dict[str, Any], listed.get("inputSchema") or {}),
+        payload_schema=cast(dict[str, Any], payload) if isinstance(payload, dict) else None,
+        delivery=[str(mode) for mode in cast(list[Any], listed.get("delivery") or [])],
+    )
+
+
+async def _event_types(connection: AsyncConnection, server: Server) -> list[schemas.McpServerEventType]:
+    rows = (
+        await connection.execute(
+            text(
+                "SELECT name, listed, accepted, problem, accepted_at FROM mcp_server_events WHERE server_id = :id"
+                " ORDER BY name"
+            ),
+            {"id": server.id},
+        )
+    ).all()
+    return [
+        schemas.McpServerEventType(
+            name=row.name,
+            status=cast(Any, event_status(row.listed, row.accepted, row.problem)),
+            listed=None if row.listed is None else _event_definition(row.listed),
+            accepted=None if row.accepted is None else _event_definition(row.accepted),
+            digest=None if row.listed is None else event_digest(row.listed),
+            problem=row.problem,
+            accepted_at=row.accepted_at,
+        )
+        for row in rows
+    ]
+
+
+async def store_event_types(
+    connection: AsyncConnection, server: Server, tenant_id: uuid.UUID, types: list[EventType]
+) -> None:
+    """Keep the event types as just listed, as tools are kept (TSK-008, ADR-0106)."""
+    found = event_problems(types)
+    for item in types:
+        await connection.execute(
+            text(
+                "INSERT INTO mcp_server_events (tenant_id, server_id, name, listed, problem)"
+                " VALUES (:tenant, :server, :name, CAST(:listed AS jsonb), :problem)"
+                " ON CONFLICT (server_id, name) DO UPDATE SET listed = EXCLUDED.listed, problem = EXCLUDED.problem"
+            ),
+            {
+                "tenant": tenant_id,
+                "server": server.id,
+                "name": item.name[:200],
+                "listed": json.dumps(item.listed()),
+                "problem": found[item.name],
+            },
+        )
+    await connection.execute(
+        text(
+            "UPDATE mcp_server_events SET listed = NULL, problem = NULL WHERE server_id = :server"
+            " AND NOT (name = ANY(:names))"
+        ),
+        {"server": server.id, "names": [item.name[:200] for item in types]},
+    )
+    await connection.execute(
+        text("DELETE FROM mcp_server_events WHERE server_id = :server AND listed IS NULL AND accepted IS NULL"),
+        {"server": server.id},
+    )
+
+
+async def _list_events(target: Target, token: str | None) -> list[EventType] | None:
+    """The server's event types, or `None` when they could not be listed: what was kept stays."""
+    try:
+        return await list_event_types(target, token)
+    except ServerError:
+        return None
+
+
 async def _view(connection: AsyncConnection, server: Server) -> schemas.McpServer:
     oauth = server.oauth
     return schemas.McpServer(
@@ -355,6 +443,7 @@ async def _view(connection: AsyncConnection, server: Server) -> schemas.McpServe
         if server.server_name is None
         else schemas.McpServerInfo(name=server.server_name, version=server.server_version or ""),
         tools=await _tools(connection, server),
+        event_types=await _event_types(connection, server),
         listed_at=server.listed_at,
         created_at=server.created_at,
         updated_at=server.updated_at,
@@ -483,11 +572,13 @@ async def create_mcp_server(
         raise errors.conflict()
     target = Target(url, identity.instance_admin)
     listing: Listing | None = None
+    events: list[EventType] | None = None
     oauth: OAuthSettings | None = None
     client_secret: str | None = None
     if body.auth == "none":
         _LIMIT.take(identity.tenant_id)
         listing = await _list(target, None)
+        events = await _list_events(target, None)
     elif body.auth == "oauth":
         _LIMIT.take(identity.tenant_id)
         oauth, client_secret = await _oauth_settings(
@@ -520,6 +611,8 @@ async def create_mcp_server(
             if listing is not None:
                 await store_listing(connection, server, identity.tenant_id, listing)
                 server = await find_server(connection, server_id)
+            if events is not None:
+                await store_event_types(connection, server, identity.tenant_id, events)
             return await _view(connection, server)
     except DBAPIError as error:
         if (refusal := _unique(error)) is not None:
@@ -571,10 +664,12 @@ async def update_mcp_server(
     # A new address is private only when the instance admin sets it (ADR-0099, point 4).
     target = Target(url, identity.instance_admin if moved else server.private_network)
     listing: Listing | None = None
+    events: list[EventType] | None = None
     oauth, client_secret_ciphertext = server.oauth, server.client_secret_ciphertext
     if new_generation and auth == "none":
         _LIMIT.take(identity.tenant_id)
         listing = await _list(target, None)
+        events = await _list_events(target, None)
     if new_generation and auth == "oauth":
         client_id = (
             body.oauth_client_id
@@ -617,6 +712,15 @@ async def update_mcp_server(
                     text("UPDATE mcp_server_tools SET accepted = NULL, accepted_at = NULL WHERE server_id = :id"),
                     {"id": server_id},
                 )
+                # Nor any of its event types (TSK-008).
+                await connection.execute(
+                    text("UPDATE mcp_server_events SET accepted = NULL, accepted_at = NULL WHERE server_id = :id"),
+                    {"id": server_id},
+                )
+                if events is None:
+                    await connection.execute(
+                        text("DELETE FROM mcp_server_events WHERE server_id = :id"), {"id": server_id}
+                    )
                 await connection.execute(
                     text("UPDATE mcp_servers SET listed_at = NULL WHERE id = :id"), {"id": server_id}
                 )
@@ -630,6 +734,8 @@ async def update_mcp_server(
             if listing is not None:
                 await store_listing(connection, server, identity.tenant_id, listing)
                 server = await find_server(connection, server_id)
+            if events is not None:
+                await store_event_types(connection, server, identity.tenant_id, events)
             return await _view(connection, server)
     except DBAPIError as error:
         if (refusal := _unique(error)) is not None:
@@ -673,8 +779,11 @@ async def refresh_mcp_server(
         if token is None:
             raise _unreachable(error) from None
         listing = await _list(server.target, token)
+    events = await _list_events(server.target, token)
     async with transaction(engine, identity) as connection:
         await store_listing(connection, server, identity.tenant_id, listing)
+        if events is not None:
+            await store_event_types(connection, server, identity.tenant_id, events)
         return await _view(connection, await find_server(connection, server_id))
 
 
@@ -721,6 +830,49 @@ async def set_accepted_mcp_tools(
         return await _view(connection, server)
 
 
+@router.put("/tenant/mcp-servers/{server_id}/accepted-event-types", response_model=schemas.McpServer)
+async def set_accepted_mcp_event_types(
+    server_id: uuid.UUID, body: schemas.AcceptedMcpEventTypesRequest, identity: Authenticated, engine: Engine
+) -> schemas.McpServer:
+    _check_admin(identity)
+    names = [item.name for item in body.event_types]
+    if len(set(names)) != len(names):
+        raise errors.invalid("/event_types", "an item is listed twice")
+    async with transaction(engine, identity) as connection:
+        server = await find_server(connection, server_id, lock=True)
+        rows = {
+            row.name: row
+            for row in await connection.execute(
+                text("SELECT name, listed, problem FROM mcp_server_events WHERE server_id = :id"), {"id": server_id}
+            )
+        }
+        for item in body.event_types:
+            row = rows.get(item.name)
+            # Refused when the listing changed since the admin saw it, or the type cannot be accepted (TSK-008).
+            if row is None or row.listed is None or row.problem is not None or event_digest(row.listed) != item.digest:
+                raise errors.conflict()
+        await connection.execute(
+            text(
+                "UPDATE mcp_server_events SET accepted = NULL, accepted_at = NULL"
+                " WHERE server_id = :id AND NOT (name = ANY(:names))"
+            ),
+            {"id": server_id, "names": names},
+        )
+        for item in body.event_types:
+            await connection.execute(
+                text(
+                    "UPDATE mcp_server_events SET accepted = CAST(:accepted AS jsonb), accepted_at = now()"
+                    " WHERE server_id = :id AND name = :name"
+                ),
+                {"id": server_id, "name": item.name, "accepted": json.dumps(event_reviewed(rows[item.name].listed))},
+            )
+        await connection.execute(
+            text("DELETE FROM mcp_server_events WHERE server_id = :id AND listed IS NULL AND accepted IS NULL"),
+            {"id": server_id},
+        )
+        return await _view(connection, server)
+
+
 # --- The household's servers, for each user (AGT-029 to AGT-031) ---
 
 
@@ -729,6 +881,15 @@ async def _summary(connection: AsyncConnection, server: Server, denied: bool) ->
         await connection.execute(
             text(
                 "SELECT name, listed, accepted, problem FROM mcp_server_tools WHERE server_id = :id"
+                " AND accepted IS NOT NULL ORDER BY name"
+            ),
+            {"id": server.id},
+        )
+    ).all()
+    events = (
+        await connection.execute(
+            text(
+                "SELECT name, listed, accepted, problem FROM mcp_server_events WHERE server_id = :id"
                 " AND accepted IS NOT NULL ORDER BY name"
             ),
             {"id": server.id},
@@ -750,6 +911,16 @@ async def _summary(connection: AsyncConnection, server: Server, denied: bool) ->
             )
             for row in rows
             if tool_status(row.listed, row.accepted, row.problem) == "accepted"
+        ],
+        event_types=[
+            schemas.McpSummaryEventType(
+                name=row.name,
+                description=row.accepted.get("description"),
+                input_schema=cast(dict[str, Any], row.accepted.get("inputSchema") or {}),
+                payload_schema=row.accepted.get("payloadSchema"),
+            )
+            for row in events
+            if event_status(row.listed, row.accepted, row.problem) == "accepted"
         ],
     )
 

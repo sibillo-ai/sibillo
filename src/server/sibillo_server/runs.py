@@ -31,6 +31,7 @@ from sibillo_server.notifications import add_follower, following
 from sibillo_server.questions import Answers, answer
 from sibillo_server.sandbox import SandboxDriver, stop_conversation_sandbox
 from sibillo_server.settings import new_conversation
+from sibillo_server.tasks import finish_firing
 from sibillo_server.tool_policy import WEB_AND_COMMANDS
 from sibillo_server.workflow_input import RunWorkflowInput
 from sibillo_server.workspace import attachment_entries
@@ -217,14 +218,16 @@ async def create_run(
     base, additional, language = await _instructions(connection, conversation)
     resuming = answers is not None
     turn = False
+    # A run that resumes a task's first turn follows its grants too (TSK-004, ADR-0106).
+    task_grants = False
     if resuming and parent is not None:
-        turn = bool(
-            (
-                await connection.execute(
-                    text("SELECT turn_allows_web_and_commands FROM runs WHERE id = :id"), {"id": parent}
-                )
-            ).scalar_one_or_none()
-        )
+        inherited = (
+            await connection.execute(
+                text("SELECT turn_allows_web_and_commands, task_grants FROM runs WHERE id = :id"), {"id": parent}
+            )
+        ).one_or_none()
+        if inherited is not None:
+            turn, task_grants = bool(inherited.turn_allows_web_and_commands), bool(inherited.task_grants)
     approvals: dict[str, Any] = {}
     for decision in answers.approvals if answers is not None else []:
         approvals[decision.tool_call_id] = {
@@ -261,9 +264,9 @@ async def create_run(
     await connection.execute(
         text(
             "INSERT INTO runs (id, tenant_id, owner_id, conversation_id, parent_run_id, kind, status,"
-            " turn_allows_web_and_commands, connection_id, model_provider, model_name, last_event_seq, created_at)"
-            " VALUES (:id, :tenant_id, :owner_id, :conversation, :parent, :kind, 'queued', :turn, :connection,"
-            " :provider, :model, 0, now())"
+            " turn_allows_web_and_commands, task_grants, connection_id, model_provider, model_name, last_event_seq,"
+            " created_at) VALUES (:id, :tenant_id, :owner_id, :conversation, :parent, :kind, 'queued', :turn,"
+            " :task_grants, :connection, :provider, :model, 0, now())"
         ),
         {
             "kind": "resume" if resuming else "message",
@@ -273,6 +276,7 @@ async def create_run(
             "conversation": conversation.id,
             "parent": parent,
             "turn": turn,
+            "task_grants": task_grants,
             "connection": model.id,
             "provider": urlsplit(str(model.base_url)).netloc,
             "model": model.model,
@@ -326,15 +330,25 @@ async def enqueue(durable: DBOSClient, workflow_input: RunWorkflowInput) -> None
 
 
 async def fail_unqueued(engine: AsyncEngine, identity: Identity, run_id: uuid.UUID) -> None:
-    """A run that never starts must not block its conversation (AGT-010)."""
+    """A run that never starts must not block its conversation, or its task (AGT-010, TSK-009)."""
     async with transaction(engine, identity) as connection:
-        await connection.execute(
-            text(
-                "UPDATE runs SET status = 'failed', error_code = 'internal.error', finished_at = now()"
-                " WHERE id = :id AND status = 'queued'"
-            ),
-            {"id": run_id},
-        )
+        conversation = (
+            await connection.execute(
+                text(
+                    "UPDATE runs SET status = 'failed', error_code = 'internal.error', finished_at = now()"
+                    " WHERE id = :id AND status = 'queued' RETURNING conversation_id"
+                ),
+                {"id": run_id},
+            )
+        ).scalar_one_or_none()
+        if conversation is not None:
+            await connection.execute(
+                text(
+                    "UPDATE task_firings SET status = 'done', finished_at = now(), event = NULL"
+                    " WHERE conversation_id = :id AND status = 'running'"
+                ),
+                {"id": conversation},
+            )
 
 
 @router.post("/conversations/{conversation_id}/runs")
@@ -439,6 +453,8 @@ async def cancel_run(
     configuration = request.app.state.configuration
     driver = SandboxDriver(configuration.sandboxd_url, configuration.sandboxd_token)
     await stop_conversation_sandbox(driver, identity, cancelled.conversation_id)
+    # A task's next firing may start (TSK-009, ADR-0106).
+    await finish_firing(engine, identity, cancelled.conversation_id)
     return run_response(cancelled)
 
 

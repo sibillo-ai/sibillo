@@ -56,6 +56,7 @@ WORKER_VARIABLES = frozenset(
         "SIBILLO_SEARCH_URL",
         "SIBILLO_TEMPORARY_SWEEP_SECONDS",
         "SIBILLO_APPROVAL_SWEEP_SECONDS",
+        "SIBILLO_TASK_SWEEP_SECONDS",
         "SIBILLO_RUN_REQUEST_LIMIT",
         "SIBILLO_MCP_CALL_SECONDS",
         "SIBILLO_PUBLIC_ORIGIN",
@@ -108,6 +109,8 @@ class WorkerConfiguration:
     temporary_sweep_seconds: int = 600
     # Between two sweeps for expired approval requests to deny (AGT-007, ADR-0090).
     approval_sweep_seconds: int = 60
+    # Between two sweeps for triggers with work due and firings waiting their turn (TSK-003, ADR-0106).
+    task_sweep_seconds: int = 30
     # The most model requests one run makes (AGT-027, ADR-0097).
     run_request_limit: int = 200
     # How long a call to a remote MCP server's tool may take (AGT-019, ADR-0099).
@@ -189,6 +192,9 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
     approvals = environment.get("SIBILLO_APPROVAL_SWEEP_SECONDS", "60")
     if not approvals.isdigit() or not 1 <= int(approvals) <= 3600:
         raise ConfigurationError("SIBILLO_APPROVAL_SWEEP_SECONDS must be a number of seconds from 1 to 3600")
+    tasks = environment.get("SIBILLO_TASK_SWEEP_SECONDS", "30")
+    if not tasks.isdigit() or not 1 <= int(tasks) <= 3600:
+        raise ConfigurationError("SIBILLO_TASK_SWEEP_SECONDS must be a number of seconds from 1 to 3600")
     limit = environment.get("SIBILLO_RUN_REQUEST_LIMIT", "200")
     if not limit.isdigit() or not 10 <= int(limit) <= 10000:
         raise ConfigurationError("SIBILLO_RUN_REQUEST_LIMIT must be a number of model requests from 10 to 10000")
@@ -208,6 +214,7 @@ def load_worker_configuration(environment: Mapping[str, str]) -> WorkerConfigura
         search_url=search_url.rstrip("/"),
         temporary_sweep_seconds=int(sweep),
         approval_sweep_seconds=int(approvals),
+        task_sweep_seconds=int(tasks),
         run_request_limit=int(limit),
         mcp_call_seconds=int(mcp_seconds),
         public_origin=_public_origin(environment),

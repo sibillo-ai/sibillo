@@ -57,7 +57,7 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
         described = cast(dict[str, Any], shown)
         action = str(described.get("action") or action)
         destination = str(described.get("destination") or destination)
-    return {
+    request: dict[str, Any] = {
         "tool": call.tool_name,
         "arguments": arguments,
         "action": action,
@@ -66,6 +66,10 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
         "reason": metadata.get("reason", "consequential"),
         "scopes": list(metadata.get("scopes") or ["once"]),
     }
+    # A proposed task says whether the run that proposed it held untrusted content (TSK-006, ADR-0106).
+    if request["reason"] == "task_proposal":
+        request["untrusted_content"] = bool(metadata.get("untrusted_content"))
+    return request
 
 
 def interrupts(stored: Any, expires_at: datetime.datetime | None = None) -> list[dict[str, Any]]:

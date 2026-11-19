@@ -29,8 +29,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
 from sibillo_server.gateway import RunDeps
-from sibillo_server.mcp_runs import shown
+from sibillo_server.mcp_runs import offered_names, shown
+from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
+    PROPOSE_TASK,
     decide,
     denied,
     has_external_effects,
@@ -77,6 +79,15 @@ async def record(
             "attempts": 1 if attempt else 0,
         },
     )
+
+
+def _granted(deps: RunDeps, tool: str, arguments: dict[str, Any]) -> Grant | None:
+    """The task's grant that covers the call, if one does and may still be used (TSK-004, ADR-0106)."""
+    grants = [grant for grant in deps.grants if isinstance(grant, Grant)]
+    found = covering(grants, tool, arguments)
+    if found is None or refusal(found, deps.permissions, offered_names(deps)) is not None:
+        return None
+    return found
 
 
 class Approvals(AbstractCapability[RunDeps]):
@@ -127,14 +138,34 @@ class Approvals(AbstractCapability[RunDeps]):
         else:
             untrusted = deps.untrusted or has_untrusted_content(ctx.messages)
             decision = decide(call.tool_name, deps.permissions, untrusted, deps.allowances)
-            if decision.request is not None:
+            if decision.request is not None and deps.unattended:
+                # Nobody watches a task's run: a grant covers the call, or it is denied without asking (TSK-004).
+                if _granted(deps, call.tool_name, args) is None:
+                    async with transaction(deps.engine, deps.identity) as connection:
+                        await record(
+                            connection,
+                            deps.identity,
+                            conversation_id=deps.conversation_id,
+                            run_id=run_id,
+                            tool_call_id=call.tool_call_id,
+                            tool=call.tool_name,
+                            outcome="not_granted",
+                            reason=decision.request.reason,
+                        )
+                    return NOT_GRANTED
+                outcome, scope, reason = "granted", None, decision.request.reason
+            elif decision.request is not None:
                 metadata: dict[str, Any] = {"reason": decision.request.reason, "scopes": list(decision.request.scopes)}
                 # A remote MCP server's tool says what it is and where the call goes (AGT-018, ADR-0099).
                 if (described := shown(deps, call.tool_name)) is not None:
                     metadata["approval"] = described
+                # A proposed task says whether the run holds untrusted content (TSK-006, ADR-0106).
+                if call.tool_name == PROPOSE_TASK:
+                    metadata["untrusted_content"] = untrusted
                 raise ApprovalRequired(metadata=metadata)
-            outcome = "not_needed" if decision.allowed is None else "allowed"
-            scope, reason = decision.allowed, None
+            else:
+                outcome = "not_needed" if decision.allowed is None else "allowed"
+                scope, reason = decision.allowed, None
         async with transaction(deps.engine, deps.identity) as connection:
             await record(
                 connection,

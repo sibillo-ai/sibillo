@@ -1,0 +1,82 @@
+"""The assistant proposes a task (TSK-006, ADR-0106).
+
+`propose_task` takes the fields of a request to create a task. Every call is
+asked, once, with the whole task in its approval request; only once the user
+approves it does the tool run, and it saves the task after the same checks as
+the API. A task's own runs can never use it: it cannot be granted.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import ValidationError
+from pydantic_ai import RunContext, Tool
+
+from sibillo_server import errors, schemas
+from sibillo_server.database import transaction
+from sibillo_server.gateway import RunDeps
+from sibillo_server.tasks import create
+
+
+async def propose_task(
+    ctx: RunContext[RunDeps],
+    name: str,
+    instructions: str,
+    time_zone: str,
+    triggers: list[dict[str, Any]],
+    grants: list[dict[str, Any]] | None = None,
+    uses_memory: bool = False,
+    reasoning: str | None = None,
+    disabled_tools: list[str] | None = None,
+) -> str:
+    """Propose a task the user wants done on its own, such as a press review every morning; the user approves it.
+
+    Each time a trigger fires, the task starts a new conversation with its instructions, without the user.
+
+    Args:
+        name: A short name of the task.
+        instructions: What to do each time, as the user would write it.
+        time_zone: The user's IANA time zone, such as `Europe/Rome`.
+        triggers: When it runs: `{"kind": "schedule", "schedule": "<cron, 5 fields>"}`, at most every 15 minutes;
+            or `{"kind": "webhook"}`.
+        grants: The calls it may make without asking, nobody being there to approve: `{"tool": "<tool>",
+            "arguments": null}` for any arguments, or with the exact arguments. Grant only what it needs.
+        uses_memory: Whether it uses what you remember about the user.
+        reasoning: `off`, `on` or `deep`.
+        disabled_tools: Tools it does without.
+    """
+    fields: dict[str, Any] = {
+        "name": name,
+        "instructions": instructions,
+        "time_zone": time_zone,
+        "triggers": triggers,
+        "grants": grants or [],
+        "uses_memory": uses_memory,
+    }
+    if reasoning is not None:
+        fields["reasoning"] = reasoning
+    if disabled_tools is not None:
+        fields["disabled_tools"] = disabled_tools
+    try:
+        request = schemas.CreateTaskRequest.model_validate(fields)
+    except ValidationError as error:
+        return f"The task was not saved: {error.error_count()} of its fields are not valid."
+    deps = ctx.deps
+    try:
+        async with transaction(deps.engine, deps.identity) as connection:
+            task = await create(connection, deps.identity, request, deps.public_origin)
+    except errors.ApiError as error:
+        detail = error.extra.get("detail")
+        return f"The task was not saved ({error.code}){f': {detail}' if detail else ''}."
+    except Exception:
+        return "The task was not saved: it could not be stored now."
+    webhook = (
+        " Its webhook address is shown in the task's settings, where the user can replace it."
+        if any(trigger.kind == "webhook" for trigger in task.triggers)
+        else ""
+    )
+    return f"Saved the task {task.name!r}; the user can change, pause or delete it in their settings.{webhook}"
+
+
+TOOLS = (Tool(propose_task),)

@@ -43,6 +43,8 @@ function Request({ interrupt }: { interrupt: Interrupt }) {
         <dd className="break-words">{request.destination}</dd>
       </dl>
       <p className="rounded-[10px] bg-hover px-3 py-2 text-pretty">{t(`approvals.reasons.${request.reason}`)}</p>
+      {/* A proposed task from a chat with content from elsewhere may come from injected instructions (TSK-006). */}
+      {request.reason === "task_proposal" && request.untrusted_content && <p className="rounded-[10px] bg-danger/15 px-3 py-2 font-semibold text-danger">{t("approvals.proposalUntrusted")}</p>}
       {/* The arguments in full, as the model gave them (UX-003, AGT-007). */}
       <p className="text-[13px] font-semibold text-muted">{t("approvals.arguments")}</p>
       <pre className="max-h-40 overflow-auto rounded-lg bg-hover p-2 font-mono text-[12.5px] whitespace-pre-wrap">{JSON.stringify(request.arguments, null, 2)}</pre>

@@ -26,6 +26,7 @@ from sibillo_server import (
     sign_in,
     skills,
     speech,
+    tasks,
     web,
     workspace,
 )
@@ -75,6 +76,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(permissions.router, prefix=API_PREFIX)
     app.include_router(egress.router, prefix=API_PREFIX)
     app.include_router(speech.router, prefix=API_PREFIX)
+    app.include_router(tasks.router, prefix=API_PREFIX)
     app.include_router(workspace.router, prefix=API_PREFIX)
     app.include_router(health.router, prefix=API_PREFIX)
     if configuration.web_root.is_dir():

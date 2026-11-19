@@ -21,7 +21,9 @@ type CapabilityClass = Literal[
     "reads_private_data", "ingests_untrusted", "external_communication", "irreversible", "physical"
 ]
 type Setting = Literal["allow", "ask", "deny"]
-type ApprovalReason = Literal["untrusted_content", "tool_default", "permission", "consequential", "device"]
+type ApprovalReason = Literal[
+    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal"
+]
 type Scope = Literal["once", "turn", "conversation"]
 
 CLASSES: tuple[CapabilityClass, ...] = (
@@ -47,6 +49,10 @@ SERVER_CLASSES: frozenset[CapabilityClass] = frozenset(
 SERVER_SEPARATOR = "__"
 # Labels the part of a user's message that lists its attachments (CNV-017).
 ATTACHMENTS_ORIGIN = "sibillo.attachments"
+# Labels the part of a task's first message that holds the event that fired it, untrusted content (ADR-0106).
+EVENT_ORIGIN = "sibillo.event"
+# The tool that proposes a task: every call asked, once (TSK-006, ADR-0106).
+PROPOSE_TASK = "propose_task"
 # Labels the result of loading a skill with the skill's name and whether it is untrusted (AGT-025, ADR-0096).
 SKILL_ORIGIN = "sibillo.skill"
 # What the model is told of a call the user did not approve.
@@ -103,6 +109,8 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "forget": _OWN,
     # Saves a skill that later conversations are given: the user sees it before it does (AGT-026, ADR-0096).
     "save_skill": Declaration(frozenset(), "ask"),
+    # Saves a task that runs later with standing grants: the user sees all of it first (TSK-006, ADR-0106).
+    PROPOSE_TASK: Declaration(frozenset(), "ask"),
     # Loads a skill: what it brings in is untrusted when the skill is, by provenance (AGT-025, ADR-0096).
     "load_capability": _OWN,
     # The output limits' own tool, which reads back a large result set aside (AGT-014): no switch (ADR-0087).
@@ -146,8 +154,9 @@ def has_untrusted_content(messages: Sequence[ModelMessage]) -> bool:
             if isinstance(part, UserPromptPart) and not isinstance(part.content, str):
                 for item in part.content:
                     metadata: Any = getattr(item, "metadata", None)
-                    if isinstance(metadata, dict) and cast(dict[str, Any], metadata).get("origin") == (
-                        ATTACHMENTS_ORIGIN
+                    if isinstance(metadata, dict) and cast(dict[str, Any], metadata).get("origin") in (
+                        ATTACHMENTS_ORIGIN,
+                        EVENT_ORIGIN,
                     ):
                         return True
     return False
@@ -238,6 +247,8 @@ def decide(tool: str, permissions: Permissions, untrusted: bool, allowances: All
     if is_server_tool(tool):
         # Every call to a server is approved, once, and nothing lifts it (AGT-018, ADR-0099).
         return Decision(Request("device", ("once",)))
+    if tool == PROPOSE_TASK:
+        return Decision(Request("task_proposal", ("once",)))
     declaration = DECLARATIONS.get(tool)
     if declaration is None:
         return Decision(Request("consequential", ("once",)))
@@ -278,5 +289,11 @@ def describe(tool: str, arguments: Mapping[str, Any]) -> tuple[str, str, str]:
         purpose = str(arguments.get("description", "") or arguments.get("purpose", ""))
         action = "Run a command in the sandbox" if tool == "run_command" else "Start a command in the sandbox"
         return (f"{action}: {purpose}" if purpose else action), command, "The internet, from the conversation's sandbox"
+    if tool == PROPOSE_TASK:
+        return (
+            "Save a task that runs on its own, with the grants it lists",
+            str(arguments.get("name", "")),
+            "Your tasks, which run without asking for what they grant",
+        )
     rendered = ", ".join(f"{key}: {value}" for key, value in arguments.items())
     return f"Use {tool}", rendered, "Wherever the tool sends it"

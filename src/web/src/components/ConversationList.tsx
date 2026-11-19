@@ -159,6 +159,8 @@ function ConversationItem({ conversation, folders, nested = false }: { conversat
         className={({ isActive }) => `min-w-0 flex-1 truncate rounded-[9px] py-[7px] pr-2.5 text-sm ${nested ? "pl-8" : "pl-2.5"} ${isActive ? "bg-hover font-semibold" : ""}`}
       >
         {conversation.title || t("shell.untitled")}
+        {/* A conversation a task started says which (UX-031). */}
+        {conversation.task && <span className="block truncate text-[12px] font-normal text-muted">{t("shell.byTask", { name: conversation.task.name })}</span>}
       </NavLink>
       <ConversationMenu conversation={conversation} folders={folders} />
     </li>

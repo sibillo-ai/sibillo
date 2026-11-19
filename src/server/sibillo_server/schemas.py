@@ -399,6 +399,7 @@ type ToolName = Literal[
     "update_memory",
     "forget",
     "save_skill",
+    "propose_task",
 ]
 
 
@@ -421,8 +422,12 @@ type CapabilityClass = Literal[
 ]
 type PermissionSetting = Literal["allow", "ask", "deny"]
 type ApprovalScope = Literal["once", "turn", "conversation"]
-type ApprovalOutcome = Literal["not_needed", "allowed", "approved", "denied", "expired", "refused"]
-type ApprovalReason = Literal["untrusted_content", "tool_default", "permission", "consequential", "device"]
+type ApprovalOutcome = Literal[
+    "not_needed", "allowed", "approved", "denied", "expired", "refused", "granted", "not_granted"
+]
+type ApprovalReason = Literal[
+    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal"
+]
 
 
 class ToolPermissions(Request):
@@ -566,6 +571,13 @@ class ForkedFrom(Response):
     run_id: uuid.UUID | None
 
 
+class ConversationTask(Response):
+    """The task whose firing started a conversation, with its name then; no ID once it is deleted (TSK-002)."""
+
+    id: uuid.UUID | None
+    name: str
+
+
 class Usage(Response):
     last_24_hours: list[Money]
     last_30_days: list[Money]
@@ -618,6 +630,7 @@ class Conversation(Response):
     title: str
     archived: bool
     temporary: bool
+    task: ConversationTask | None
     active_run_id: uuid.UUID | None
     model: ModelChoiceOut | None
     reasoning: Reasoning
@@ -927,6 +940,30 @@ class McpServerTool(Response):
     accepted_at: Timestamp | None
 
 
+type McpEventProblem = Literal[
+    "name", "description_too_long", "schema_too_large", "too_many_events", "no_supported_delivery"
+]
+
+
+class McpEventTypeDefinition(Response):
+    description: str | None
+    input_schema: dict[str, Any]
+    payload_schema: dict[str, Any] | None
+    delivery: list[str]
+
+
+class McpServerEventType(Response):
+    """An event type of a remote MCP server, for its review (TSK-008, ADR-0106)."""
+
+    name: str
+    status: McpToolStatus
+    listed: McpEventTypeDefinition | None
+    accepted: McpEventTypeDefinition | None
+    digest: str | None
+    problem: McpEventProblem | None
+    accepted_at: Timestamp | None
+
+
 class McpServer(Response):
     id: uuid.UUID
     name: str
@@ -939,6 +976,7 @@ class McpServer(Response):
     enabled: bool
     server: McpServerInfo | None
     tools: list[McpServerTool]
+    event_types: list[McpServerEventType]
     listed_at: Timestamp | None
     created_at: Timestamp
     updated_at: Timestamp
@@ -976,6 +1014,22 @@ class AcceptedMcpToolsRequest(Request):
     tools: Annotated[list[AcceptedMcpTool], Field(max_length=100)]
 
 
+class AcceptedMcpEventType(Request):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class AcceptedMcpEventTypesRequest(Request):
+    event_types: Annotated[list[AcceptedMcpEventType], Field(max_length=100)]
+
+
+class McpSummaryEventType(Response):
+    name: str
+    description: str | None
+    input_schema: dict[str, Any]
+    payload_schema: dict[str, Any] | None
+
+
 class McpSummaryTool(Response):
     model_name: str
     title: str | None
@@ -991,6 +1045,7 @@ class McpServerSummary(Response):
     credential: McpCredentialState
     denied: bool
     tools: list[McpSummaryTool]
+    event_types: list[McpSummaryEventType]
 
 
 class McpServerSummaryList(Response):
@@ -1022,3 +1077,135 @@ class CompleteMcpSignInRequest(Request):
     iss: Annotated[str, Field(max_length=2000)] | None = None
     error: Annotated[str, Field(max_length=200)] | None = None
     error_description: Annotated[str, Field(max_length=2000)] | None = None
+
+
+# --- Tasks and triggers (TSK-001 to TSK-010, ADR-0106) ---
+
+type TaskName = Annotated[str, Field(min_length=1, max_length=100)]
+type TaskInstructions = Annotated[str, Field(min_length=1, max_length=20000, pattern=r"^[^\x00]*$")]
+type TimeZone = Annotated[str, Field(min_length=1, max_length=64)]
+type TriggerKind = Literal["schedule", "webhook", "mcp_event"]
+
+
+class ScheduleTriggerInput(Request):
+    kind: Literal["schedule"]
+    schedule: Annotated[str, Field(min_length=9, max_length=100)]
+
+
+class WebhookTriggerInput(Request):
+    kind: Literal["webhook"]
+
+
+class EventTriggerInput(Request):
+    kind: Literal["mcp_event"]
+    server_id: uuid.UUID
+    event: Annotated[str, Field(min_length=1, max_length=64)]
+    arguments: dict[str, Any]
+
+
+type TaskTriggerInput = Annotated[
+    ScheduleTriggerInput | WebhookTriggerInput | EventTriggerInput, Field(discriminator="kind")
+]
+
+
+class TaskTrigger(Response):
+    id: uuid.UUID
+    kind: TriggerKind
+    schedule: str | None
+    next_fire_at: Timestamp | None
+    webhook_path: str | None
+    server_id: uuid.UUID | None
+    event: str | None
+    arguments: dict[str, Any] | None
+    delivery: Literal["poll", "webhook"] | None
+    problem: Literal["not_accepted", "credential_missing", "unauthorized", "unreachable", "terminated"] | None
+    created_at: Timestamp
+
+
+class TaskGrant(Request):
+    tool: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+    arguments: dict[str, Any] | None
+
+
+class TaskGrantOut(Response):
+    tool: str
+    arguments: dict[str, Any] | None
+
+
+class GrantCheck(Response):
+    passes: bool
+    private_data: list[str]
+    untrusted_content: list[str]
+    external_communication: list[str]
+
+
+class TaskSkipped(Response):
+    count: int
+    last_at: Timestamp | None
+
+
+class Task(Response):
+    id: uuid.UUID
+    name: str
+    instructions: str
+    model: ModelChoiceOut | None
+    reasoning: Reasoning
+    disabled_tools: list[ToolName]
+    disabled_skills: list[str]
+    disabled_servers: list[uuid.UUID]
+    uses_memory: bool
+    time_zone: str
+    paused: bool
+    triggers: list[TaskTrigger]
+    grants: list[TaskGrantOut]
+    grant_check: GrantCheck
+    skipped: TaskSkipped
+    last_fired_at: Timestamp | None
+    created_at: Timestamp
+    updated_at: Timestamp
+
+
+class TaskList(Response):
+    items: list[Task]
+
+
+class CreateTaskRequest(Request):
+    name: TaskName
+    instructions: TaskInstructions
+    model: ModelChoice | None = None
+    reasoning: Reasoning | None = None
+    disabled_tools: DisabledTools | None = None
+    disabled_skills: DisabledSkills | None = None
+    disabled_servers: DisabledServers | None = None
+    uses_memory: bool = False
+    time_zone: TimeZone
+    triggers: Annotated[list[TaskTriggerInput], Field(min_length=1, max_length=5)]
+    grants: Annotated[list[TaskGrant], Field(max_length=20)] = Field(default_factory=list[TaskGrant])
+
+
+class UpdateTaskRequest(Request):
+    name: TaskName | None = None
+    instructions: TaskInstructions | None = None
+    model: ModelChoice | None = None
+    reasoning: Reasoning | None = None
+    disabled_tools: DisabledTools | None = None
+    disabled_skills: DisabledSkills | None = None
+    disabled_servers: DisabledServers | None = None
+    uses_memory: bool | None = None
+    time_zone: TimeZone | None = None
+    paused: bool | None = None
+    grants: Annotated[list[TaskGrant], Field(max_length=20)] | None = None
+
+
+class TaskConversation(Response):
+    conversation_id: uuid.UUID
+    title: str
+    trigger_kind: TriggerKind
+    outcome: Literal["queued", "running", "interrupted", "completed", "failed", "cancelled"] | None
+    without_grants: bool
+    started_at: Timestamp
+
+
+class TaskConversationPage(Response):
+    items: list[TaskConversation]
+    next_cursor: str | None

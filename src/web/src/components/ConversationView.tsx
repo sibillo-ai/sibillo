@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Brain, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
+import { ArrowDown, Brain, CalendarClock, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -309,6 +309,18 @@ export function ConversationView() {
             <li className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] text-muted">
               <Ghost className="size-4 flex-none" aria-hidden="true" />
               {t("temporary.notice")}
+            </li>
+          )}
+          {conversation.data?.task && (
+            <li className="mt-3 flex items-center gap-2 text-[13px] text-muted">
+              <CalendarClock className="size-4 flex-none" aria-hidden="true" />
+              {conversation.data.task.id ? (
+                <Link to={`/settings?section=tasks&task=${conversation.data.task.id}`} className="underline underline-offset-2 hover:text-fg">
+                  {t("message.startedByTask", { name: conversation.data.task.name })}
+                </Link>
+              ) : (
+                t("message.startedByDeletedTask", { name: conversation.data.task.name })
+              )}
             </li>
           )}
           {conversation.data?.forked_from && (
@@ -857,7 +869,7 @@ function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind:
   // A command's first line, under what it is for; other tools show their first argument beside the label.
   const preview = command !== null ? (command.split("\n")[0] ?? "") : argumentPreview(part.args);
   // A call that never ran, denied or refused, is not done: its outcome says what became of it (UX-023).
-  const refused = decision !== undefined && ["denied", "expired", "refused"].includes(decision.outcome);
+  const refused = decision !== undefined && ["denied", "expired", "refused", "not_granted"].includes(decision.outcome);
   const done = part.result !== undefined && !refused;
   return (
     <details className="group/tool max-w-full">
@@ -869,7 +881,7 @@ function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind:
         </span>
         {/* How the call was decided, when it needed approval (UX-023). */}
         {decision && (
-          <span className={`flex-none rounded-full px-2 py-0.5 text-xs font-semibold ${decision.outcome === "denied" || decision.outcome === "expired" || decision.outcome === "refused" ? "bg-danger/15 text-danger" : "bg-accent-soft text-accent"}`}>
+          <span className={`flex-none rounded-full px-2 py-0.5 text-xs font-semibold ${decision.outcome === "denied" || decision.outcome === "expired" || decision.outcome === "refused" || decision.outcome === "not_granted" ? "bg-danger/15 text-danger" : "bg-accent-soft text-accent"}`}>
             {outcomeLabel(t, decision.outcome, decision.scope)}
           </span>
         )}

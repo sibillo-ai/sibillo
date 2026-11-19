@@ -38,7 +38,8 @@ from sibillo_server.settings import new_conversation
 router = APIRouter()
 
 CONVERSATION_COLUMNS = (
-    "id, title, archived_at IS NOT NULL AS archived, temporary, active_run_id, connection_id, model, reasoning,"
+    "id, title, archived_at IS NOT NULL AS archived, temporary, task_id, task_name, active_run_id, connection_id,"
+    " model, reasoning,"
     " disabled_tools, disabled_skills, disabled_servers, allowed_web_and_commands, allowed_tools, base_instructions,"
     " additional_instructions, folder_id,"
     " pinned_at IS NOT NULL AS pinned, forked_from_conversation_id, forked_from_run_id, last_message_at,"
@@ -67,6 +68,8 @@ def conversation_response(row: Any) -> schemas.Conversation:
         title=row.title,
         archived=row.archived,
         temporary=row.temporary,
+        # The task whose firing started it, kept by name once the task is deleted (TSK-002, ADR-0106).
+        task=None if row.task_name is None else schemas.ConversationTask(id=row.task_id, name=row.task_name),
         active_run_id=row.active_run_id,
         # A model whose connection was removed is no model the client can show or choose.
         model=None

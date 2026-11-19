@@ -1621,6 +1621,7 @@ dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
     { name = "asyncpg" },
+    { name = "croniter" },
     { name = "cryptography" },
     { name = "dbos" },
     { name = "fastapi" },
@@ -1629,6 +1630,7 @@ dependencies = [
     { name = "pydantic-ai-slim", extra = ["ag-ui", "dbos", "mcp", "openai"] },
     { name = "python-multipart" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tzdata" },
     { name = "uvicorn" },
     { name = "webauthn" },
 ]
@@ -1638,6 +1640,7 @@ requires-dist = [
     { name = "alembic", specifier = "==1.20.1" },
     { name = "argon2-cffi", specifier = "==25.1.0" },
     { name = "asyncpg", specifier = "==0.32.0" },
+    { name = "croniter", specifier = "==6.2.4" },
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "dbos", specifier = "==3.4.0" },
     { name = "fastapi", specifier = "==0.162.0" },
@@ -1646,6 +1649,7 @@ requires-dist = [
     { name = "pydantic-ai-slim", extras = ["ag-ui", "dbos", "mcp", "openai"], specifier = "==2.64.0" },
     { name = "python-multipart", specifier = "==0.0.32" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.6" },
+    { name = "tzdata", specifier = "==2026.6" },
     { name = "uvicorn", specifier = "==0.54.0" },
     { name = "webauthn", specifier = "==3.0.1" },
 ]
