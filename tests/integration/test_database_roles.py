@@ -16,6 +16,11 @@ PRE_AUTHENTICATION_FUNCTIONS = (
     "expired_temporary_conversations",
     "expired_approvals",
     "default_model_configured",
+    # The work of tasks (ADR-0106).
+    "due_task_triggers",
+    "waiting_task_firings",
+    "find_webhook_trigger",
+    "find_event_subscription",
 )
 
 

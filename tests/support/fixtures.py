@@ -34,11 +34,21 @@ def sandboxes(request: pytest.FixtureRequest) -> Driver:
     return start_sandboxes(request.config)
 
 
+_SEARCH_SERVICE = pytest.StashKey[SearchServer]()
+
+
 @pytest.fixture(scope="session")
-def search_service() -> Iterator[SearchServer]:
-    search, http = start_search_server()
-    yield search
-    http.shutdown()
+def search_service(request: pytest.FixtureRequest) -> SearchServer:
+    """The search service the tests serve (ADR-0075).
+
+    One per test session, as the worker that queries it is, whichever test directory asks first.
+    """
+    service = request.config.stash.get(_SEARCH_SERVICE, None)
+    if service is None:
+        service, http = start_search_server()
+        request.config.add_cleanup(http.shutdown)
+        request.config.stash[_SEARCH_SERVICE] = service
+    return service
 
 
 @pytest.fixture(scope="session")

@@ -44,6 +44,11 @@ from tests.support.tasks import (
 )
 
 
+def _reached_model(model: HarnessModel, text: str) -> bool:
+    """Whether a request reached the model with `text` in its last user message, which also holds the instructions."""
+    return any(text in "".join(request.user_texts()[-1:]) for request in model.endpoint.requests)
+
+
 @pytest.fixture
 def member(database: Database, server: Server, default_model: HarnessModel) -> Member:
     return new_member(database, server, default_model)
@@ -67,7 +72,7 @@ def test_a_request_to_a_webhook_trigger_fires_its_task_with_the_body_as_untruste
     assert response.status_code == 202
     (item,) = wait_for_conversations(server, member.token, task["id"])
     assert item["trigger_kind"] == "webhook"
-    assert default_model.endpoint.requests_with(marker)
+    assert _reached_model(default_model, marker)
 
     # The event is untrusted content: a later search in the conversation asks first (AGT-004).
     run_id, _ = start_run(server, member.token, item["conversation_id"], search(fresh_query()))
@@ -278,7 +283,7 @@ def test_polled_events_fire_the_task_once_each(
     poll_now(database, trigger["id"])
     (item,) = wait_for_conversations(server, member.token, task["id"])
     assert item["trigger_kind"] == "mcp_event"
-    assert default_model.endpoint.requests_with(subject)
+    assert _reached_model(default_model, subject)
 
     # The same event, delivered again, fires nothing.
     mcp.queue("mail.received", {"subject": subject}, event_id=event["eventId"])
@@ -373,7 +378,7 @@ def test_a_signed_delivery_fires_the_task(
     assert deliver(subscription, _occurrence(subject)).status_code == 202
     (item,) = wait_for_conversations(server, member.token, task["id"])
     assert item["trigger_kind"] == "mcp_event"
-    assert default_model.endpoint.requests_with(subject)
+    assert _reached_model(default_model, subject)
 
 
 @pytest.mark.spec("TSK-008")

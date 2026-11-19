@@ -46,7 +46,17 @@ ALLOWED_NATIVE_TOOLS = {"tool_search"}
 # page reading in the sandbox, offering a file to download, keeping the user's memory, and saving a skill,
 # which change only rows of the database (AGT-020, AGT-021, AGT-023, AGT-026, MEM-007, ADR-0075, ADR-0079,
 # ADR-0095, ADR-0096).
-ALLOWED_OWN_TOOLS = {"web_search", "read_page", "offer_download", "remember", "update_memory", "forget", "save_skill"}
+ALLOWED_OWN_TOOLS = {
+    "web_search",
+    "read_page",
+    "offer_download",
+    "remember",
+    "update_memory",
+    "forget",
+    "save_skill",
+    # Proposes a task, which only the user's approval saves (TSK-006, ADR-0106).
+    "propose_task",
+}
 # The only places a component runs a command on the host, by file and
 # enclosing function. None runs anything a user or the agent chose.
 ALLOWED_HOST_COMMANDS = {

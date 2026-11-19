@@ -346,6 +346,7 @@ TOOLS = frozenset(
         "update_memory",
         "forget",
         "save_skill",
+        "propose_task",
         # Offered while a skill is on, as the built-in skills are by default; it has no switch (ADR-0096).
         "load_capability",
     }
