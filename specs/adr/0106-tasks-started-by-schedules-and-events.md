@@ -113,8 +113,9 @@ Three forces shape it:
 5. **Grants never complete the lethal trifecta.** When a task is saved, and
    again at every firing, the server checks three things together:
    - **private data**: a grant, fixed or open, of a tool in the
-     `reads_private_data` class; memory, when the task uses it; an event
-     trigger, since an event may carry the user's mail or messages;
+     `reads_private_data` class; memory, when the task uses it and memory is
+     on for the user; an event trigger, a webhook trigger or a trigger on an
+     event, since an event may carry the user's mail or messages;
    - **untrusted content**: a grant, fixed or open, of a tool in the
      `ingests_untrusted` class; an event trigger;
    - **external communication**: an open grant of a tool in the

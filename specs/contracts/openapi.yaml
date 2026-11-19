@@ -5235,9 +5235,11 @@ components:
       type: object
       description: |
         The check of TSK-005 on a task's grants, settings and triggers: the
-        sources of each element of the lethal trifecta, each a tool's name,
-        `memory` or `event_trigger`. It passes when at least one list is
-        empty. Fixed grants never appear under `external_communication`.
+        sources of each element of the lethal trifecta, each a tool's name;
+        `memory`, when the task uses memory and memory is on for the user; or
+        `event_trigger`, when it has a webhook trigger or a trigger on an
+        event. It passes when at least one list is empty. Fixed grants never
+        appear under `external_communication`.
       required: [passes, private_data, untrusted_content, external_communication]
       properties:
         passes: { type: boolean }
@@ -5289,7 +5291,9 @@ components:
       type: object
       description: |
         Settings left out are copied from the user's defaults, as for a new
-        conversation (CNV-013); `uses_memory` is false unless given.
+        conversation (CNV-013); `uses_memory` is false unless given. The
+        assistant's `propose_task` tool takes the same fields as its
+        arguments (TSK-006).
       required: [name, instructions, time_zone, triggers]
       additionalProperties: false
       properties:

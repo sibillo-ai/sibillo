@@ -76,10 +76,11 @@ be checked when the task is saved and at every call (ADR-0106).
 - **Verification:** security
 
 A task MUST NOT be saved when it has all three of: a source of private data
-(a grant of a tool in the `reads_private_data` class, use of memory, or an
-event trigger); a source of untrusted content (a grant of a tool in the
-`ingests_untrusted` class, or an event trigger); and an open grant of a tool
-in the `external_communication` class. Fixed grants MUST NOT count as
+(a grant of a tool in the `reads_private_data` class, use of memory while
+memory is on for its user, or an event trigger, which is a webhook trigger or
+a trigger on an event); a source of untrusted content (a grant of a tool in
+the `ingests_untrusted` class, or an event trigger); and an open grant of a
+tool in the `external_communication` class. Fixed grants MUST NOT count as
 external communication. The check MUST be repeated at every firing, and a
 task that fails it then MUST fire without grants, its conversation saying
 why (ADR-0106).
@@ -91,8 +92,9 @@ why (ADR-0106).
 - **Phase:** 2
 - **Verification:** integration
 
-The assistant SHOULD have a tool that proposes a task with its instructions,
-settings, triggers and grants. Every call to it MUST require the user's
+The assistant SHOULD have a tool, `propose_task`, that proposes a task with
+its instructions, settings, triggers and grants, given as the fields of a
+request to create a task. Every call to it MUST require the user's
 approval, whose request MUST show the whole task as its page shows it, and
 say when the run holds untrusted content; only approving it MUST save the
 task, after the checks of TSK-004 and TSK-005. It MUST NOT be granted to a
