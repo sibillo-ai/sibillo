@@ -6,7 +6,7 @@ grants they need to work while nobody watches. Background: ADR-0106.
 
 ## TSK-001: Tasks
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
@@ -20,7 +20,7 @@ paused task MUST NOT fire (ADR-0106).
 
 ## TSK-002: Every firing is a new conversation
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
@@ -36,7 +36,7 @@ first (ADR-0106).
 
 ## TSK-003: Schedules
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
@@ -50,7 +50,7 @@ not once per missed time (ADR-0106).
 
 ## TSK-004: Task grants
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security
@@ -70,7 +70,7 @@ be checked when the task is saved and at every call (ADR-0106).
 
 ## TSK-005: Task grants never complete the lethal trifecta
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** security
@@ -87,7 +87,7 @@ why (ADR-0106).
 
 ## TSK-006: The assistant proposes a task
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
@@ -102,7 +102,7 @@ task (ADR-0106).
 
 ## TSK-007: Webhook triggers
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security
@@ -118,7 +118,7 @@ address (ADR-0106).
 
 ## TSK-008: Events of remote MCP servers
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security
@@ -139,7 +139,7 @@ bounded as tool results are (AGT-014) (ADR-0106).
 
 ## TSK-009: Limits on firing
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
@@ -151,7 +151,7 @@ count them and show when the latest was skipped (ADR-0106).
 
 ## TSK-010: Tasks need no one to be signed in
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration

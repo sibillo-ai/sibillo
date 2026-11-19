@@ -548,7 +548,7 @@ their place if every new piece of text pulls them back down.
 
 ## UX-031: Tasks in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e
