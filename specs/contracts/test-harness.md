@@ -64,9 +64,9 @@ database procedure (ADR-0050):
    repository root, with `SIBILLO_DATABASE_URL` and `SIBILLO_SECRET_KEY` as for the
    API (ADR-0052), `SIBILLO_SANDBOXD_URL` and `SIBILLO_SANDBOXD_TOKEN` of the
    sandbox driver below, and `SIBILLO_TEMPORARY_SWEEP_SECONDS` and
-   `SIBILLO_APPROVAL_SWEEP_SECONDS` set to `1`, so that tests of temporary
-   conversations and of expired approvals need not wait (ADR-0082,
-   ADR-0090), and `SIBILLO_RUN_REQUEST_LIMIT` set to `20`, so that a test
+   `SIBILLO_APPROVAL_SWEEP_SECONDS` and `SIBILLO_TASK_SWEEP_SECONDS` set to
+   `1`, so that tests of temporary conversations, of expired approvals and
+   of tasks need not wait (ADR-0082, ADR-0090, ADR-0106), and `SIBILLO_RUN_REQUEST_LIMIT` set to `20`, so that a test
    reaches it quickly (ADR-0097), and `SIBILLO_PUBLIC_ORIGIN` as for the
    API, so that it sends notifications (ADR-0101). The worker has no readiness signal: tests wait for the
    outcome of runs, with a timeout.
@@ -206,6 +206,31 @@ to return a code with a wrong `iss`, or to refuse a renewal. Tests set
 `SIBILLO_PUBLIC_ORIGIN` for the API they start. Tests of the address rules
 check the connection-time transport directly, with an injected resolver, as
 for connections (ADR-0061).
+
+## Tasks
+
+Tests do not wait for time to pass (ADR-0106). To make a schedule fire, a
+test sets its trigger's `next_fire_at` to a past time, as superuser, and
+waits for the worker's next sweep; to check firings missed while the
+instance was down, it sets it hours in the past. To make the worker poll an
+event subscription again, it sets the trigger's `next_poll_at` likewise. To
+check the hourly limit of firings, it arranges `done` firings of the last
+hour as superuser. Everything else about tasks goes through the API: tests
+create them, fire webhook triggers from source addresses of their own with
+`X-Forwarded-For`, and read the conversations a task started.
+
+The MCP servers the tests serve also offer the MCP Events extension
+(`io.modelcontextprotocol/events`) when a test scripts event types: their
+names, descriptions, input and payload schemas and delivery modes, listed
+with `events/list`. `events/poll` answers with the events a test queued
+since the cursor it is given, with a cursor of its own and a `nextPollMs` the
+test sets, and records each poll. `events/subscribe` records the delivery's
+address and secret and answers with a `refreshBefore` the test sets;
+`events/unsubscribe` is recorded. Tests deliver events by webhook as such a
+server does: they post to the recorded address, signed as Standard Webhooks
+with the recorded secret, and may also forge the signature, use an old
+timestamp, or post the same delivery twice. A test can change an event type
+between two listings, as a server that changes its event types does.
 
 ## Search
 

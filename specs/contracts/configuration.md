@@ -38,6 +38,7 @@ variable.
 | `SIBILLO_RUN_REQUEST_LIMIT` | no | `200` | The most model requests one run makes before it fails with `run.step_limit` (AGT-027, ADR-0097), from 10 to 10000. |
 | `SIBILLO_MCP_CALL_SECONDS` | no | `120` | Seconds a call to a tool of a remote MCP server may take before it fails (AGT-019, ADR-0099), from 1 to 3600. |
 | `SIBILLO_APPROVAL_SWEEP_SECONDS` | no | `60` | Seconds between two sweeps for expired approval requests to deny (AGT-007, ADR-0090), from 1 to 3600. |
+| `SIBILLO_TASK_SWEEP_SECONDS` | no | `30` | Seconds between two sweeps for triggers with work due and firings waiting their turn (TSK-003, TSK-008, TSK-009, ADR-0106), from 1 to 3600. |
 | `SIBILLO_SANDBOXD_URL` | yes | — | Base URL of the sandbox driver's API, such as `http://sandboxd:8100/v1`, on the internal network (ADR-0022). |
 | `SIBILLO_SANDBOXD_TOKEN` | yes | — | The secret shared with the sandbox driver, at least 32 characters (ADR-0022). |
 | `SIBILLO_SEARCH_URL` | no | empty | Base URL of the search service, such as `http://search:8080`, on the `search` network (ADR-0075). When empty, the agent has no `web_search` tool (AGT-020). |
@@ -160,7 +161,7 @@ by `SIBILLO_CONFIG_DIR` in the environment of the `docker compose` command,
 | `SIBILLO_BACKUP_KEY` | yes | As above. Keep a copy away from the server: without it, no archive can be restored. |
 | `SIBILLO_BACKUP_DIR` | no | The host folder for archives, relative to `deploy/` or absolute; default `./backups`. |
 | `SIBILLO_PUBLISH` | no | Where the API is published, `HOST:PORT`; default `127.0.0.1:8080`. |
-| `SIBILLO_TRUSTED_PROXIES`, `SIBILLO_RUN_RETENTION_DAYS`, `SIBILLO_RUN_REQUEST_LIMIT`, `SIBILLO_MCP_CALL_SECONDS`, `SIBILLO_TEMPORARY_SWEEP_SECONDS`, `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`, `SIBILLO_SANDBOX_RESOLVER`, `SIBILLO_SANDBOX_CPUS`, `SIBILLO_SANDBOX_MEMORY_MB`, `SIBILLO_SANDBOX_PROCESSES`, `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES`, `SIBILLO_SANDBOX_IDLE_MINUTES`, `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`, `SIBILLO_SANDBOX_DISK_MB`, `SIBILLO_BACKUP_TIME`, `SIBILLO_BACKUP_KEEP`, `SIBILLO_UPLOAD_MAX_MB`, `SIBILLO_PUBLIC_ORIGIN` | no | Passed to the services that read them, with the defaults above. |
+| `SIBILLO_TRUSTED_PROXIES`, `SIBILLO_RUN_RETENTION_DAYS`, `SIBILLO_RUN_REQUEST_LIMIT`, `SIBILLO_MCP_CALL_SECONDS`, `SIBILLO_TEMPORARY_SWEEP_SECONDS`, `SIBILLO_TASK_SWEEP_SECONDS`, `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`, `SIBILLO_SANDBOX_RESOLVER`, `SIBILLO_SANDBOX_CPUS`, `SIBILLO_SANDBOX_MEMORY_MB`, `SIBILLO_SANDBOX_PROCESSES`, `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES`, `SIBILLO_SANDBOX_IDLE_MINUTES`, `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`, `SIBILLO_SANDBOX_DISK_MB`, `SIBILLO_BACKUP_TIME`, `SIBILLO_BACKUP_KEEP`, `SIBILLO_UPLOAD_MAX_MB`, `SIBILLO_PUBLIC_ORIGIN` | no | Passed to the services that read them, with the defaults above. |
 
 ## Migrations
 

@@ -5192,7 +5192,7 @@ components:
         trigger's address under the instance's origin, such as
         `/v1/hooks/<token>`, given only in the answer that made it; `null`
         everywhere else. `delivery` is how the worker receives an MCP
-        event trigger's events: by webhook when the instance has an `https`
+        event trigger's events: by webhook when the instance has a
         `SIBILLO_PUBLIC_ORIGIN` and the server offers it, else by polling.
         `problem` says why an event trigger receives no events.
       required: [id, kind, schedule, next_fire_at, webhook_path, server_id, event, arguments, delivery, problem, created_at]
