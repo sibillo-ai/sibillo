@@ -108,6 +108,9 @@ beyond keeping them configurable and updatable.
 | T-38 | A sign-in to a remote MCP server is subverted: an attacker's authorization is bound to a victim's account, a code is intercepted or replayed, a token is obtained for another server or sent to one, or the server's OAuth metadata leads the control plane to the household's network | X1, X2, X4 | AGT-031, MOD-009 |
 | T-40 | Another app, or a web page that posts a form to the app's share address, puts text of its choosing in a new chat and has it sent as the user's own message | X1 | UX-006 |
 | T-41 | A tenant admin signs in as a member with the password the admin chose, and reads or changes the member's private data | X2 | AUTH-008, AUTH-011, AUTH-012, TEN-007 |
+| T-42 | Injected instructions in a page or an event read by a task's run, while nobody watches, use the task's grants to send data out or to act | X1 | AGT-003, AGT-004, TSK-004, TSK-005 |
+| T-43 | Forged, replayed or flooded webhook requests or MCP event deliveries start conversations, plant content in them, or spend the household's model budget | X1, X4 | TSK-007, TSK-008, TSK-009 |
+| T-44 | Injected instructions make the assistant propose a task, so that they run again later, unattended, with standing grants | X1 | TSK-005, TSK-006 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |
@@ -133,7 +136,11 @@ to break the trifecta **within each run**:
    beyond it (ADR-0090).
 4. Approvals fail closed (AGT-007) and every tool call is auditable
    (AGT-008).
-5. Evals include injection scenarios that must not exfiltrate (EVL-003).
+5. A task, which runs while nobody watches, carries grants instead of
+   asking; its grants together never reach private data, untrusted content
+   and an open way out at once, and a fixed grant carries nothing the model
+   chose (TSK-004, TSK-005, ADR-0106).
+6. Evals include injection scenarios that must not exfiltrate (EVL-003).
 
 Prompts are never relied upon as a security boundary.
 
@@ -157,6 +164,14 @@ Prompts are never relied upon as a security boundary.
   (ADR-0086). What a page holds is what the assistant wrote into it; the
   lethal trifecta mitigation bounds what injected content can make it write
   (AGT-004).
+- **What a task with open web grants holds.** Injected content in a page
+  that such a task reads can send out what its run holds: the task's
+  instructions, the user's instructions and what it found on the web. The
+  task has no other private data by construction (TSK-005); its user writes
+  its instructions knowing that (ADR-0106).
+- **A fixed grant repeated.** Injected content can make a task's run repeat
+  a call that a fixed grant covers, within the task's limits, but cannot
+  change it (TSK-004, TSK-009).
 - **A tenant admin ahead of a new member.** The admin who chose an
   initial password can sign in with it before the member does and change it
   (T-41). The member is then locked out, which they notice; the admin cannot

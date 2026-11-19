@@ -59,11 +59,12 @@ a fork (ADR-0090).
 
 In a run with untrusted content (AGT-003), every invocation of a tool in the
 `external_communication` class MUST require explicit user approval, unless
-the user allowed it earlier for that turn or that conversation. One approval
+the user allowed it earlier for that turn or that conversation, or a task
+grant covers it (TSK-004, TSK-005). One approval
 MUST cover the web and command tools `web_search`, `read_page`,
 `run_command` and `start_command` together, and MAY cover them for the rest
 of the turn or for the conversation, as the user chooses; other tools are
-approved one by one (ADR-0090).
+approved one by one (ADR-0090, ADR-0106).
 
 ## AGT-005: Capability classes
 
@@ -278,10 +279,13 @@ Rationale: journey J13.
 
 Every invocation of a tool of a connected device (DEV-003) or of a remote MCP
 server (AGT-019) MUST require the user's explicit approval, whatever its
-capability classes, in addition to AGT-006. The run MUST wait for the answer.
+capability classes, in addition to AGT-006. The run MUST wait for the answer,
+except in the runs of a task, where a call that no fixed grant covers is
+denied at once (TSK-004).
 The approval MUST cover only that invocation, and MUST NOT be lifted by
-any tool permission or allowance. Tools of the sandbox and Sibillo's own tools follow
-AGT-006 alone (ADR-0063, ADR-0064, ADR-0099).
+any tool permission or allowance; only a fixed grant of a task, given in
+advance for that exact invocation, MAY stand in for it (TSK-004). Tools of the sandbox and Sibillo's own tools follow
+AGT-006 alone (ADR-0063, ADR-0064, ADR-0099, ADR-0106).
 
 ## AGT-019: Remote MCP servers of a household
 

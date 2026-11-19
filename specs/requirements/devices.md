@@ -8,7 +8,7 @@ editing files. Background: ADR-0063.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 A user MUST be able to pair a device to their account by confirming, while
@@ -21,7 +21,7 @@ device MUST be disconnected at once and unable to reconnect.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 The device service MUST connect to the instance on its own initiative, over
@@ -32,7 +32,7 @@ Tool calls and their results MUST travel over that connection only.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 On Linux, the device service MUST offer the tools `run_command`, `read_file`
@@ -46,7 +46,7 @@ needs.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 The tools of each connected device of the run's user MUST be offered to the
@@ -58,7 +58,7 @@ NOT be offered.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 An approved tool call to a device that is offline MUST wait until the device
@@ -70,7 +70,7 @@ conversation list.
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 A connected device SHOULD report a short status about once a minute: online
@@ -82,7 +82,7 @@ the device's owner can see it.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** integration
 
 The device service MUST run as a dedicated unprivileged user without `sudo`
@@ -93,7 +93,7 @@ choice of the device's owner at installation.
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** e2e
 
 While open in the foreground, the web app SHOULD act as a device of its user,
@@ -104,8 +104,21 @@ reporting its status and offering the tools `current_location`,
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 2
+- **Phase:** 3
 - **Verification:** e2e
 
 The device service MUST support Linux. Support for macOS and Windows MAY
 follow later.
+
+## DEV-010: Events of a connected device
+
+- **Status:** draft
+- **Priority:** SHOULD
+- **Phase:** 3
+- **Verification:** integration
+
+The device service SHOULD emit events over its connection with the MCP
+Events extension, such as low disk space, a failed service or a finished
+update, which its user can use as triggers of their tasks as for a remote MCP
+server's (TSK-008). Only the device's owner MUST be able to subscribe to them
+(ADR-0106).

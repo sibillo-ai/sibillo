@@ -95,7 +95,9 @@ mostly quiet.
    conversation are listed with it and its user can withdraw them; they
    are created only by answering a stored approval request (AGT-012), never
    by a settings change, and a fork does not copy them. There is no
-   standing allowance beyond one conversation.
+   standing allowance beyond one conversation. Amended by ADR-0106: a task
+   carries grants, approved when it is saved, for the runs of its first
+   turn.
 
 5. **Tool permissions.** A tenant admin sets, for each user, each tool or
    each capability class to `allow`, `ask` or `deny` (AGT-002); without a

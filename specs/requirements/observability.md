@@ -40,7 +40,7 @@ items and credentials by default.
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** integration
 
 A user SHOULD be able to enable, for themselves only, a debug mode that

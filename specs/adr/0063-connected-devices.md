@@ -38,7 +38,9 @@ Inference stays on the instance; only the tools need to run on the device.
 5. **Every call is approved,** with a button, before it reaches the device
    (AGT-018). The run waits as for any approval (ADR-0033); an approved call
    to an offline device waits until it reconnects, and the conversation is
-   marked as waiting (DEV-005).
+   marked as waiting (DEV-005). Amended by ADR-0106: in the runs of a task,
+   a fixed grant approves one exact call in advance, and other calls are
+   denied without waiting.
 6. **Status.** About once a minute a device reports a short status, of which
    only the latest is kept, visible to its owner (DEV-006).
 7. **Least privilege.** The service runs as a dedicated unprivileged user

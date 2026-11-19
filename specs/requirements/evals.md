@@ -53,7 +53,7 @@ MUST flag every run of such a scenario that fails (ADR-0092).
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** review
 
 A release MUST NOT be published if the eval suite falls below its documented

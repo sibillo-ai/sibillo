@@ -51,7 +51,7 @@ another model instead (MOD-012) (ADR-0017, ADR-0091).
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** integration
 
 The model gateway SHOULD enforce spending limits per user and per tenant for

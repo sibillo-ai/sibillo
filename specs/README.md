@@ -43,7 +43,7 @@ Rationale: …
 |---|---|---|
 | Status | `draft`, `accepted`, `implemented`, `deprecated` | `draft` is proposed; `accepted` is approved by a maintainer and may be implemented; `implemented` is verified by tests; `deprecated` is kept for history |
 | Priority | `MUST`, `SHOULD`, `MAY` | Keywords as defined in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174) |
-| Phase | `0`–`3` | The [roadmap](../ROADMAP.md) phase in which the requirement is due |
+| Phase | `0`–`5` | The [roadmap](../ROADMAP.md) phase in which the requirement is due |
 | Verification | `unit`, `integration`, `e2e`, `design`, `security`, `eval`, `review` | How compliance is demonstrated |
 
 The normative statement must use the keyword matching the priority (in

@@ -26,7 +26,7 @@ self-registration MUST be disabled by default.
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** integration
 
 The system SHOULD support signing in through an external OpenID Connect

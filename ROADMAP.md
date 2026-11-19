@@ -5,8 +5,11 @@ the requirements of a phase are those with the matching `Phase` field in
 [`specs/requirements/`](specs/requirements/). Dates are deliberately absent:
 this is a personal, best-effort project.
 
-The phases were renumbered when connected devices became phase 2 (ADR-0063):
-ADRs written before then call the release phase 2 and opening up phase 3.
+The phases were renumbered twice. When connected devices became phase 2
+(ADR-0063), the release moved from phase 2 to 3 and opening up from 3 to 4.
+When tasks became phase 2 (ADR-0106), connected devices moved to phase 3, the
+release to phase 4 and opening up to phase 5. ADRs keep the numbers of the
+day they were written.
 
 ## Phase 0 — Walking skeleton
 
@@ -67,7 +70,26 @@ capabilities; notifications and voice last.
 **Exit criteria:** used daily by at least one household for a month without
 data loss; eval suite in place, including injection scenarios.
 
-## Phase 2 — Connected devices
+## Phase 2 — Tasks and triggers
+
+**Goal:** the assistant works while nobody writes: a press review ready on
+waking, a report every week, a word when something happens.
+
+Includes: tasks with their instructions, settings and triggers, each firing a
+new conversation listed under its task (TSK-001, TSK-002, TSK-010);
+schedules (TSK-003); task grants that let a run work unattended without ever
+completing the lethal trifecta (TSK-004, TSK-005); tasks proposed by the
+assistant in a conversation (TSK-006); webhook triggers (TSK-007); events of
+remote MCP servers through the MCP Events extension, reviewed by a tenant
+admin like tools (TSK-008); limits on firing (TSK-009); and tasks in the app
+(UX-031) (ADR-0106). Mail, messaging and other services come in as remote MCP
+servers, never as code of the control plane.
+
+**Exit criteria:** a household member wakes up to a press review made by a
+task every day for a month, and a task fired by a webhook or an MCP event
+runs as expected; every grant check has security tests that try to break it.
+
+## Phase 3 — Connected devices
 
 **Goal:** the assistant helps with the household's own machines: diagnosing a
 server, installing updates, checking logs and firewall rules, editing files,
@@ -77,19 +99,21 @@ Includes: the device service for Linux, paired to one user and connected
 outbound (DEV-001, DEV-002), its tools for commands and files (DEV-003), the
 tools of several devices in one run (DEV-004), calls that wait for offline
 devices (DEV-005), device status (DEV-006), least privilege by default
-(DEV-007), and the web app as a device (DEV-008) (ADR-0063). macOS and
-Windows may follow (DEV-009).
+(DEV-007), the web app as a device (DEV-008), and events of a device that
+fire tasks, such as a weekly check of a server's security updates (DEV-010)
+(ADR-0063, ADR-0106). macOS and Windows may follow (DEV-009).
 
 **Exit criteria:** the maintainer administers their own servers through
-Sibillo for a month, with every device call approved and none surprising.
+Sibillo for a month, with every device call approved, in a conversation or
+by a fixed grant of a task, and none surprising.
 
-## Phase 3 — A real assistant, and a first release
+## Phase 4 — A real assistant, and a first release
 
 **Goal:** the features that make it an assistant rather than a chat, and the
 release engineering to let others run it.
 
 Includes: multi-step research producing reports, browser automation in the
-sandbox, scheduled tasks, connectors over open protocols (calendar, mail,
+sandbox, connectors over open protocols (calendar, mail,
 files, home automation through mediated tools), OpenID Connect (AUTH-003),
 budgets (MOD-004), debug mode (OBS-004), signed multi-architecture images,
 upgrade guarantees, English and Italian translations, release gating by evals.
@@ -97,7 +121,7 @@ upgrade guarantees, English and Italian translations, release gating by evals.
 **Exit criteria:** first public release `0.1.0`; installation and upgrade
 documentation verified on a clean machine; public announcement.
 
-## Phase 4 — Opening up
+## Phase 5 — Opening up
 
 **Goal:** make the project sustainable beyond its first household.
 

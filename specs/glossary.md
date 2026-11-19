@@ -63,7 +63,7 @@ new entry here first (ADR-0005).
 | Agent | The component that turns a user request into model calls and tool calls. |
 | Run | One execution of the agent in response to a message, including all its model and tool calls. |
 | Run event | An AG-UI event produced during a run (text, tool call, result, interrupt, completion), stored durably with a sequence number and streamed to clients (ADR-0032, ADR-0034). |
-| Worker | A server process that executes runs and scheduled tasks as durable workflows (ADR-0034). |
+| Worker | A server process that executes runs, and fires tasks, as durable workflows (ADR-0034, ADR-0106). |
 | Durable execution engine | The library that checkpoints runs so they survive crashes and restarts: DBOS (ADR-0034). |
 | Interrupt | The end of a run that needs the user's answer, such as an approval; the answer starts a new run (ADR-0033). |
 | Tool | A capability the agent can invoke. All tools are mediated tools. |
@@ -77,7 +77,14 @@ new entry here first (ADR-0005).
 | Allowance | An approval that also covers later calls: of the web and command tools for the rest of a turn, or of a tool in one conversation (AGT-006, ADR-0090). |
 | Audit event | A content-free record of a tool call and its approval outcome, visible to the user it acted for (AGT-008, ADR-0090). |
 | Activity | The page of a user's settings that lists their audit events (UX-023). |
-| Scheduled task | A run started by a schedule or trigger rather than by a message. |
+| Task | A user's standing instructions, with conversation settings, triggers and task grants, that start a new conversation each time a trigger fires, without a message from the user (TSK-001, ADR-0106). |
+| Trigger | What fires a task: a schedule, a webhook trigger, or an event of a remote MCP server or a connected device (TSK-003, TSK-007, TSK-008, ADR-0106). |
+| Schedule | A trigger that fires at the times of a cron expression, in the task's time zone (TSK-003). |
+| Webhook trigger | A trigger that fires when a request reaches its secret address of the instance, whose body is the event (TSK-007). |
+| Event | Something that happened outside Sibillo, delivered by a remote MCP server or a connected device with the MCP Events extension, or by a request to a webhook trigger; its data is untrusted content (TSK-008, ADR-0106). |
+| Accepted event type | A type of event of a remote MCP server that a tenant admin accepted as the server listed it; offered only while the server lists it unchanged (TSK-008, ADR-0106). |
+| Firing | One time a trigger fires a task, which starts one conversation (TSK-002, TSK-009). |
+| Task grant | A call a task's runs may make without approval, given by its user when the task is saved: a fixed grant, of one tool with all its arguments, or an open grant, of one tool with any arguments (TSK-004, TSK-005, ADR-0106). Not to be confused with an allowance, which lasts one turn or one conversation. |
 | Memory item | A short text the assistant retains about a user across conversations, given to every run while memory is on; written by the user or by the assistant's memory tools, and untrusted when the assistant wrote it from untrusted content. Visible, editable and deletable by the user (MEM-001 to MEM-008, ADR-0095). |
 | Connector | An integration with an external system (calendar, mail, files, home automation), exposed to the agent as mediated tools. Not to be confused with a connection. |
 

@@ -53,7 +53,7 @@ after it has finished (ADR-0032).
 
 - **Status:** draft
 - **Priority:** SHOULD
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** review
 
 Breaking changes to the public API SHOULD be introduced only with a new

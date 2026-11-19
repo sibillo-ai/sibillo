@@ -50,7 +50,7 @@ agent. All such execution MUST happen in sandboxes.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** e2e
 
 Upgrading from any earlier released version to the current one MUST succeed
@@ -75,7 +75,7 @@ that a backup can be restored into a working instance (ADR-0077).
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** review
 
 Release container images MUST be published for amd64 and arm64, signed, and
@@ -85,7 +85,7 @@ accompanied by a software bill of materials.
 
 - **Status:** draft
 - **Priority:** MUST
-- **Phase:** 3
+- **Phase:** 4
 - **Verification:** review
 
 Container images MUST NOT include model weights or voice models. They MUST be
