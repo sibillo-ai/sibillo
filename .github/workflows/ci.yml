@@ -90,6 +90,7 @@ jobs:
               --ignore=tests/integration/test_forks.py --ignore=tests/integration/test_conversation_list.py
               --ignore=tests/integration/test_workspace_files.py --ignore=tests/integration/test_conversation_files.py
               --ignore=tests/integration/test_ollama.py --ignore=tests/integration/test_skills.py
+              --ignore=tests/integration/test_tasks.py
             # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
             # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
             budget: 360
@@ -117,8 +118,17 @@ jobs:
             paths: tests/integration/test_skills.py
             budget: 180
           - part: sandbox
-            paths: tests/security tests/integration/test_sandbox_driver.py
+            paths: >-
+              tests/security tests/integration/test_sandbox_driver.py
+              --ignore=tests/security/test_task_grants.py --ignore=tests/security/test_task_triggers.py
             budget: 300
+          # Tasks (TSK-001 to TSK-010, ADR-0106): each firing runs a conversation, and the
+          # grant and trigger tests wait for the worker's sweeps; about 185 seconds.
+          - part: tasks
+            paths: >-
+              tests/integration/test_tasks.py tests/security/test_task_grants.py
+              tests/security/test_task_triggers.py
+            budget: 240
           # The server image now builds the web app as well (ADR-0067).
           - part: end-to-end
             paths: tests/e2e/test_deployment.py
