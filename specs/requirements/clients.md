@@ -548,14 +548,14 @@ their place if every new piece of text pulls them back down.
 
 ## UX-031: Tasks in the app
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e
 
-Clients MUST let a user create, change, pause, resume and delete their tasks
-among their settings, with the task's instructions, settings, time zone,
-triggers and grants. For a schedule they MUST say in words when it fires and
+Clients MUST let a user create, change, pause, resume, fire at once
+(TSK-011) and delete their tasks among their settings, with the task's
+instructions, settings, time zone, triggers and grants. For a schedule they MUST say in words when it fires and
 show the next firing; for a webhook trigger, show its address once and let
 the user replace it; for an event trigger, offer the accepted event types of
 the servers the user may use and a form for the subscription's arguments
@@ -568,3 +568,36 @@ task started MUST show the task's name, and in the conversation, the calls
 denied as `not_granted` MUST be shown as such (TSK-002, TSK-004).
 
 Rationale: journey J15.
+
+## UX-032: The app follows what changes
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+While open, clients SHOULD follow the stream of API-008 and show what it
+announces without the user reloading: a conversation a task started SHOULD
+appear in the conversation list within seconds, marked as running until its
+first run ends, and a task's page SHOULD show its new conversations and
+their outcome as they change. After the stream is lost, clients MUST reload
+what they show when it returns (ADR-0108).
+
+Rationale: journey J15.
+
+## UX-033: Notifications that are off say so
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+While notifications are available on the instance (UX-004) and off on the
+device, clients SHOULD show a lasting sign of it in their main view, which
+turns them on from a button, says how to allow them when the browser blocks
+them, and which the user MAY dismiss on that device; a dismissed sign MUST
+NOT come back on that device until the user turns notifications on and off
+again (ADR-0101).
+
+Rationale: journeys J8 and J15: a task's answer waits for a user who
+learns of it.

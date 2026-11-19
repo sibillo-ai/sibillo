@@ -111,6 +111,7 @@ beyond keeping them configurable and updatable.
 | T-42 | Injected instructions in a page or an event read by a task's run, while nobody watches, use the task's grants to send data out or to act | X1 | AGT-003, AGT-004, TSK-004, TSK-005 |
 | T-43 | Forged, replayed or flooded webhook requests or MCP event deliveries start conversations, plant content in them, or spend the household's model budget | X1, X4 | TSK-007, TSK-008, TSK-009 |
 | T-44 | Injected instructions make the assistant propose a task, so that they run again later, unattended, with standing grants | X1 | TSK-005, TSK-006 |
+| T-45 | Injected instructions read in one conversation reach another, unseen, when the assistant searches or reads the user's earlier conversations | X1 | AGT-003, AGT-004, AGT-032, AGT-033 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |

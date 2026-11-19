@@ -161,3 +161,42 @@ and MUST stop firing when its user's account is disabled or deleted. Its runs
 MUST follow the user's data egress policy (MOD-003) and tool permissions
 (AGT-002) as they stand at the firing, and MUST be recorded in their cost
 ledger (MOD-006) and audit events (AGT-008) like any other run (ADR-0106).
+
+## TSK-011: Running a task now
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** integration
+
+A task's user MUST be able to fire it at once, also while it is paused. Such
+a firing MUST be recorded as `manual`, MUST count toward the limit of
+TSK-009 and wait its turn as any other, and its runs MUST follow the task's
+grants as TSK-004 and TSK-005 say (ADR-0107).
+
+## TSK-012: The assistant changes a task
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration
+
+The assistant SHOULD have a tool, `update_task`, that changes one of the
+user's tasks with the fields of a request to change a task, pausing and
+resuming included. Every call to it MUST require the user's approval, whose
+request MUST show the change in full and say when the run holds untrusted
+content; only approving it MUST apply the change, after the checks of
+TSK-004 and TSK-005. It MUST NOT be granted to a task (ADR-0107).
+
+## TSK-013: The assistant reads the user's tasks
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration
+
+The assistant SHOULD have a tool, `list_tasks`, that lists the user's own
+tasks with their instructions, triggers, next firing, grants and whether they
+are paused, and their latest firings with when each started, how its first
+run ended and its conversation's ID and title. It MUST NOT list another
+user's tasks, and its result MUST be trusted content (ADR-0107).

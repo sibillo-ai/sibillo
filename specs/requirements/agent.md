@@ -44,11 +44,13 @@ the user or the system) or untrusted (web content, received messages,
 external files, sandbox output, connector data from third parties). The
 results of tools in the `ingests_untrusted` class, attachments given to
 a run, untrusted memory items (MEM-008), and
-the loaded bodies of untrusted skills (AGT-025), MUST be untrusted; the user's messages,
+the loaded bodies of untrusted skills (AGT-025), and what a tool reads of
+another conversation that holds untrusted content (AGT-033), MUST be
+untrusted; the user's messages,
 their answers to questions (AGT-015) and the instructions MUST be trusted. A
 run MUST count as having untrusted content when the conversation's active
 path, up to and including that run, holds any, also after compaction and in
-a fork (ADR-0090).
+a fork (ADR-0090, ADR-0107).
 
 ## AGT-004: Breaking the lethal trifecta
 
@@ -521,3 +523,35 @@ rules (AGT-019) (ADR-0100).
 
 Rationale: many hosted servers accept no other credential, and people who
 are not technical cannot create tokens (T-38).
+
+## AGT-032: Searching the user's conversations
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration
+
+The assistant SHOULD have a tool, `search_conversations`, that finds the
+user's conversations by words of their titles and messages, as the search of
+CNV-009 does, with each conversation's ID, title, time and a short excerpt
+of the match. It MUST NOT find a temporary conversation (CNV-011), what a
+rewind removed (CNV-004), or another user's conversation (TEN-007). It MUST
+be in the `reads_private_data` class, and its result MUST be untrusted
+content exactly when a conversation it shows holds untrusted content on its
+active path (AGT-003) (ADR-0107).
+
+## AGT-033: Reading another conversation
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration, security
+
+The assistant SHOULD have a tool, `read_conversation`, that reads the
+messages of one of the user's conversations on its active path: what the
+user and the assistant wrote, and the names of the tools called, without
+their results, bounded as tool results are (AGT-014). It MUST NOT read a
+temporary conversation, what a rewind removed, or another user's
+conversation. It MUST be in the `reads_private_data` class, and its result
+MUST be untrusted content exactly when the conversation it reads holds
+untrusted content on its active path (AGT-003) (ADR-0107).

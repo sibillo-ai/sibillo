@@ -82,7 +82,11 @@ completing the lethal trifecta (TSK-004, TSK-005); tasks proposed by the
 assistant in a conversation (TSK-006); webhook triggers (TSK-007); events of
 remote MCP servers through the MCP Events extension, reviewed by a tenant
 admin like tools (TSK-008); limits on firing (TSK-009); and tasks in the app
-(UX-031) (ADR-0106). Mail, messaging and other services come in as remote MCP
+(UX-031) (ADR-0106). Then running a task now, the assistant changing and
+reading tasks, searching and reading the user's earlier conversations with
+provenance that follows what was read, a stream of the user's changes that
+the app follows, and a lasting sign when notifications are off (TSK-011 to
+TSK-013, AGT-032, AGT-033, API-008, UX-032, UX-033, ADR-0107, ADR-0108). Mail, messaging and other services come in as remote MCP
 servers, never as code of the control plane.
 
 **Exit criteria:** a household member wakes up to a press review made by a

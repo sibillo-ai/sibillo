@@ -84,6 +84,7 @@ new entry here first (ADR-0005).
 | Event | Something that happened outside Sibillo, delivered by a remote MCP server or a connected device with the MCP Events extension, or by a request to a webhook trigger; its data is untrusted content (TSK-008, ADR-0106). |
 | Accepted event type | A type of event of a remote MCP server that a tenant admin accepted as the server listed it; offered only while the server lists it unchanged (TSK-008, ADR-0106). |
 | Firing | One time a trigger fires a task, which starts one conversation (TSK-002, TSK-009). |
+| Change event | A content-free announcement, on the user's stream of changes, that a conversation was created, a run started or finished, or a task fired, with their identifiers (API-008, ADR-0108). |
 | Task grant | A call a task's runs may make without approval, given by its user when the task is saved: a fixed grant, of one tool with all its arguments, or an open grant, of one tool with any arguments (TSK-004, TSK-005, ADR-0106). Not to be confused with an allowance, which lasts one turn or one conversation. |
 | Memory item | A short text the assistant retains about a user across conversations, given to every run while memory is on; written by the user or by the assistant's memory tools, and untrusted when the assistant wrote it from untrusted content. Visible, editable and deletable by the user (MEM-001 to MEM-008, ADR-0095). |
 | Connector | An integration with an external system (calendar, mail, files, home automation), exposed to the agent as mediated tools. Not to be confused with a connection. |

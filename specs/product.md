@@ -149,4 +149,6 @@ a check of their servers' updates every week, a word when a certain mail
 arrives. Wakes up to a new conversation with the result and a notification,
 continues it like any other, and sees every past one from the task. Knows in
 advance what the task may do without asking, and finds what it was not
-allowed to do waiting for them (TSK-001 to TSK-010, UX-031).
+allowed to do waiting for them. Runs a task at once to try it, watches it
+appear as it runs, and asks the assistant how it went or to change it
+(TSK-001 to TSK-013, UX-031 to UX-033).
