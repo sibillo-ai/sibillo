@@ -56,6 +56,11 @@ ALLOWED_OWN_TOOLS = {
     "save_skill",
     # Proposes a task, which only the user's approval saves (TSK-006, ADR-0106).
     "propose_task",
+    # Changes a task, and reads the user's tasks and conversations (TSK-012, TSK-013, AGT-032, AGT-033, ADR-0107).
+    "update_task",
+    "list_tasks",
+    "search_conversations",
+    "read_conversation",
 }
 # The only places a component runs a command on the host, by file and
 # enclosing function. None runs anything a user or the agent chose.

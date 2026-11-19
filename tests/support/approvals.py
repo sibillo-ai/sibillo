@@ -62,6 +62,12 @@ DECLARED: dict[str, tuple[set[str], str]] = {
     "save_skill": (set[str](), "ask"),
     # Saves a task that runs later with standing grants: the user sees all of it first (TSK-006, ADR-0106).
     "propose_task": (set[str](), "ask"),
+    # Changes a task: the user sees the whole change first (TSK-012, ADR-0107).
+    "update_task": (set[str](), "ask"),
+    # Read the user's tasks and conversations: private data, untrusted by what they read (ADR-0107).
+    "list_tasks": ({"reads_private_data"}, "allow"),
+    "search_conversations": ({"reads_private_data"}, "allow"),
+    "read_conversation": ({"reads_private_data"}, "allow"),
 }
 
 

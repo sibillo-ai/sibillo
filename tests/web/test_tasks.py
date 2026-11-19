@@ -147,3 +147,54 @@ def test_a_task_lists_its_conversations_which_show_its_name(
     expect(page.get_by_role("main")).to_contain_text("Not allowed to this task")
     conversations = page.get_by_role("navigation", name="Conversations")
     expect(conversations).to_contain_text("Evening digest")
+
+
+@pytest.mark.spec("UX-031", "TSK-001")
+def test_a_user_changes_a_task_from_its_entry(page: Page, server: Server, member: Account) -> None:
+    token = login(server, member)
+    create_task(server, token, "Summarize the news.", name="Morning review")
+    sign_in(page, member)
+    _tasks_page(page)
+    item = page.get_by_role("region", name="Tasks").get_by_role("list", name="Your tasks").get_by_role("listitem").first
+    item.get_by_role("button", name="Edit Morning review").click()
+    dialog = page.get_by_role("dialog", name="Edit task")
+    expect(dialog.get_by_label("Instructions")).to_have_value("Summarize the news.")
+    dialog.get_by_label("Name").fill("Evening review")
+    dialog.get_by_label("Instructions").fill("Summarize the day.")
+    assert accessibility_violations(page) == []
+    dialog.get_by_role("button", name="Save").click()
+    expect(dialog).to_be_hidden()
+    expect(item).to_contain_text("Evening review")
+
+
+@pytest.mark.spec("UX-031", "UX-032", "TSK-011")
+def test_a_task_run_now_appears_as_running_and_then_done(page: Page, server: Server, member: Account) -> None:
+    token = login(server, member)
+    create_task(server, token, "slow:8", name="Slow digest")
+    sign_in(page, member)
+    _tasks_page(page)
+    item = page.get_by_role("region", name="Tasks").get_by_role("listitem").filter(has_text="Slow digest")
+    item.get_by_role("button", name="Run Slow digest now").click()
+    # Without reloading, the conversation appears in the list, marked as running, until its run ends.
+    conversations = page.get_by_role("navigation", name="Conversations")
+    running = conversations.get_by_role("listitem").filter(has_text="Slow digest")
+    expect(running).to_contain_text("Running", timeout=10_000)
+    expect(running).not_to_contain_text("Running", timeout=20_000)
+    item.get_by_role("link", name="Slow digest").click()
+    started = page.get_by_role("list", name="Conversations of this task").get_by_role("listitem")
+    expect(started).to_have_count(1)
+    expect(started.first).to_contain_text("Completed")
+
+
+@pytest.mark.spec("UX-033", "UX-004")
+def test_notifications_that_are_off_show_a_sign_until_dismissed(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    sign = page.get_by_role("region", name="Notifications are off")
+    expect(sign).to_be_visible()
+    expect(sign.get_by_role("button", name="Turn on")).to_be_visible()
+    assert accessibility_violations(page) == []
+    sign.get_by_role("button", name="Dismiss").click()
+    expect(sign).to_be_hidden()
+    page.reload()
+    expect(page.get_by_role("link", name="Settings")).to_be_visible()
+    expect(page.get_by_role("region", name="Notifications are off")).to_be_hidden()
