@@ -4,7 +4,8 @@ The PostgreSQL schema for phase 0. The schema is a contract (ADR-0003): it
 changes only through `spec/*` pull requests, and migrations in `migrations/`
 implement it. Background: ADR-0009, ADR-0025, ADR-0031, ADR-0033, ADR-0034,
 ADR-0037, ADR-0042, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0051,
-ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073, ADR-0094, ADR-0099, ADR-0100.
+ADR-0052, ADR-0068, ADR-0069, ADR-0071, ADR-0073, ADR-0094, ADR-0099, ADR-0100,
+ADR-0106.
 
 ## Roles
 
@@ -85,6 +86,10 @@ minimum needed and nothing else.
 | `expired_approvals()` | `conversation_id, tenant_id, owner_id` for every conversation whose `approvals_expire_at` has passed and that has no `queued` or `running` run | Expiry of approval requests (AGT-007, ADR-0090): only identifiers, so the worker can deny them under the owner's request context |
 | `retention_expired_runs(days integer)` | `run_id` for every run whose `finished_at` is more than `days` days ago | Retention of durable workflows (TEN-009, ADR-0052): only identifiers, so the worker can delete their workflows across tenants |
 | `auth_take_sign_in(token_hash bytea)` | `user_id, tenant_id, username, role, instance_admin, disabled, challenge, expires_at`, or no row | The passkey step of a sign-in (AUTH-010, ADR-0094): deletes the `sign_in` challenge with that token hash and returns it with its user, so that a token is used once whatever the outcome; also deletes every expired challenge |
+| `due_task_triggers()` | `trigger_id, task_id, tenant_id, owner_id, work` for every trigger with work due, of a task that is not paused and whose owner's account is not disabled: `fire` for a schedule whose `next_fire_at` has passed, `poll` for an `mcp_event` trigger polled whose `next_poll_at` has passed, `renew` for an `mcp_event` trigger delivered by webhook whose `refresh_before` is less than 10 minutes away | Firing schedules and following event subscriptions (TSK-003, TSK-008, ADR-0106): only identifiers, so the worker does the work under the owner's request context |
+| `waiting_task_firings()` | `firing_id, task_id, tenant_id, owner_id` for the oldest `waiting` firing of every task that has no `running` firing and whose owner's account is not disabled | Starting firings that wait their turn (TSK-009), as a sweep behind the worker's own start of the next firing when one ends |
+| `find_webhook_trigger(token_hash bytea)` | `trigger_id, task_id, tenant_id, owner_id, paused`, or no row | A request to a webhook trigger (TSK-007): the trigger whose `token_hash` it is, of a user whose account is not disabled |
+| `find_event_subscription(trigger_id uuid)` | `task_id, tenant_id, owner_id, paused, secret_ciphertext`, or no row | A delivery of MCP events by webhook (TSK-008): the `mcp_event` trigger delivered by webhook with that ID, of a user whose account is not disabled, with its encrypted secret to check the signature |
 | `bootstrap_instance(tenant_name text, username text, display_name text, password_hash text)` | `tenant_id, user_id` | Creates the first tenant and its first user, who is instance admin and tenant admin; fails if any user exists (AUTH-007). Executable only by `sibillo_owner`, run by the setup command |
 | `remove_passkeys(username text)` | `integer`, the number removed | Deletes every passkey of the user with that username, ignoring case, and fails when there is none such user (AUTH-010, ADR-0094). Executable only by `sibillo_owner`, run by the `remove-passkeys` command |
 
@@ -112,7 +117,7 @@ these are the only policies for that role:
 | Table | Operations for `sibillo_owner` | Used by |
 |---|---|---|
 | `tenants` | `SELECT`, `INSERT` | `bootstrap_instance` |
-| `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys` |
+| `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys`, and the task functions, for the account's state |
 | `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_disabled_user` |
 | `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window |
 | `passkey_challenges` | `SELECT`, `DELETE` | `auth_take_sign_in` |
@@ -120,6 +125,15 @@ these are the only policies for that role:
 | `runs` | `SELECT` | `retention_expired_runs`, `expired_temporary_conversations`, `expired_approvals` |
 | `conversations` | `SELECT` | `expired_temporary_conversations`, `expired_approvals` |
 | `connections` | `SELECT` | `default_model_configured` |
+| `tasks` | `SELECT` | `due_task_triggers`, `waiting_task_firings`, `find_webhook_trigger`, `find_event_subscription` |
+| `task_triggers` | `SELECT` | `due_task_triggers`, `find_webhook_trigger`, `find_event_subscription` |
+| `task_firings` | `SELECT` | `waiting_task_firings` |
+
+A webhook trigger's token, and a delivery's signature with its
+subscription's secret, authenticate a request as that trigger: once
+`find_webhook_trigger` or `find_event_subscription` found it, the API sets the
+request context of the task's owner, with the role `member`, to record the
+firing (or count it as skipped), and does nothing else under it (ADR-0106).
 
 Owner policies have no condition (`USING (true)`): `sibillo_owner` is never used
 by running services, so they open these tables only to the code of the
@@ -323,6 +337,8 @@ A user's groups of conversations (CNV-007, ADR-0073).
 | `disabled_servers` | uuid[] | not null, default empty; the remote MCP servers that are off (AGT-029, ADR-0099), without a reference: an ID of no server is ignored; copied from the user's settings on creation, and into a fork |
 | `base_instructions`, `additional_instructions` | text | the conversation's own instructions; null to use the user's defaults (CNV-014) |
 | `temporary` | boolean | not null, default false; set on creation and never changed (CNV-011, ADR-0082) |
+| `task_id` | uuid | the task whose firing started it (TSK-002, ADR-0106); (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete set null (`task_id`); indexed; never set otherwise, and not copied into a fork |
+| `task_name` | text | the task's name when it started the conversation, kept once the task is deleted; null when `task_id` was never set |
 | `archived_at` | timestamptz | null when active |
 | `created_at` | timestamptz | not null |
 | `updated_at` | timestamptz | not null; updated when a run adds messages |
@@ -449,6 +465,7 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `parent_run_id` | uuid | the run this run continues (ADR-0037); null for the first run; (`tenant_id`, `owner_id`, `parent_run_id`) references `runs` on delete cascade; indexed |
 | `kind` | text | `message` (a new turn) or `resume` (answers to an interrupt, ADR-0033) |
 | `turn_allows_web_and_commands` | boolean | not null, default false; the web and command tools are allowed for the rest of the turn (ADR-0090): set on a resume run answering an approval request with scope `turn`, and copied from the parent by every resume run |
+| `task_grants` | boolean | not null, default false; the calls of the run follow its conversation's task's grants (TSK-004, ADR-0106): set on the run a firing starts, unless the task failed the check of TSK-005 at the firing, and copied from the parent by every resume run |
 | `status` | text | `queued`, `running`, `interrupted`, `completed`, `failed`, `cancelled` |
 | `error_code` | text | stable error code when failed (API-007) |
 | `connection_id` | uuid | the connection that answered; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`) |
@@ -564,9 +581,9 @@ rewinding a conversation keeps them; they are deleted with their user.
 | `conversation_id`, `run_id` | uuid | not null; identifiers only |
 | `tool_call_id` | text | not null; unique with `run_id`: the idempotency key of the call |
 | `tool` | text | not null; the tool's name: one of `ToolName`, or a tool without a switch, such as `read_tool_result` |
-| `outcome` | text | `not_needed`, `allowed`, `approved`, `denied`, `expired` or `refused` |
+| `outcome` | text | `not_needed`, `allowed`, `approved`, `denied`, `expired`, `refused`, `granted` (a task grant covered it) or `not_granted` (it needed approval in a task's run and no grant covered it, ADR-0106) |
 | `scope` | text | `once`, `turn` or `conversation`, else null |
-| `reason` | text | `untrusted_content`, `tool_default`, `permission`, `consequential` or `device`, else null |
+| `reason` | text | `untrusted_content`, `tool_default`, `permission`, `consequential`, `device` or `task_proposal`, else null |
 | `attempts` | integer | not null, default 0; incremented before each start of a call of a tool in the `external_communication`, `irreversible` or `physical` class, outside any durable step, so that a run replayed after a crash, which calls its tools again, increments it again; more than one means it may have run twice (ADR-0034) |
 | `created_at` | timestamptz | not null; indexed with `owner_id` |
 
@@ -731,11 +748,130 @@ Primary key (`connection_id`, `model`). Policies: `SELECT`, `INSERT` and
 `UPDATE` where `tenant_id = app_tenant_id()`; no `DELETE` but through its
 connection.
 
+### `mcp_server_events`
+
+The event types of a remote MCP server, as last listed and as accepted
+(TSK-008, ADR-0106).
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id` | uuid | not null |
+| `server_id` | uuid | not null; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade |
+| `name` | text | not null; the server's name for the event type |
+| `listed` | jsonb | the type as last listed, `{description, inputSchema, payloadSchema, delivery}`; null when the last listing did not have it |
+| `accepted` | jsonb | the type as a tenant admin accepted it, `{description, inputSchema, payloadSchema}`; null when not accepted |
+| `problem` | text | why the listed type cannot be accepted: `name`, `description_too_long`, `schema_too_large`, `too_many_events` or `no_supported_delivery` (neither `poll` nor `webhook`); else null |
+| `accepted_at` | timestamptz | set exactly when `accepted` is |
+
+Primary key (`server_id`, `name`). Policies as for `connections`. Listing
+the server again lists its event types as it lists its tools, with the same
+rules; a new `url` sets `accepted` to null in every row of the server.
+
+### `tasks` (private)
+
+A user's tasks (TSK-001, ADR-0106).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null; (`tenant_id`, `owner_id`) references `users` on delete cascade |
+| `name` | text | not null; from 1 to 100 characters; unique for its owner |
+| `instructions` | text | not null; from 1 to 20,000 characters |
+| `connection_id`, `model` | uuid, text | the model of its conversations, as in `conversations`: set from its owner's default model, else the tenant's, when the task is created, or chosen by its owner; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`) |
+| `reasoning` | text | not null, default `on`; as in `conversations` |
+| `disabled_tools`, `disabled_skills` | text[] | not null, default empty; as in `conversations` |
+| `disabled_servers` | uuid[] | not null, default empty; as in `conversations` |
+| `uses_memory` | boolean | not null, default false; whether its runs use memory, when memory is on for its owner |
+| `time_zone` | text | not null; an IANA time zone name, such as `Europe/Rome` |
+| `paused_at` | timestamptz | when it was paused; null while it fires |
+| `skipped_count` | integer | not null, default 0; firings that did not run, over the limit or while paused (TSK-009) |
+| `last_skipped_at` | timestamptz | when the latest of them arrived; null when none did |
+| `created_at`, `updated_at` | timestamptz | not null |
+
+At most 50 rows per owner. Copied into each conversation it starts: the
+model, the reasoning, the disabled tools, skills and servers. Its
+instructions become the first message.
+
+### `task_grants` (private)
+
+The task grants of a task (TSK-004, TSK-005, ADR-0106).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null |
+| `task_id` | uuid | not null; (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete cascade |
+| `tool` | text | not null; the name the model knows the tool by: a `ToolName` of the API contract, or `<prefix>__<name>` of a remote MCP server's tool |
+| `server_id` | uuid | the server of a server's tool, else null; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade |
+| `arguments` | jsonb | for a fixed grant, the call's arguments, a JSON object, at most 4 KiB; null for an open grant |
+| `created_at` | timestamptz | not null |
+
+Unique (`task_id`, `tool`, `arguments`), with nulls not distinct. At most 20
+rows per task. A row with `server_id` has `arguments`: open grants never
+cover a server's tool.
+
+### `task_triggers` (private)
+
+The triggers of a task (TSK-003, TSK-007, TSK-008, ADR-0106).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null |
+| `task_id` | uuid | not null; (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete cascade |
+| `kind` | text | not null; `schedule`, `webhook` or `mcp_event` |
+| `schedule` | text | for `schedule`, a cron expression of five fields; else null |
+| `next_fire_at` | timestamptz | for `schedule`, its next firing time; indexed; else null |
+| `token_hash` | bytea | for `webhook`, the SHA-256 of its token; unique; else null |
+| `server_id` | uuid | for `mcp_event`, the server; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade; else null |
+| `server_generation` | uuid | for `mcp_event`, the server's `generation` when the subscription was made; a subscription of another generation is made again, with the owner's credential of the new one |
+| `event_name` | text | for `mcp_event`, the event type; else null |
+| `event_arguments` | jsonb | for `mcp_event`, the subscription's arguments, a JSON object of at most 4 KiB; else null |
+| `delivery` | text | for `mcp_event`, `poll` or `webhook`; else null |
+| `cursor` | text | for `mcp_event`, the server's cursor after the last event received; null to start from now |
+| `next_poll_at` | timestamptz | for `poll`, when to poll next: the server's `nextPollMs`, at least one minute after the last poll; indexed |
+| `secret_ciphertext` | bytea | for `webhook` delivery, the subscription's secret (`whsec_` and 32 random bytes in base64), encrypted with AES-256-GCM under `SIBILLO_SECRET_KEY` with the row's ID followed by `:secret` as associated data (MOD-002); else null |
+| `refresh_before` | timestamptz | for `webhook` delivery, the server's `refreshBefore` of the subscription |
+| `problem` | text | for `mcp_event`, why it receives no events: `not_accepted` (the type is not, or no longer, an accepted event type), `credential_missing`, `unauthorized`, `unreachable` or `terminated`; else null |
+| `created_at` | timestamptz | not null |
+
+At most 5 rows per task, and at least one while the task exists. Resuming a
+paused task sets `cursor` to null, so that events of the pause do not fire
+it.
+
+### `task_firings` (private)
+
+The firings of a task that wait, run or ran (TSK-002, TSK-009, ADR-0106).
+Firings over the limit or while the task is paused have no row; the task
+counts them.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key |
+| `tenant_id`, `owner_id` | uuid | not null |
+| `task_id` | uuid | not null; (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete cascade |
+| `trigger_id` | uuid | (`tenant_id`, `owner_id`, `trigger_id`) references `task_triggers` on delete set null (`trigger_id`) |
+| `trigger_kind` | text | not null; the trigger's `kind` |
+| `fire_key` | text | not null; what makes a firing one: the trigger's ID followed by `:` and, for a schedule, the firing time it stands for, for an MCP event, its event ID, for a webhook request, a random UUID |
+| `event` | jsonb | the event while the firing waits, `{name, data}` for an MCP event, `{content_type, body}` for a webhook request, at most 64 KiB; set to null when its conversation starts |
+| `status` | text | not null; `waiting`, `running` (its conversation's first run has not ended) or `done` |
+| `without_grants` | boolean | not null, default false; the task failed the check of TSK-005 at the firing |
+| `conversation_id` | uuid | the conversation it started; (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete set null (`conversation_id`) |
+| `created_at` | timestamptz | not null; when the trigger fired; indexed with `task_id` for the hourly limit |
+| `started_at`, `finished_at` | timestamptz | when its conversation started, and when its first run ended |
+
+Unique (`task_id`, `fire_key`): the worker inserts a firing with
+`ON CONFLICT DO NOTHING` and starts its conversation in the transaction that
+sets `status` to `running`, so that one firing starts one conversation
+(TSK-003). At most one row per task is `running`. Rows `done` for more than
+30 days are deleted by the worker every hour.
+
 ### Policies for private tables
 
 `device_sessions`, `notification_subscriptions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
 `conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `run_followers`, `usage_ledger`,
-`audit_events`, `mcp_credentials` and `mcp_sign_ins` use the same policy for
+`audit_events`, `mcp_credentials`, `mcp_sign_ins`, `tasks`, `task_grants`,
+`task_triggers` and `task_firings` use the same policy for
 every operation:
 
 ```sql
@@ -783,6 +919,11 @@ keys, not by privileges of `sibillo_app`.
 | `mcp_credentials` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `mcp_sign_ins` | `SELECT`, `INSERT`, `DELETE` |
 | `served_context_windows` | `SELECT`, `INSERT`, `UPDATE` |
+| `mcp_server_events` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `tasks` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `task_grants` | `SELECT`, `INSERT`, `DELETE` |
+| `task_triggers` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `task_firings` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | Helper functions | `EXECUTE` on `app_tenant_id()`, `app_user_id()`, `app_is_tenant_admin()`, `app_is_instance_admin()` |
 | Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` and `remove_passkeys` |
 
@@ -820,7 +961,8 @@ way (CNV-004, ADR-0068); the foreign key from a run to its parent cascades. Its 
 cost ledger are kept, detached from the conversation and its runs, so that
 spending totals stay correct (ADR-0042), and so are its audit events
 (ADR-0090), the memory items written in it (ADR-0095) and the skills saved
-in it (ADR-0096). Deletion is physical;
+in it (ADR-0096). Deleting a task deletes its grants, triggers and firings,
+and leaves the conversations it started, with their `task_name` (ADR-0106). Deletion is physical;
 there is no soft delete for user content.
 
 ## Migrations

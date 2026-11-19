@@ -45,6 +45,7 @@ tags:
   - name: memory
   - name: skills
   - name: runs
+  - name: tasks
   - name: speech
   - name: health
 
@@ -1314,14 +1315,15 @@ paths:
       operationId: refreshMcpServer
       summary: List a remote MCP server's tools again (tenant admin only).
       description: |
-        Shows which accepted tools changed or are gone, and which are new;
-        accepting none of them changes nothing (AGT-028). A `token` or
+        Shows which accepted tools and event types changed or are gone, and
+        which are new; accepting none of them changes nothing (AGT-028,
+        TSK-008). A `token` or
         `oauth` server is listed with the admin's own credential, and
         answers `mcp_server.credential_missing` when they have none, or
         `mcp_server.unauthorized` when the server refuses it (AGT-030). A
         server that cannot be reached answers `mcp_server.unreachable`. Each
         keeps the last listing.
-      x-requirements: [AGT-028, AGT-030, TEN-006]
+      x-requirements: [AGT-028, AGT-030, TSK-008, TEN-006]
       responses:
         "200":
           description: The server, with its tools as listed now.
@@ -1356,6 +1358,38 @@ paths:
       responses:
         "200":
           description: The server, with its tools.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /tenant/mcp-servers/{server_id}/accepted-event-types:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
+    put:
+      tags: [administration]
+      operationId: setAcceptedMcpEventTypes
+      summary: Replace the accepted event types of a remote MCP server (tenant admin only).
+      description: |
+        Each event type named is accepted as last listed, and every other
+        event type of the server is no longer accepted: the triggers on it
+        receive no more events until it is accepted again. The request is
+        refused with `resource.conflict`, and nothing changes, when a digest
+        is not that of the type's last listing, or a type cannot be accepted
+        (TSK-008, ADR-0106).
+      x-requirements: [TSK-008, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptedMcpEventTypesRequest" }
+      responses:
+        "200":
+          description: The server, with its tools and event types.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/McpServer" }
@@ -2471,6 +2505,272 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /tasks:
+    post:
+      tags: [tasks]
+      operationId: createTask
+      summary: Create a task.
+      description: |
+        The task is saved only when its grants pass the checks of TSK-004 and
+        TSK-005: a grant of a tool that cannot be granted answers
+        `task.grant_not_allowed`, and grants that complete the lethal
+        trifecta answer `task.lethal_trifecta`, with the check in
+        `grant_check`. A schedule that would fire more often than once every
+        15 minutes, an unknown time zone or event type, or a model, tool or
+        server the user cannot use answer `request.validation_failed`. Each
+        webhook trigger's `webhook_path` is in this answer only. A user has
+        at most 50 tasks (ADR-0106).
+      x-requirements: [TSK-001, TSK-003, TSK-004, TSK-005, TSK-007, TSK-008, UX-031]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaskRequest" }
+      responses:
+        "201":
+          description: Task created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/TaskRefused" }
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      summary: The user's tasks, by name.
+      x-requirements: [TSK-001, TSK-009, UX-031, TEN-007]
+      responses:
+        "200":
+          description: Every task of the user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+
+  /tasks/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      tags: [tasks]
+      operationId: getTask
+      summary: A task.
+      x-requirements: [TSK-001, TSK-005, TSK-009, UX-031, TEN-006, TEN-007]
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [tasks]
+      operationId: updateTask
+      summary: Change, pause or resume a task, or replace its grants.
+      description: |
+        Changes apply from the next firing; a firing that runs keeps what it
+        started with. `grants` replaces every grant, checked as when creating
+        a task (TSK-004, TSK-005). Resuming a paused task does not fire it
+        for what happened while it was paused (ADR-0106).
+      x-requirements: [TSK-001, TSK-004, TSK-005, UX-031, TEN-006, TEN-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaskRequest" }
+      responses:
+        "200":
+          description: The updated task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/TaskRefused" }
+    delete:
+      tags: [tasks]
+      operationId: deleteTask
+      summary: Delete a task.
+      description: |
+        Its triggers stop at once and its waiting firings are dropped. The
+        conversations it started stay, with its name (ADR-0106).
+      x-requirements: [TSK-001, TEN-006, TEN-007]
+      responses:
+        "204": { description: Task deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tasks/{task_id}/conversations:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      tags: [tasks]
+      operationId: listTaskConversations
+      summary: The conversations a task started that still exist, newest first.
+      x-requirements: [TSK-002, UX-031, TEN-006, TEN-007]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of the task's conversations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskConversationPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /tasks/{task_id}/triggers:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    post:
+      tags: [tasks]
+      operationId: addTaskTrigger
+      summary: Add a trigger to a task.
+      description: |
+        Checked as when creating a task; an event trigger counts as a source
+        of private data and of untrusted content, so it may make the task's
+        grants complete the lethal trifecta (`task.lethal_trifecta`,
+        TSK-005). A webhook trigger's `webhook_path` is in this answer only.
+        A task has at most 5 triggers.
+      x-requirements: [TSK-003, TSK-005, TSK-007, TSK-008, UX-031, TEN-006, TEN-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskTriggerInput" }
+      responses:
+        "201":
+          description: Trigger added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskTrigger" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/TaskRefused" }
+
+  /tasks/{task_id}/triggers/{trigger_id}:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+      - $ref: "#/components/parameters/TriggerId"
+    delete:
+      tags: [tasks]
+      operationId: removeTaskTrigger
+      summary: Remove a trigger of a task.
+      description: |
+        A task keeps at least one trigger: removing its last one answers
+        `resource.conflict` (TSK-001). A webhook trigger's address stops
+        working at once, and an event subscription is ended with the server.
+      x-requirements: [TSK-001, TSK-007, TSK-008, TEN-006, TEN-007]
+      responses:
+        "204": { description: Trigger removed. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /tasks/{task_id}/triggers/{trigger_id}/webhook-address:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+      - $ref: "#/components/parameters/TriggerId"
+    post:
+      tags: [tasks]
+      operationId: replaceWebhookAddress
+      summary: Give a webhook trigger a new address.
+      description: |
+        The old address stops working at once, and the new one is in this
+        answer only (TSK-007). A trigger that is not a webhook trigger
+        answers `resource.conflict`.
+      x-requirements: [TSK-007, UX-031, TEN-006, TEN-007]
+      responses:
+        "200":
+          description: The trigger, with its new address.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskTrigger" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /hooks/{token}:
+    parameters:
+      - $ref: "#/components/parameters/WebhookToken"
+    post:
+      tags: [tasks]
+      operationId: fireWebhookTrigger
+      summary: Fire the task of a webhook trigger.
+      description: |
+        The token in the address is the only authentication. The body, of
+        any type and at most 64 KiB, is the event, untrusted content of the
+        conversation the task starts (TSK-002, AGT-003). The answer is `202`
+        whether the address fired a task, belongs to a paused task, or is
+        unknown, replaced or deleted, so that it tells nothing of the task
+        (TSK-007). Limited to 30 requests a minute per address and 60 per
+        source address (ADR-0106).
+      security: []
+      x-requirements: [TSK-002, TSK-007, TSK-009]
+      requestBody:
+        required: false
+        content:
+          "*/*":
+            schema: { type: string, format: binary, maxLength: 65536 }
+      responses:
+        "202": { description: Received. }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /mcp-events/{trigger_id}:
+    parameters:
+      - $ref: "#/components/parameters/TriggerId"
+    post:
+      tags: [tasks]
+      operationId: receiveMcpEvents
+      summary: Receive a delivery of a remote MCP server's events by webhook.
+      description: |
+        The address a subscription of the MCP Events extension was made with
+        (`events/subscribe`). A delivery is accepted only with a valid
+        Standard Webhooks signature with the subscription's own secret, a
+        `webhook-timestamp` less than five minutes old and a `webhook-id`
+        not seen before; anything else, including an unknown trigger,
+        answers `webhook.rejected`. An accepted event fires the task at most
+        once by its event ID; control envelopes (`gap`, `terminated`) fire
+        nothing, and `terminated` ends the subscription (TSK-008, ADR-0106).
+        A body larger than 256 KiB answers `413`. The answer comes once the
+        delivery is stored.
+      security: []
+      x-requirements: [TSK-008, TSK-009]
+      parameters:
+        - { name: webhook-id, in: header, required: true, schema: { type: string, maxLength: 200 } }
+        - { name: webhook-timestamp, in: header, required: true, schema: { type: string, pattern: "^[0-9]{1,12}$" } }
+        - { name: webhook-signature, in: header, required: true, schema: { type: string, maxLength: 2000 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "202": { description: Stored. }
+        "401": { $ref: "#/components/responses/WebhookRejected" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /health:
     get:
       tags: [health]
@@ -2576,6 +2876,22 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Id" }
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    TriggerId:
+      name: trigger_id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    WebhookToken:
+      name: token
+      in: path
+      required: true
+      description: The token of a webhook trigger's address, 32 random bytes in base64url without padding (TSK-007).
+      schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
     ConversationId:
       name: conversation_id
       in: path
@@ -2772,6 +3088,36 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
           example: { type: "about:blank", title: "Temporary conversation", status: 409, code: "conversation.temporary" }
+    TaskRefused:
+      description: |
+        The request is invalid (`request.validation_failed`); a grant covers
+        a tool that cannot be granted (`task.grant_not_allowed`, TSK-004),
+        which `detail` names; or the task's grants, settings and triggers
+        would complete the lethal trifecta (`task.lethal_trifecta`, TSK-005),
+        with the check in `grant_check`.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Problem"
+              - type: object
+                properties:
+                  grant_check: { $ref: "#/components/schemas/GrantCheck" }
+          example: { type: "about:blank", title: "Grants refused", status: 422, code: "task.lethal_trifecta" }
+    PayloadTooLarge:
+      description: The body is larger than the operation allows (`request.too_large`); nothing was stored.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Too large", status: 413, code: "request.too_large" }
+    WebhookRejected:
+      description: |
+        The delivery is not accepted (`webhook.rejected`): unknown address,
+        invalid signature, old timestamp or delivery seen before, alike.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Rejected", status: 401, code: "webhook.rejected" }
     ValidationFailed:
       description: The request body or parameters are invalid.
       content:
@@ -2802,6 +3148,7 @@ components:
         - resource.not_found
         - resource.conflict
         - request.validation_failed
+        - request.too_large
         - conversation.temporary
         - run.in_progress
         - run.interrupt_pending
@@ -2832,6 +3179,9 @@ components:
         - mcp_server.credential_missing
         - mcp_server.oauth_unsupported
         - mcp_server.sign_in_failed
+        - task.grant_not_allowed
+        - task.lethal_trifecta
+        - webhook.rejected
         - sandbox.unavailable
         - sandbox.command_failed
         - internal.error
@@ -3356,6 +3706,7 @@ components:
         - update_memory
         - forget
         - save_skill
+        - propose_task
 
     DisabledTools:
       type: array
@@ -3381,7 +3732,7 @@ components:
         the instance admin, which allows a private address. `credential` is
         the state of the requesting admin's own credential; other users'
         credentials are never shown, nor is a client secret.
-      required: [id, name, prefix, url, auth, oauth, credential, private_network, enabled, server, tools, listed_at, created_at, updated_at]
+      required: [id, name, prefix, url, auth, oauth, credential, private_network, enabled, server, tools, event_types, listed_at, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         name: { type: string }
@@ -3423,6 +3774,12 @@ components:
           type: array
           description: Every tool as last listed, and every accepted tool, by name.
           items: { $ref: "#/components/schemas/McpServerTool" }
+        event_types:
+          type: array
+          description: |
+            Every event type as last listed, and every accepted one, by name;
+            empty for a server without the MCP Events extension (TSK-008).
+          items: { $ref: "#/components/schemas/McpServerEventType" }
         listed_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
@@ -3472,6 +3829,51 @@ components:
             characters, its input schema larger than 16 KiB, the server has
             more than 100 tools, or it requires task execution.
         accepted_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+
+    McpServerEventType:
+      type: object
+      description: |
+        An event type of a remote MCP server, for its review (TSK-008,
+        ADR-0106), with the same `status` as a tool (`McpServerTool`).
+      required: [name, status, listed, accepted, digest, problem, accepted_at]
+      properties:
+        name: { type: string, description: "The server's name for the event type." }
+        status: { type: string, enum: [accepted, changed, gone, not_accepted, unusable] }
+        listed:
+          description: The type as last listed; `null` when gone.
+          oneOf: [{ $ref: "#/components/schemas/McpEventTypeDefinition" }, { type: "null" }]
+        accepted:
+          description: The type as accepted; `null` when not accepted.
+          oneOf: [{ $ref: "#/components/schemas/McpEventTypeDefinition" }, { type: "null" }]
+        digest:
+          type: [string, "null"]
+          description: |
+            The SHA-256, in hexadecimal, of the canonical JSON of the listed
+            `description`, `input_schema` and `payload_schema`, to send when
+            accepting it; `null` when gone.
+        problem:
+          type: [string, "null"]
+          enum: [name, description_too_long, schema_too_large, too_many_events, no_supported_delivery, null]
+          description: |
+            Why it cannot be accepted: its name does not fit
+            `^[A-Za-z0-9_.-]{1,64}$`, its description is longer than 4,000
+            characters, one of its schemas is larger than 16 KiB, the server
+            has more than 100 event types, or it is delivered neither by
+            polling nor by webhook.
+        accepted_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+
+    McpEventTypeDefinition:
+      type: object
+      description: An event type's fields as its server lists them (`events/list`).
+      required: [description, input_schema, payload_schema]
+      properties:
+        description: { type: [string, "null"] }
+        input_schema: { type: object, description: "The schema of a subscription's arguments." }
+        payload_schema: { type: [object, "null"], description: "The schema of an event's data." }
+        delivery:
+          type: array
+          description: The delivery modes the server offers; absent from an accepted type.
+          items: { type: string }
 
     McpServerAuth:
       type: string
@@ -3588,10 +3990,27 @@ components:
               name: { type: string }
               digest: { type: string, pattern: "^[0-9a-f]{64}$" }
 
+    AcceptedMcpEventTypesRequest:
+      type: object
+      required: [event_types]
+      additionalProperties: false
+      properties:
+        event_types:
+          type: array
+          description: The event types to accept, each by its name and the digest of its listing the admin saw.
+          maxItems: 100
+          items:
+            type: object
+            required: [name, digest]
+            additionalProperties: false
+            properties:
+              name: { type: string }
+              digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+
     McpServerSummary:
       type: object
       description: A remote MCP server as a user of the household sees it (AGT-029, ADR-0099).
-      required: [id, name, prefix, host, auth, credential, denied, tools]
+      required: [id, name, prefix, host, auth, credential, denied, tools, event_types]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         name: { type: string }
@@ -3612,6 +4031,17 @@ components:
               model_name: { type: string }
               title: { type: [string, "null"] }
               description: { type: [string, "null"] }
+        event_types:
+          type: array
+          description: Its accepted event types that the server lists as accepted, which the user's tasks may be triggered by (TSK-008).
+          items:
+            type: object
+            required: [name, description, input_schema, payload_schema]
+            properties:
+              name: { type: string }
+              description: { type: [string, "null"] }
+              input_schema: { type: object }
+              payload_schema: { type: [object, "null"] }
 
     DisabledServers:
       type: array
@@ -3702,17 +4132,19 @@ components:
       description: |
         How a tool call was decided (AGT-008): it needed no approval, an
         allowance covered it, the user approved or denied it, its request
-        expired, or a tool permission refused it.
-      enum: [not_needed, allowed, approved, denied, expired, refused]
+        expired, a tool permission refused it, a task grant covered it, or,
+        in a task's run, it needed approval and no task grant covered it, so
+        it was denied without asking (TSK-004, ADR-0106).
+      enum: [not_needed, allowed, approved, denied, expired, refused, granted, not_granted]
 
     ApprovalReason:
       type: string
       description: |
         Why a call needs approval: untrusted content in the run (AGT-004), the
         tool's default or a tool permission (AGT-006, AGT-002), its
-        `irreversible` or `physical` class, or a device or MCP server
-        (AGT-018).
-      enum: [untrusted_content, tool_default, permission, consequential, device]
+        `irreversible` or `physical` class, a device or MCP server
+        (AGT-018), or a proposed task, whose every call is asked (TSK-006).
+      enum: [untrusted_content, tool_default, permission, consequential, device, task_proposal]
 
     Allowances:
       type: object
@@ -4087,7 +4519,7 @@ components:
 
     Conversation:
       type: object
-      required: [id, title, archived, temporary, active_run_id, model, reasoning, disabled_tools, disabled_skills, disabled_servers, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
+      required: [id, title, archived, temporary, task, active_run_id, model, reasoning, disabled_tools, disabled_skills, disabled_servers, allowances, base_instructions, additional_instructions, folder_id, pinned, forked_from, interrupts, plan, cost, last_message_at, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         temporary:
@@ -4097,6 +4529,18 @@ components:
           type: string
           description: Empty while the conversation is untitled; clients show their own placeholder (ADR-0052).
         archived: { type: boolean }
+        task:
+          description: |
+            The task whose firing started it, with the task's name then; the
+            ID is `null` once the task is deleted. `null` for a conversation
+            no task started, and for its forks (TSK-002, ADR-0106).
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: { oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }] }
+                name: { type: string }
+            - type: "null"
         active_run_id:
           description: Last run of the active path (ADR-0037); null before the first run.
           oneOf:
@@ -4220,6 +4664,12 @@ components:
           type: string
           description: Where the data goes, such as the search service, a web address's host, or the internet from the sandbox.
         reason: { $ref: "#/components/schemas/ApprovalReason" }
+        untrusted_content:
+          type: boolean
+          description: |
+            For `task_proposal`, whether the run holds untrusted content, so
+            that the proposal may come from injected instructions (TSK-006);
+            absent otherwise.
         scopes:
           type: array
           description: The scopes the user may approve with, `once` first.
@@ -4700,6 +5150,212 @@ components:
             - REASONING_MESSAGE_END
             - REASONING_END
             - CUSTOM
+
+    TimeZone:
+      type: string
+      description: An IANA time zone name, such as `Europe/Rome`.
+      minLength: 1
+      maxLength: 64
+
+    TaskTriggerInput:
+      description: |
+        A trigger to add (ADR-0106): a schedule, a cron expression of five
+        fields evaluated in the task's time zone, firing at most once every
+        15 minutes (TSK-003); a webhook trigger (TSK-007); or an accepted
+        event type of a remote MCP server the user may use, with the
+        subscription's arguments, valid against its input schema (TSK-008).
+      oneOf:
+        - type: object
+          required: [kind, schedule]
+          additionalProperties: false
+          properties:
+            kind: { const: schedule }
+            schedule: { type: string, minLength: 9, maxLength: 100 }
+        - type: object
+          required: [kind]
+          additionalProperties: false
+          properties:
+            kind: { const: webhook }
+        - type: object
+          required: [kind, server_id, event, arguments]
+          additionalProperties: false
+          properties:
+            kind: { const: mcp_event }
+            server_id: { $ref: "#/components/schemas/Id" }
+            event: { type: string, minLength: 1, maxLength: 64 }
+            arguments: { type: object, additionalProperties: true, description: "At most 4 KiB as JSON." }
+
+    TaskTrigger:
+      type: object
+      description: |
+        A trigger of a task. `webhook_path` is the path of a webhook
+        trigger's address under the instance's origin, such as
+        `/v1/hooks/<token>`, given only in the answer that made it; `null`
+        everywhere else. `delivery` is how the worker receives an MCP
+        event trigger's events: by webhook when the instance has an `https`
+        `SIBILLO_PUBLIC_ORIGIN` and the server offers it, else by polling.
+        `problem` says why an event trigger receives no events.
+      required: [id, kind, schedule, next_fire_at, webhook_path, server_id, event, arguments, delivery, problem, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/Id" }
+        kind: { type: string, enum: [schedule, webhook, mcp_event] }
+        schedule: { type: [string, "null"] }
+        next_fire_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        webhook_path: { type: [string, "null"] }
+        server_id: { oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }] }
+        event: { type: [string, "null"] }
+        arguments: { type: [object, "null"] }
+        delivery: { type: [string, "null"], enum: [poll, webhook, null] }
+        problem:
+          type: [string, "null"]
+          enum: [not_accepted, credential_missing, unauthorized, unreachable, terminated, null]
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+
+    TaskGrant:
+      type: object
+      description: |
+        A call the task's runs may make without approval (TSK-004,
+        ADR-0106): with `arguments`, a fixed grant, which covers a call only
+        when its arguments equal these; with `arguments` `null`, an open
+        grant, of the tool with any arguments. A remote MCP server's tool
+        takes only fixed grants.
+      required: [tool, arguments]
+      additionalProperties: false
+      properties:
+        tool:
+          type: string
+          description: A `ToolName`, or a remote MCP server's tool, `<prefix>__<tool>`.
+          pattern: "^[A-Za-z0-9_-]{1,64}$"
+        arguments:
+          type: [object, "null"]
+          additionalProperties: true
+          description: At most 4 KiB as JSON.
+
+    GrantCheck:
+      type: object
+      description: |
+        The check of TSK-005 on a task's grants, settings and triggers: the
+        sources of each element of the lethal trifecta, each a tool's name,
+        `memory` or `event_trigger`. It passes when at least one list is
+        empty. Fixed grants never appear under `external_communication`.
+      required: [passes, private_data, untrusted_content, external_communication]
+      properties:
+        passes: { type: boolean }
+        private_data: { type: array, items: { type: string } }
+        untrusted_content: { type: array, items: { type: string } }
+        external_communication: { type: array, items: { type: string } }
+
+    Task:
+      type: object
+      description: |
+        A task of the user (TSK-001, ADR-0106). `grant_check` is the check of
+        its grants as they stand now; a task that no longer passes it, after
+        a change of a tool permission or of the user's memory, fires without
+        grants. `skipped` counts the firings over the limit or while paused,
+        with when the latest arrived (TSK-009).
+      required: [id, name, instructions, model, reasoning, disabled_tools, disabled_skills, disabled_servers, uses_memory, time_zone, paused, triggers, grants, grant_check, skipped, last_fired_at, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/Id" }
+        name: { type: string }
+        instructions: { type: string }
+        model: { oneOf: [{ $ref: "#/components/schemas/ModelChoice" }, { type: "null" }] }
+        reasoning: { $ref: "#/components/schemas/Reasoning" }
+        disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_skills: { $ref: "#/components/schemas/DisabledSkills" }
+        disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
+        uses_memory:
+          type: boolean
+          description: Whether its runs use memory, when memory is on for the user.
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+        paused: { type: boolean }
+        triggers:
+          type: array
+          items: { $ref: "#/components/schemas/TaskTrigger" }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/TaskGrant" }
+        grant_check: { $ref: "#/components/schemas/GrantCheck" }
+        skipped:
+          type: object
+          required: [count, last_at]
+          properties:
+            count: { type: integer, minimum: 0 }
+            last_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        last_fired_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    CreateTaskRequest:
+      type: object
+      description: |
+        Settings left out are copied from the user's defaults, as for a new
+        conversation (CNV-013); `uses_memory` is false unless given.
+      required: [name, instructions, time_zone, triggers]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        instructions: { type: string, minLength: 1, maxLength: 20000 }
+        model: { $ref: "#/components/schemas/ModelChoice" }
+        reasoning: { $ref: "#/components/schemas/Reasoning" }
+        disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_skills: { $ref: "#/components/schemas/DisabledSkills" }
+        disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
+        uses_memory: { type: boolean }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+        triggers:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items: { $ref: "#/components/schemas/TaskTriggerInput" }
+        grants:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/TaskGrant" }
+
+    UpdateTaskRequest:
+      type: object
+      description: Fields left out stay as they are; `grants` replaces every grant.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        instructions: { type: string, minLength: 1, maxLength: 20000 }
+        model: { $ref: "#/components/schemas/ModelChoice" }
+        reasoning: { $ref: "#/components/schemas/Reasoning" }
+        disabled_tools: { $ref: "#/components/schemas/DisabledTools" }
+        disabled_skills: { $ref: "#/components/schemas/DisabledSkills" }
+        disabled_servers: { $ref: "#/components/schemas/DisabledServers" }
+        uses_memory: { type: boolean }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+        paused: { type: boolean }
+        grants:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/TaskGrant" }
+
+    TaskConversation:
+      type: object
+      description: |
+        A conversation a task started (TSK-002), with how its first run
+        ended: its status, or `null` while it waits to start. `without_grants`
+        is true when the task failed the check of TSK-005 at the firing.
+      required: [conversation_id, title, trigger_kind, outcome, without_grants, started_at]
+      properties:
+        conversation_id: { $ref: "#/components/schemas/Id" }
+        title: { type: string }
+        trigger_kind: { type: string, enum: [schedule, webhook, mcp_event] }
+        outcome: { oneOf: [{ $ref: "#/components/schemas/RunStatus" }, { type: "null" }] }
+        without_grants: { type: boolean }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+
+    TaskConversationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TaskConversation" }
+        next_cursor: { type: [string, "null"] }
 
     HealthStatus:
       type: string
