@@ -394,6 +394,39 @@ be added only by the instance's administrator; anyone else needs a public
 `https` address. A call that takes longer than two minutes is stopped
 (`SIBILLO_MCP_CALL_SECONDS`).
 
+**Tasks**
+
+A task starts a conversation on its own, without anyone writing (TSK-001,
+ADR-0106): a press review every morning, a weekly report, a word when
+something happens. Each person makes theirs in **Settings**, then **Tasks**,
+or asks the assistant in a chat, which proposes one for them to approve. A
+task has instructions, written as in a chat, and one or more triggers:
+
+- **A schedule**, five cron fields in the task's time zone, such as
+  `0 7 * * 1-5` for 7:00 on weekdays, no more often than every 15 minutes. If
+  the server was off when it was due, it runs once when it is back.
+- **A webhook address**, shown once, for anything that can send an HTTP
+  request, such as a Home Assistant automation: the request's body, up to
+  64 KiB, is the event the task reads. Replacing the address stops the old
+  one at once.
+- **An event of an MCP server** that offers the MCP Events extension, such
+  as a new mail. The administrator accepts a server's event types in
+  **MCP servers**, as its tools; Sibillo polls for them every minute or
+  more, or, with `SIBILLO_PUBLIC_ORIGIN` set, the service delivers them to
+  that address.
+
+Each time it runs, the task starts a new conversation, listed with the
+others and under the task, and the notification says it is ready. Nobody is
+there to approve calls, so a task carries **grants**: the tools it may use
+without asking, such as **Search the web**, or one exact call, such as a
+fixed command. A call no grant covers is denied without asking, and the
+answer says what could not be done; continue the conversation to do it with
+the usual approvals. Sibillo refuses grants that would let content read on
+the way send private data out: a task that searches the web can't also read
+files or use memory, and a task started by an event can't search the web
+unattended. A task runs at most 10 times an hour and one run at a time; the
+worker checks for due tasks every 30 seconds (`SIBILLO_TASK_SWEEP_SECONDS`).
+
 **Sandboxes and workspaces**
 
 Every conversation has a sandbox of its own, which no other conversation
