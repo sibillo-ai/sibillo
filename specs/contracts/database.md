@@ -851,8 +851,8 @@ counts them.
 | `tenant_id`, `owner_id` | uuid | not null |
 | `task_id` | uuid | not null; (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete cascade |
 | `trigger_id` | uuid | (`tenant_id`, `owner_id`, `trigger_id`) references `task_triggers` on delete set null (`trigger_id`) |
-| `trigger_kind` | text | not null; the trigger's `kind` |
-| `fire_key` | text | not null; what makes a firing one: the trigger's ID followed by `:` and, for a schedule, the firing time it stands for, for an MCP event, its event ID, for a webhook request, a random UUID |
+| `trigger_kind` | text | not null; the trigger's `kind`, or `manual` when the user fired the task at once (TSK-011) |
+| `fire_key` | text | not null; what makes a firing one: the trigger's ID followed by `:` and, for a schedule, the firing time it stands for, for an MCP event, its event ID, for a webhook request, a random UUID; `manual:` and a random UUID for a manual firing |
 | `event` | jsonb | the event, `{name, data}` for an MCP event, `{content_type, body}` for a webhook request, at most 64 KiB; set to null when the firing is `done`, so that its first run can be queued again after a crash until then |
 | `status` | text | not null; `waiting`, `running` (its conversation's first run has not ended) or `done` |
 | `without_grants` | boolean | not null, default false; the task failed the check of TSK-005 at the firing |
@@ -865,6 +865,17 @@ Unique (`task_id`, `fire_key`): the worker inserts a firing with
 sets `status` to `running`, so that one firing starts one conversation
 (TSK-003). At most one row per task is `running`. Rows are deleted with their
 task: the task's list of conversations reads them (TSK-002).
+
+### Change notifications
+
+The API and the worker announce the changes of API-008 with
+`pg_notify('sibillo_changes', payload)` in the transaction that makes them,
+where the payload is a JSON object `{tenant_id, user_id, event}` and `event`
+is a `ChangeEvent` of the API contract (ADR-0108): when a conversation is
+created, a run starts or reaches a final status, or a task fires. Each API
+process listens on the channel with one connection of `sibillo_app`, outside
+any request context, and forwards an event only to the streams of that
+tenant and user. Payloads carry no content.
 
 ### Policies for private tables
 

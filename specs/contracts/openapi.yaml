@@ -2635,6 +2635,46 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
+  /tasks/{task_id}/fire:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    post:
+      tags: [tasks]
+      operationId: fireTask
+      summary: Fire a task at once, also while it is paused.
+      description: |
+        The firing is of kind `manual`: it waits its turn as any other, and
+        its runs follow the task's grants (TSK-011). A task that started 10
+        conversations in the last hour answers `task.limit_reached`, and the
+        firing is counted as skipped (TSK-009, ADR-0107).
+      x-requirements: [TSK-011, TSK-009, TEN-006, TEN-007]
+      responses:
+        "202": { description: Fired; its conversation starts when its turn comes. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/TaskLimitReached" }
+
+  /me/events:
+    get:
+      tags: [tasks]
+      operationId: streamMyChanges
+      summary: A stream of what changes for the user, as Server-Sent Events.
+      description: |
+        Each SSE message has `event` = the change's `type` and `data` = the
+        JSON-encoded `ChangeEvent`; a comment line every 15 seconds keeps the
+        connection open. Nothing is replayed: a client that reconnects
+        reloads what it shows (API-008, ADR-0108).
+      x-requirements: [API-008, UX-032, TEN-006]
+      responses:
+        "200":
+          description: The stream, open until the client closes it.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+
   /tasks/{task_id}/triggers:
     parameters:
       - $ref: "#/components/parameters/TaskId"
@@ -3110,6 +3150,12 @@ components:
                 properties:
                   grant_check: { $ref: "#/components/schemas/GrantCheck" }
           example: { type: "about:blank", title: "Grants refused", status: 422, code: "task.lethal_trifecta" }
+    TaskLimitReached:
+      description: The task started 10 conversations in the last hour (`task.limit_reached`, TSK-009).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example: { type: "about:blank", title: "Limit reached", status: 409, code: "task.limit_reached" }
     PayloadTooLarge:
       description: The body is larger than the operation allows (`request.too_large`); nothing was stored.
       content:
@@ -3187,6 +3233,7 @@ components:
         - mcp_server.sign_in_failed
         - task.grant_not_allowed
         - task.lethal_trifecta
+        - task.limit_reached
         - webhook.rejected
         - sandbox.unavailable
         - sandbox.command_failed
@@ -3713,6 +3760,10 @@ components:
         - forget
         - save_skill
         - propose_task
+        - update_task
+        - list_tasks
+        - search_conversations
+        - read_conversation
 
     DisabledTools:
       type: array
@@ -4149,7 +4200,8 @@ components:
         Why a call needs approval: untrusted content in the run (AGT-004), the
         tool's default or a tool permission (AGT-006, AGT-002), its
         `irreversible` or `physical` class, a device or MCP server
-        (AGT-018), or a proposed task, whose every call is asked (TSK-006).
+        (AGT-018), or a task the assistant proposes or changes, whose every
+        call is asked (TSK-006, TSK-012).
       enum: [untrusted_content, tool_default, permission, consequential, device, task_proposal]
 
     Allowances:
@@ -5324,7 +5376,10 @@ components:
 
     UpdateTaskRequest:
       type: object
-      description: Fields left out stay as they are; `grants` replaces every grant.
+      description: |
+        Fields left out stay as they are; `grants` replaces every grant. The
+        assistant's `update_task` tool takes the same fields as its
+        arguments, with the task's `task_id` (TSK-012).
       additionalProperties: false
       minProperties: 1
       properties:
@@ -5353,10 +5408,25 @@ components:
       properties:
         conversation_id: { $ref: "#/components/schemas/Id" }
         title: { type: string }
-        trigger_kind: { type: string, enum: [schedule, webhook, mcp_event] }
+        trigger_kind:
+          type: string
+          enum: [schedule, webhook, mcp_event, manual]
+          description: What fired it; `manual` when its user fired it at once (TSK-011).
         outcome: { oneOf: [{ $ref: "#/components/schemas/RunStatus" }, { type: "null" }] }
         without_grants: { type: boolean }
         started_at: { $ref: "#/components/schemas/Timestamp" }
+
+    ChangeEvent:
+      type: object
+      description: |
+        What changed for the user, with identifiers only (API-008, ADR-0108):
+        a conversation created, a run started or finished, or a task fired.
+      required: [type]
+      properties:
+        type: { type: string, enum: [conversation_created, run_started, run_finished, task_fired] }
+        conversation_id: { $ref: "#/components/schemas/Id" }
+        run_id: { $ref: "#/components/schemas/Id" }
+        task_id: { $ref: "#/components/schemas/Id" }
 
     TaskConversationPage:
       type: object
