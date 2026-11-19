@@ -53,6 +53,11 @@ unseen, as they must not through memory items (ADR-0095) or skills
    another user's data (TEN-007). Both are in a new tool group, so that the
    user can switch them off (AGT-032, AGT-033).
 
+   The tools take: `list_tasks` nothing; `update_task` the task's
+   `task_id` and the fields of `UpdateTaskRequest`; `search_conversations`
+   a `query`; `read_conversation` a `conversation_id`. The conversation the
+   run is in is never found or read: it is already the run's.
+
 5. **Provenance follows what was read.** Reading a conversation, or finding
    it, is in the `reads_private_data` class, and not in
    `ingests_untrusted`. Its result is untrusted content only when the
