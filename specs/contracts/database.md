@@ -853,7 +853,7 @@ counts them.
 | `trigger_id` | uuid | (`tenant_id`, `owner_id`, `trigger_id`) references `task_triggers` on delete set null (`trigger_id`) |
 | `trigger_kind` | text | not null; the trigger's `kind` |
 | `fire_key` | text | not null; what makes a firing one: the trigger's ID followed by `:` and, for a schedule, the firing time it stands for, for an MCP event, its event ID, for a webhook request, a random UUID |
-| `event` | jsonb | the event while the firing waits, `{name, data}` for an MCP event, `{content_type, body}` for a webhook request, at most 64 KiB; set to null when its conversation starts |
+| `event` | jsonb | the event, `{name, data}` for an MCP event, `{content_type, body}` for a webhook request, at most 64 KiB; set to null when the firing is `done`, so that its first run can be queued again after a crash until then |
 | `status` | text | not null; `waiting`, `running` (its conversation's first run has not ended) or `done` |
 | `without_grants` | boolean | not null, default false; the task failed the check of TSK-005 at the firing |
 | `conversation_id` | uuid | the conversation it started; (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete set null (`conversation_id`) |
@@ -863,8 +863,8 @@ counts them.
 Unique (`task_id`, `fire_key`): the worker inserts a firing with
 `ON CONFLICT DO NOTHING` and starts its conversation in the transaction that
 sets `status` to `running`, so that one firing starts one conversation
-(TSK-003). At most one row per task is `running`. Rows `done` for more than
-30 days are deleted by the worker every hour.
+(TSK-003). At most one row per task is `running`. Rows are deleted with their
+task: the task's list of conversations reads them (TSK-002).
 
 ### Policies for private tables
 

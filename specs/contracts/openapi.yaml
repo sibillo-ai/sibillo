@@ -2729,6 +2729,12 @@ paths:
       requestBody:
         required: false
         content:
+          text/plain:
+            schema: { type: string, maxLength: 65536 }
+          application/json:
+            schema: {}
+          application/octet-stream:
+            schema: { type: string, format: binary, maxLength: 65536 }
           "*/*":
             schema: { type: string, format: binary, maxLength: 65536 }
       responses:
