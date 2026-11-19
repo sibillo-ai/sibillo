@@ -34,7 +34,7 @@ ADR_REF_RE = re.compile(r"\bADR-(\d{4})\b")
 REQUIRED_FIELDS = ("Status", "Priority", "Phase", "Verification")
 STATUSES = {"draft", "accepted", "implemented", "deprecated"}
 PRIORITIES = {"MUST", "SHOULD", "MAY"}
-PHASES = {"0", "1", "2", "3"}
+PHASES = {"0", "1", "2", "3", "4", "5"}
 VERIFICATIONS = {"unit", "integration", "e2e", "design", "security", "eval", "review"}
 
 # Directories never scanned for cross-references.
