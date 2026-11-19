@@ -11,12 +11,20 @@ server whose issuer is `/s/<id>`, with its metadata at
 A test scripts a server's tools, their results and failures, whether it needs
 a token and which ones it accepts, and how its authorization server behaves,
 and reads every request it received.
+
+A server with scripted event types also offers the MCP Events extension
+(`io.modelcontextprotocol/events`, ADR-0106): it lists them with
+`events/list`, answers `events/poll` with the events a test queued after the
+cursor it is given, and records `events/subscribe` with the delivery's
+address and secret, so that a test can deliver events by webhook as the
+server would (`deliver`), signed as Standard Webhooks.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import secrets
 import threading
@@ -82,6 +90,44 @@ def tool(
     return listed
 
 
+EVENTS_EXTENSION = "io.modelcontextprotocol/events"
+
+
+def event_type(
+    name: str,
+    *,
+    description: str | None = None,
+    properties: dict[str, Any] | None = None,
+    payload: dict[str, Any] | None = None,
+    delivery: tuple[str, ...] = ("poll", "webhook"),
+) -> dict[str, Any]:
+    """An event type as a server lists it with `events/list` (ADR-0106)."""
+    return {
+        "name": name,
+        "description": description if description is not None else f"Happens when {name}.",
+        "delivery": list(delivery),
+        "inputSchema": {
+            "type": "object",
+            "properties": properties if properties is not None else {"folder": {"type": "string"}},
+        },
+        "payloadSchema": payload
+        if payload is not None
+        else {"type": "object", "properties": {"subject": {"type": "string"}}},
+    }
+
+
+@dataclass(frozen=True)
+class Subscription:
+    """A subscription the server received with `events/subscribe`: where and with what secret to deliver."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    url: str
+    secret: str
+    headers: dict[str, str]
+
+
 @dataclass(frozen=True)
 class McpRequest:
     """A request the server received: its HTTP method and path, its JSON-RPC method and params, its headers."""
@@ -138,6 +184,13 @@ class McpServer:
     documents: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     requests: list[McpRequest] = field(default_factory=list[McpRequest])
     token_requests: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
+    # The event types it lists, and the events queued for polling, oldest first (ADR-0106).
+    event_types: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    events: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    # What `events/poll` answers as `nextPollMs`, and `events/subscribe` as `refreshBefore`, from now.
+    next_poll_ms: int = 60_000
+    refresh_ms: int = 3_600_000
+    subscriptions: list[Subscription] = field(default_factory=list[Subscription])
     clients: dict[str, _Client] = field(default_factory=dict[str, _Client])
     codes: dict[str, dict[str, str]] = field(default_factory=dict[str, dict[str, str]])
     refresh_tokens: dict[str, str] = field(default_factory=dict[str, str])
@@ -199,6 +252,35 @@ class McpServer:
                 if listed["name"] == name:
                     listed.update(fields)
 
+    def change_event_type(self, name: str, **fields: Any) -> None:
+        """Change a listed event type, as a server that changes its event types does."""
+        with self.service.lock:
+            for listed in self.event_types:
+                if listed["name"] == name:
+                    listed.update(fields)
+
+    def queue(self, name: str, data: dict[str, Any], *, event_id: str | None = None) -> dict[str, Any]:
+        """Queue an event of type `name` for polling, and return it as the server delivers it."""
+        with self.service.lock:
+            occurrence = {
+                "eventId": event_id or f"event-{secrets.token_hex(6)}",
+                "name": name,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "data": data,
+                "cursor": str(len(self.events) + 1),
+            }
+            self.events.append(occurrence)
+            return occurrence
+
+    def polls(self) -> list[McpRequest]:
+        """Every `events/poll` request so far."""
+        with self.service.lock:
+            return [request for request in self.requests if request.method == "events/poll"]
+
+    def subscribed(self) -> list[Subscription]:
+        with self.service.lock:
+            return list(self.subscriptions)
+
 
 @dataclass
 class McpService:
@@ -222,6 +304,39 @@ class McpService:
         with self.lock:
             self.servers[server.id] = server
         return server
+
+
+def signature(secret: str, webhook_id: str, timestamp: str, body: bytes) -> str:
+    """The Standard Webhooks signature of a delivery, with a `whsec_` secret."""
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    signed = f"{webhook_id}.{timestamp}.".encode() + body
+    return "v1," + base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
+
+
+def deliver(
+    subscription: Subscription,
+    payload: dict[str, Any],
+    *,
+    webhook_id: str | None = None,
+    timestamp: int | None = None,
+    secret: str | None = None,
+) -> httpx.Response:
+    """Deliver an event, or a control envelope, by webhook to the subscription's address, as its server would.
+
+    The signature uses the subscription's own secret unless `secret` replaces
+    it, and the current time unless `timestamp` does (ADR-0106).
+    """
+    body = json.dumps(payload).encode()
+    webhook_id = webhook_id or f"msg_{secrets.token_hex(8)}"
+    stamp = str(timestamp if timestamp is not None else int(time.time()))
+    headers = {
+        "Content-Type": "application/json",
+        "webhook-id": webhook_id,
+        "webhook-timestamp": stamp,
+        "webhook-signature": signature(secret or subscription.secret, webhook_id, stamp, body),
+        "X-MCP-Subscription-Id": subscription.id,
+    }
+    return httpx.post(subscription.url, content=body, headers=headers, timeout=30)
 
 
 def follow_sign_in(authorization_url: str) -> dict[str, str]:
@@ -344,9 +459,14 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             method, request_id = message.get("method"), message["id"]
             params = cast(dict[str, Any], message.get("params") or {})
             if method == "initialize":
+                capabilities: dict[str, Any] = {"tools": {"listChanged": False}}
+                with service.lock:
+                    if server.event_types:
+                        capabilities["events"] = {"listChanged": False}
+                        capabilities["extensions"] = {EVENTS_EXTENSION: {}}
                 result: dict[str, Any] = {
                     "protocolVersion": "2025-06-18",
-                    "capabilities": {"tools": {"listChanged": False}},
+                    "capabilities": capabilities,
                     "serverInfo": {"name": f"Test server {server.id}", "version": "1.2.3"},
                     "instructions": SERVER_INSTRUCTIONS,
                 }
@@ -363,6 +483,45 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 time.sleep(scripted.delay)
                 result = {"content": [{"type": "text", "text": scripted.text}], "isError": scripted.error}
             elif method == "ping":
+                result = {}
+            elif method == "events/list" and server.event_types:
+                with service.lock:
+                    result = {"events": json.loads(json.dumps(server.event_types))}
+            elif method == "events/poll" and server.event_types:
+                with service.lock:
+                    after = int(params.get("cursor") or 0) if params.get("cursor") is not None else len(server.events)
+                    found = [event for event in server.events[after:] if event["name"] == params.get("name")]
+                    result = {
+                        "events": json.loads(json.dumps(found)),
+                        "cursor": str(len(server.events)),
+                        "truncated": False,
+                        "hasMore": False,
+                        "nextPollMs": server.next_poll_ms,
+                    }
+            elif method == "events/subscribe" and server.event_types:
+                delivery = cast(dict[str, Any], params.get("delivery") or {})
+                with service.lock:
+                    known = next((s for s in server.subscriptions if s.url == delivery.get("url")), None)
+                    subscription_id = known.id if known is not None else f"sub-{secrets.token_hex(6)}"
+                    server.subscriptions = [s for s in server.subscriptions if s.id != subscription_id]
+                    server.subscriptions.append(
+                        Subscription(
+                            subscription_id,
+                            str(params.get("name")),
+                            cast(dict[str, Any], params.get("arguments") or {}),
+                            str(delivery.get("url")),
+                            str(delivery.get("secret")),
+                            headers,
+                        )
+                    )
+                    refresh = time.time() + server.refresh_ms / 1000
+                    result = {
+                        "id": subscription_id,
+                        "refreshBefore": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(refresh)),
+                        "cursor": str(len(server.events)),
+                        "truncated": False,
+                    }
+            elif method == "events/unsubscribe" and server.event_types:
                 result = {}
             else:
                 self._json(

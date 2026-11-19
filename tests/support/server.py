@@ -246,6 +246,9 @@ def start_server(
             "SIBILLO_PUBLIC_ORIGIN": f"http://localhost:{port}",
             "SIBILLO_TEMPORARY_SWEEP_SECONDS": "1",
             "SIBILLO_APPROVAL_SWEEP_SECONDS": "1",
+            # So are triggers with work due and firings waiting their turn, so that tests of tasks need not wait
+            # (ADR-0106).
+            "SIBILLO_TASK_SWEEP_SECONDS": "1",
             # Calls to a remote MCP server's tools time out quickly, so that their test need not wait (ADR-0099).
             "SIBILLO_MCP_CALL_SECONDS": str(MCP_CALL_SECONDS),
         }

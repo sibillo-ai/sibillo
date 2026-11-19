@@ -70,6 +70,12 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "mcp_sign_ins": {"SELECT": EVERY, "INSERT": EVERY, "DELETE": EVERY},
     # Any user of a household records the window its Ollama server runs a model with (MOD-019, ADR-0093).
     "served_context_windows": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
+    # The event types of a household's remote MCP servers, and each user's tasks (TSK-001, TSK-008, ADR-0106).
+    "mcp_server_events": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "tasks": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "task_grants": {"SELECT": EVERY, "INSERT": EVERY, "DELETE": EVERY},
+    "task_triggers": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    "task_firings": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "tool_permissions": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "egress_policies": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "audit_events": {
@@ -92,6 +98,10 @@ EXECUTABLE_FUNCTIONS = {
     "expired_temporary_conversations(integer)",
     "expired_approvals()",
     "default_model_configured()",
+    "due_task_triggers()",
+    "waiting_task_firings()",
+    "find_webhook_trigger(bytea)",
+    "find_event_subscription(uuid)",
 }
 
 # Owner policies of the pre-authentication functions: table -> operations.
@@ -105,6 +115,10 @@ OWNER_POLICIES = {
     "runs": {"SELECT"},
     "connections": {"SELECT"},
     "conversations": {"SELECT"},
+    # The functions that find the work of tasks (ADR-0106).
+    "tasks": {"SELECT"},
+    "task_triggers": {"SELECT"},
+    "task_firings": {"SELECT"},
 }
 
 

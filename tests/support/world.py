@@ -39,6 +39,10 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "mcp_sign_ins": ("id",),
     "notification_subscriptions": ("device_session_id",),
     "run_followers": ("id",),
+    "tasks": ("id",),
+    "task_grants": ("id",),
+    "task_triggers": ("id",),
+    "task_firings": ("id",),
 }
 
 
@@ -96,7 +100,11 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         credential_id,
         sign_in_id,
         follower_id,
-    ) = (uuid7() for _ in range(15))
+        task_id,
+        grant_id,
+        trigger_id,
+        firing_id,
+    ) = (uuid7() for _ in range(19))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -220,6 +228,28 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO run_followers (id, tenant_id, owner_id, run_id, seen_at) VALUES (%s, %s, %s, %s, now())",
         (follower_id, tenant_id, user_id, run_id),
     )
+    # A task with a grant and a schedule, which fired once and started the user's conversation (ADR-0106).
+    conn.execute(
+        "INSERT INTO tasks (id, tenant_id, owner_id, name, instructions, time_zone, created_at, updated_at)"
+        " VALUES (%s, %s, %s, 'Test task', 'Say hello.', 'Europe/Rome', now(), now())",
+        (task_id, tenant_id, user_id),
+    )
+    conn.execute(
+        "INSERT INTO task_grants (id, tenant_id, owner_id, task_id, tool, created_at)"
+        " VALUES (%s, %s, %s, %s, 'web_search', now())",
+        (grant_id, tenant_id, user_id, task_id),
+    )
+    conn.execute(
+        "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule, next_fire_at, created_at)"
+        " VALUES (%s, %s, %s, %s, 'schedule', '0 7 * * *', now() + interval '1 day', now())",
+        (trigger_id, tenant_id, user_id, task_id),
+    )
+    conn.execute(
+        "INSERT INTO task_firings (id, tenant_id, owner_id, task_id, trigger_id, trigger_kind, fire_key, status,"
+        " conversation_id, created_at, started_at, finished_at) VALUES (%s, %s, %s, %s, %s, 'schedule', %s, 'done',"
+        " %s, now(), now(), now())",
+        (firing_id, tenant_id, user_id, task_id, trigger_id, f"{trigger_id}:fired", conversation_id),
+    )
     rows: dict[str, tuple[object, ...]] = {
         "device_sessions": (session_id,),
         "passkey_challenges": (challenge_id,),
@@ -239,6 +269,10 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "mcp_sign_ins": (sign_in_id,),
         "notification_subscriptions": (session_id,),
         "run_followers": (follower_id,),
+        "tasks": (task_id,),
+        "task_grants": (grant_id,),
+        "task_triggers": (trigger_id,),
+        "task_firings": (firing_id,),
     }
     assert set(rows) == set(PRIVATE_TABLES)
     return User(user_id, tenant_id, username, role, token_hash, conversation_id, run_id, mcp_server_id, rows)

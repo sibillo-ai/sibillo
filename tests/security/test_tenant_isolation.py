@@ -180,6 +180,30 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 "INSERT INTO run_followers (id, tenant_id, owner_id, run_id, seen_at) VALUES (%s, %s, %s, %s, now())",
                 (uuid7(), tenant, user, owner.run_id),
             )
+        case "tasks":
+            return (
+                "INSERT INTO tasks (id, tenant_id, owner_id, name, instructions, time_zone, created_at, updated_at)"
+                " VALUES (%s, %s, %s, 'intruder', 'x', 'UTC', now(), now())",
+                (uuid7(), tenant, user),
+            )
+        case "task_grants":
+            return (
+                "INSERT INTO task_grants (id, tenant_id, owner_id, task_id, tool, created_at)"
+                " VALUES (%s, %s, %s, %s, 'read_page', now())",
+                (uuid7(), tenant, user, owner.rows["tasks"][0]),
+            )
+        case "task_triggers":
+            return (
+                "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, token_hash, created_at)"
+                " VALUES (%s, %s, %s, %s, 'webhook', %s, now())",
+                (uuid7(), tenant, user, owner.rows["tasks"][0], uuid.uuid4().bytes * 2),
+            )
+        case "task_firings":
+            return (
+                "INSERT INTO task_firings (id, tenant_id, owner_id, task_id, trigger_kind, fire_key, status,"
+                " created_at) VALUES (%s, %s, %s, %s, 'webhook', %s, 'waiting', now())",
+                (uuid7(), tenant, user, owner.rows["tasks"][0], f"intruder:{uuid.uuid4()}"),
+            )
         case _:
             raise AssertionError(f"no row builder for {table}")
 

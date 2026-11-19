@@ -60,6 +60,8 @@ DECLARED: dict[str, tuple[set[str], str]] = {
     },
     # Saves a skill that reaches later conversations: the user sees it first (AGT-026, ADR-0096).
     "save_skill": (set[str](), "ask"),
+    # Saves a task that runs later with standing grants: the user sees all of it first (TSK-006, ADR-0106).
+    "propose_task": (set[str](), "ask"),
 }
 
 

@@ -49,6 +49,11 @@ PRIVATE_TABLES = (
     # A device session's notification subscription, and the open event streams of runs (UX-004, ADR-0101).
     "notification_subscriptions",
     "run_followers",
+    # A user's tasks, their grants, triggers and firings (TSK-001, ADR-0106).
+    "tasks",
+    "task_grants",
+    "task_triggers",
+    "task_firings",
 )
 # Configuration of the instance, without a tenant.
 INSTANCE_TABLES = ("tenants",)
@@ -64,6 +69,8 @@ TENANT_TABLES = (
     # A household's remote MCP servers and their tools (AGT-019, AGT-028, ADR-0099).
     "mcp_servers",
     "mcp_server_tools",
+    # The event types of a household's remote MCP servers (TSK-008, ADR-0106).
+    "mcp_server_events",
 )
 CONTRACT_TABLES = ("tenants", "login_attempts", *TENANT_TABLES, *PRIVATE_TABLES)
 # Column holding the owning user of each private table.
@@ -87,6 +94,11 @@ SECURITY_DEFINER_FUNCTIONS = (
     "expired_temporary_conversations",
     "expired_approvals",
     "default_model_configured",
+    # The work of tasks, found before any request context (ADR-0106).
+    "due_task_triggers",
+    "waiting_task_firings",
+    "find_webhook_trigger",
+    "find_event_subscription",
 )
 
 
