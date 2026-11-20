@@ -61,6 +61,8 @@ ALLOWED_OWN_TOOLS = {
     "list_tasks",
     "search_conversations",
     "read_conversation",
+    # Looks at an image of the workspace, read through the sandbox driver and never decoded (CNV-020, ADR-0110).
+    "view_image",
 }
 # The only places a component runs a command on the host, by file and
 # enclosing function. None runs anything a user or the agent chose.
