@@ -276,6 +276,9 @@ Microsoft), which learns that your server notified a device and when, but
 nothing of the conversation. No notification comes for a chat that is open
 on one of the person's devices.
 
+While they are off on a device, the app says so in its menu, with a button
+that turns them on; **Hide** hides that sign on that device.
+
 **Sharing into Sibillo**
 
 On Android, Sibillo installed on the home screen appears in the share sheet
@@ -426,6 +429,22 @@ the way send private data out: a task that searches the web can't also read
 files or use memory, and a task started by an event can't search the web
 unattended. A task runs at most 10 times an hour and one run at a time; the
 worker checks for due tasks every 30 seconds (`SIBILLO_TASK_SWEEP_SECONDS`).
+
+**Run now** starts a task at once, also while it is paused, to try it;
+**Edit** changes its instructions, triggers and grants. The new
+conversation appears in the list as it starts, marked **Running** until its
+answer is ready. In a chat, the assistant can list your tasks and how they
+last went, and change one: it shows the whole change and waits for your
+approval, as when it proposes a task.
+
+**Your other chats**
+
+The assistant can search your earlier chats and read one, to pick up where
+you left off or say how a task went (AGT-032, AGT-033). It never sees
+temporary chats, what you rewound, or anyone else's. If a chat it reads
+holds content from elsewhere, such as web pages, the current chat counts as
+holding it too, and asks before searching the web or running commands.
+Switch **Your other chats** off among the tools to keep each chat apart.
 
 **Sandboxes and workspaces**
 
