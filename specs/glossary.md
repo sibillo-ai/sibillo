@@ -125,9 +125,9 @@ new entry here first (ADR-0005).
 | Workspace panel | The client's view of a conversation's workspace, as a tree of files and folders to preview, download, upload, move and delete (UX-019, ADR-0079). |
 | Sandbox driver | The only component allowed to manage containers; exposes a minimal API to the control plane. |
 | Workspace backend | The control-plane component that presents a conversation's sandbox to Pydantic AI as a workspace, through the sandbox driver (ADR-0035, ADR-0078). |
-| Sandbox bridge | The host network bridge, with a fixed interface name, to which all sandboxes attach; the egress table matches it (ADR-0021). |
+| Sandbox bridge | The host network bridge of one sandbox, whose interface name has a fixed prefix; the egress table matches every sandbox bridge, and gives network only to those of conversations with internet access (ADR-0021, ADR-0113). |
 | Network guard | A small infrastructure container, with host networking and `NET_ADMIN`, that installs and maintains the egress table on the host (ADR-0021). Never runs user code. |
-| Egress table | The dedicated `nftables` table on the host that enforces the egress policy for traffic from the sandbox bridge (ADR-0021). |
+| Egress table | The dedicated `nftables` table on the host that enforces the egress policy for traffic from the sandbox bridges (ADR-0021, ADR-0113). |
 | Canary sandbox | A short-lived sandbox the sandbox driver starts to verify isolation before accepting requests. |
 | Isolation runtime | The container runtime that enforces sandbox isolation: gVisor (ADR-0023). |
 | Egress policy | The network rules that decide which destinations a sandbox may reach. |

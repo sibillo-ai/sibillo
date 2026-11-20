@@ -111,25 +111,40 @@ untrusted content. Daily use showed where this still falls short:
    scratch folder and its background commands (ADR-0090 point 8), so the
    network is switched on a running sandbox, not by starting a new one.
 
-   **How it is enforced is open, and this ADR is not accepted until a spike
-   settles it**, as the spikes of ADR-0021 settled the egress table. The
-   egress table matches the whole sandbox bridge today, and the network
-   guard takes no requests. The candidates:
+   **A bridge for each sandbox, and a set of the bridges that are online.**
+   Each sandbox attaches to a sandbox bridge of its own, created by the
+   driver with a name it chooses, under a fixed prefix, and a subnet of four
+   addresses from a range of the instance. The egress table matches every
+   bridge with the prefix: the rules of ADR-0021 stand for all of them, and
+   one rule more drops everything from a bridge that is not in a set of the
+   table, the bridges whose conversation has internet access. Giving
+   internet access adds the bridge's name to the set, withdrawing it removes
+   it. Which bridge a packet enters from is decided by the host, so nothing
+   a sandbox does to its own network configuration changes it. The driver
+   removes a sandbox's bridge with the sandbox.
 
-   - a set of sandboxes with internet access in the egress table, which
-     drops everything else from the bridge. The set must name something a
-     sandbox cannot forge: on a shared bridge, a sandbox with control of its
-     network configuration can send from another sandbox's address, so the
-     source address alone is not enough;
-   - a second bridge without any way out, with sandboxes moved between the
-     two. Whether gVisor accepts a change of network on a running sandbox
-     is not known;
-   - the second bridge, with a sandbox replaced by a new one on the other
-     bridge when internet access is given. Simple, but the scratch folder
-     and the background commands are lost, against ADR-0090 point 8.
+   A spike settled this, on 2026-11-21, on Ubuntu 26.04 with kernel 7.0, an
+   AMD Ryzen 9 5950X without `/dev/kvm`, Docker 29.1.0, gVisor
+   `release-20261116.0` and nftables 1.1.6, with a table and bridges of its
+   own beside the deployment's:
 
-   The spike also says how the driver reaches the network guard, which today
-   only keeps the table in place.
+   | Design | Result |
+   |---|---|
+   | One shared bridge, and a set of the source addresses that are online | **Failed.** Giving and withdrawing worked on a running gVisor sandbox, but a container with `NET_ADMIN` and raw sockets on the same bridge, emulating a compromised sandbox kernel, took the address of an online sandbox and reached the internet, with UDP and with a complete HTTP request |
+   | Two bridges, one without a way out, and the running sandbox moved between them with Docker | **Failed.** Docker connected the gVisor sandbox to the second network, but the sandbox never saw the new interface; once disconnected from the first it had no network at all. A runc container, as a control, got the interface |
+   | A bridge for each sandbox, and a set of the bridges that are online | **Passed.** A sandbox out of the set reached nothing, by address or by name; in the set it reached the internet at once, without a restart, and its resolver alone on port 53; out of the set again, the packets it kept sending stopped at once. It never reached another sandbox or the host. The container with `NET_ADMIN`, on a bridge out of the set, was dropped as itself, with an online sandbox's address, and with its address and MAC, while that sandbox kept working. A bridge took 0.07 s to create; with 42 bridges a sandbox still started in 0.37 s |
+
+   Replacing the sandbox with a new one when internet access is given was
+   not tried: it loses the scratch folder and the background commands,
+   against ADR-0090 point 8, and the third design does not need it.
+
+   The network guard owns the table, so it changes the set: the driver
+   tells it, over a Unix socket in a volume that only the two share, which
+   bridges are online, always as the whole list. A guard that reinstalls the
+   table starts with an empty set, so every sandbox is without network until
+   the driver says again; a driver that cannot reach the guard treats the
+   egress table as missing (SBX-015). This channel was not part of the
+   spike. This amends ADR-0021 points 1 and 3.
 
 7. **Tasks.** A task grant of internet access is a third kind of grant,
    beside fixed and open grants: it gives internet access to the runs of the
@@ -193,8 +208,14 @@ untrusted content. Daily use showed where this still falls short:
   command tools, the tool `request_internet_access`, and the task grant of
   internet access; in the database, the columns that hold the allowance for
   the conversation and for the turn, and the grant; in the sandbox driver's
-  API, how a sandbox's network is given and taken, which depends on the
-  spike. Stored allowances and task grants move over as points 4 and 7 say.
+  API, how a sandbox's network is given and taken; in the configuration,
+  the range the sandbox bridges take their subnets from, which bounds how
+  many sandboxes run at once. Stored allowances and task grants move over
+  as points 4 and 7 say.
+- Sandboxes no longer share a bridge, so one cannot pose as another on it,
+  and SBX-006 no longer rests on a bridge option. The driver creates and
+  removes a bridge with every sandbox, and must remove the ones a crash
+  left behind when it starts.
 - Questions to the user in hands-free mode (AGT-015) are not decided here.
 
 ## Alternatives considered
@@ -206,6 +227,8 @@ untrusted content. Daily use showed where this still falls short:
 - **Keep ADR-0090 and only merge the requests of one run:** removes the
   repeated prompts, but keeps the question about a call, the rule nobody can
   predict and a sandbox that is always online.
+- **One shared bridge with a set of addresses, or moving a sandbox between
+  two bridges:** both failed in the spike of point 6.
 - **Leave the network on and ask before commands:** what ADR-0090 does; the
   defense is a prompt alone.
 - **Let `read_page` read without asking the addresses that search results

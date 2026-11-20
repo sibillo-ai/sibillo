@@ -330,7 +330,8 @@ has. Giving it MUST NOT restart the sandbox, so that a run that waited for
 the user's answer finds its scratch folder and its background commands
 (SBX-018). This MUST be enforced outside the sandbox's kernel, as SBX-005
 is, so that it holds for code with full control of the sandbox's network
-configuration, which MUST NOT gain network by posing as another sandbox. It
+configuration, which MUST NOT gain network by posing as another sandbox:
+each sandbox MUST have a sandbox bridge of its own. It
 MUST be applied and verified before any code runs (SBX-015); a sandbox whose
 state cannot be verified MUST have no network. Security tests MUST verify
 this from inside a running sandbox, and from a test container with network

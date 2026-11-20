@@ -36,7 +36,8 @@ We will enforce sandbox egress **in the host kernel**, with a dedicated
 
 1. All sandboxes attach to one **sandbox bridge** with a fixed interface name,
    created by the sandbox driver, with inter-container communication and
-   IPv6 disabled.
+   IPv6 disabled. Amended by ADR-0113: each sandbox has a sandbox bridge
+   of its own, and the table matches them all by a prefix of their names.
 2. A **network guard** container installs the table `inet sibillo` on the
    host. It runs only project code, with host networking and the
    `NET_ADMIN` capability, and no other privileges or mounts.
