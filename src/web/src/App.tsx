@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes } from "react-router";
 
 import { ConversationView } from "./components/ConversationView";
@@ -7,7 +9,8 @@ import { Settings } from "./components/Settings";
 import { Shell } from "./components/Shell";
 import { SignIn } from "./components/SignIn";
 import { Welcome } from "./components/Welcome";
-import { NoticeProvider } from "./notices";
+import { NoticeProvider, useNotify } from "./notices";
+import { watchForUpdates } from "./update";
 import { useMe } from "./session";
 
 export function App() {
@@ -15,6 +18,7 @@ export function App() {
   if (me === undefined) return null;
   return (
     <NoticeProvider>
+      <NewVersion />
       {me === null ? (
         <SignIn />
       ) : me.password_change_required ? (
@@ -34,4 +38,16 @@ export function App() {
       )}
     </NoticeProvider>
   );
+}
+
+/** A new version of the app takes over; while the page cannot load it yet, a notice says it is ready (UX-040, ADR-0112). */
+function NewVersion() {
+  const { t } = useTranslation();
+  const notify = useNotify();
+  useEffect(() => {
+    watchForUpdates(() =>
+      notify({ kind: "info", lasting: true, title: t("update.ready"), text: t("update.when"), action: { label: t("update.load"), run: () => window.location.reload() } }),
+    );
+  }, [notify, t]);
+  return null;
 }

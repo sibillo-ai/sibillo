@@ -63,10 +63,11 @@ def router(root: Path) -> APIRouter:
         if not candidate.is_relative_to(root):
             return Response(status_code=404, headers=HEADERS)
         if candidate.is_file():
-            # Built files have content hashes in their names; the page and the
-            # service worker must always be fetched fresh.
-            fresh = candidate.name in {"index.html", "sw.js"} or candidate.suffix == ".webmanifest"
-            cache = "no-cache" if fresh else "public, max-age=31536000, immutable"
+            # Only the files under assets/ have a hash of their content in their names, so a new version has
+            # new names; every other file, the page and the service worker first, is asked for again (UX-040,
+            # ADR-0112).
+            hashed = candidate.is_relative_to(root / "assets")
+            cache = "public, max-age=31536000, immutable" if hashed else "no-cache"
             return FileResponse(candidate, headers=HEADERS | {"Cache-Control": cache})
         if Path(path).suffix:
             # A missing file, not a route of the app.

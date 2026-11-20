@@ -375,6 +375,11 @@
     "model_context_exceeded": "The model ran out of room before it could answer: the conversation no longer fits in its context window. Start a new conversation, choose another model, or ask a household admin to give the model's server a larger context window (for Ollama, num_ctx).",
     "run_step_limit": "The assistant stopped after many steps, before it was done. Ask it to continue, and it goes on from where it stopped."
   },
+  "update": {
+    "ready": "A new version of Sibillo is ready",
+    "when": "It loads when you leave the app, or now.",
+    "load": "Load it"
+  },
   "usage": {
     "conversation": "This conversation",
     "day": "Last 24 hours",

@@ -11,6 +11,8 @@ export interface Notice {
   title: string;
   text?: string;
   action?: { label: string; run: () => void };
+  /** Stays until the user acts on it or closes it, as a new version that is ready does (UX-040). */
+  lasting?: boolean;
 }
 
 interface Shown extends Notice {
@@ -33,7 +35,7 @@ export function NoticeProvider({ children }: { children: ReactNode }) {
     (notice: Notice) => {
       const id = Date.now() + Math.random();
       setShown((all) => [...all.filter((other) => other.kind !== notice.kind || other.title !== notice.title), { ...notice, id }]);
-      if (notice.kind === "info") window.setTimeout(() => dismiss(id), INFO_SECONDS * 1000);
+      if (notice.kind === "info" && !notice.lasting) window.setTimeout(() => dismiss(id), INFO_SECONDS * 1000);
     },
     [dismiss],
   );
