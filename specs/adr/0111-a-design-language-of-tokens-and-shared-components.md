@@ -125,8 +125,11 @@ sprite and the quotes, and replaces the rest.
      first message, as part of starting.
    - *A conversation.* Its top bar has its title, its model, its cost and
      its context, its files and its settings, on a computer and on a phone
-     alike. The cost and the context are a line under the title; on a phone
-     the files are an icon. The model belongs to the conversation, not to
+     alike. On a computer the cost and the context are a line under the
+     title. On a phone, where one line has no room for them, the bar has a
+     second line: the model with its name in full at its start, the cost as
+     an amount alone and the share of the context at its end; the files are
+     an icon. The model belongs to the conversation, not to
      the next message, so it is not in the message box. The answer is plain
      text in the reading role; the user's message is a bubble. Approvals and
      questions wait above the message box.

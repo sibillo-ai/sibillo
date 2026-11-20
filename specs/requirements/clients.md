@@ -704,12 +704,14 @@ at the right end of the bar. The message box SHOULD NOT hold the model
 picker.
 
 On a phone the conversation list SHOULD take the whole screen, and every
-page SHOULD have a bar at its top, the only one there: it SHOULD hold the button that opens the
-conversation list, or Back where the page has a parent, and the name of the
-page that is open. In the settings, Back SHOULD lead from a section to the
-list of sections, and from that list to the conversation list. The device's
-own Back SHOULD lead to the same place as the bar's, and SHOULD close the
-conversation list when it is open.
+page SHOULD have a bar at its top, the only one there: it SHOULD hold the
+button that opens the conversation list, or Back where the page has a
+parent, and the name of the page that is open. In the settings, Back SHOULD
+lead from a section to the list of sections, and from that list to the
+conversation list. The device's own Back SHOULD lead to the same place as
+the bar's, and SHOULD close the conversation list when it is open. A
+conversation's bar SHOULD keep the model's name and the cost readable: on a
+phone it MAY take a second line for them, where the cost is an amount alone.
 
 Rationale: the model belongs to the conversation rather than to the next
 message; on a phone, a list that covers half the screen cuts the titles
