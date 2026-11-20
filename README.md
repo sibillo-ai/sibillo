@@ -484,6 +484,19 @@ download a file or a folder as a `.zip`, upload, rename, move and delete
 download button. Previews never run a file: an HTML page shows as its
 source.
 
+Pasting an image or a file into the message box attaches it, and attached
+images show as small previews (UX-036). A model that accepts images sees
+the PNG, JPEG, WebP and GIF images attached to a message, up to 5 MiB each,
+and can look at any image of the workspace; the model picker marks such
+models **Sees images**. A larger image, or one in another format, stays a
+file: ask the assistant to shrink or convert it and look at the result.
+With any other model the assistant says that it cannot see images.
+OpenRouter and Ollama say which of their models accept images; for another
+server, an administrator names them in the connection, under **Models that
+see images** (MOD-020). A conversation keeps where an image is, never the
+image: deleting the file takes it out of what the model is sent from then
+on (CNV-020, ADR-0110).
+
 Workspaces from before sandboxes were per conversation are no longer used:
 `docker volume ls --filter label=dev.sibillo.sandbox=workspace` lists
 them, and those without a third identifier in their name can be removed.
