@@ -405,9 +405,14 @@ something happens. Each person makes theirs in **Settings**, then **Tasks**,
 or asks the assistant in a chat, which proposes one for them to approve. A
 task has instructions, written as in a chat, and one or more triggers:
 
-- **A schedule**, five cron fields in the task's time zone, such as
-  `0 7 * * 1-5` for 7:00 on weekdays, no more often than every 15 minutes. If
-  the server was off when it was due, it runs once when it is back.
+- **A schedule**: a start, in the task's time zone, and how it repeats,
+  written as calendars do (iCalendar, RFC 5545, as in Google Calendar):
+  nothing to run once; `RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` for
+  weekdays; `RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2` for the first Monday of
+  the next two months; `UNTIL=` to stop on a date, `EXDATE` to skip one,
+  `RDATE` to add one (ADR-0109). No more often than every 15 minutes. If
+  the server was off when it was due, it runs once when it is back; after
+  its last time, the schedule shows as ended.
 - **A webhook address**, shown once, for anything that can send an HTTP
   request, such as a Home Assistant automation: the request's body, up to
   64 KiB, is the event the task reads. Replacing the address stops the old
