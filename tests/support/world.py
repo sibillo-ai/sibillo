@@ -207,6 +207,15 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO mcp_server_tools (tenant_id, server_id, name, listed) VALUES (%s, %s, 'turn_on', %s)",
         (tenant_id, mcp_server_id, Jsonb({"title": None, "description": "x", "inputSchema": {}, "annotations": None})),
     )
+    # And one event type, listed and not accepted (TSK-008).
+    conn.execute(
+        "INSERT INTO mcp_server_events (tenant_id, server_id, name, listed) VALUES (%s, %s, 'door_opened', %s)",
+        (
+            tenant_id,
+            mcp_server_id,
+            Jsonb({"description": "x", "inputSchema": {}, "payloadSchema": {}, "delivery": ["poll"]}),
+        ),
+    )
     conn.execute(
         "INSERT INTO mcp_credentials (id, tenant_id, owner_id, server_id, server_generation, kind,"
         " access_token_ciphertext, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, 'token', %s, 'valid',"
