@@ -96,7 +96,7 @@ sprite and the quotes, and replaces the rest.
    | Dialog | A title, a body and a footer whose rightmost button is the action; three widths; a sheet from the bottom on a phone |
    | Menu | Actions or options that float; the model picker is a menu with a search (UX-015) |
    | Navigation item | An entry of the conversation list, of the settings' sections, or of a tree of files (UX-019) |
-   | Message box, Message, Activity, Request card | The parts of a conversation: the composer; a user's message and an answer; what a run did, as one summary that expands (UX-003); an approval or a question waiting above the message box |
+   | Message box, Message, Activity, Request card | The parts of a conversation: the composer; a user's message and an answer; what a run did, as compact lines that each expand (UX-003); an approval or a question waiting above the message box |
 
    Outside that directory the client does not style a native control, does
    not use a value that is not a token, and does not write a color. A design

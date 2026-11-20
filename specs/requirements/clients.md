@@ -654,7 +654,7 @@ picked.
 
 ## UX-037: Screens are built from the shared components
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** design
