@@ -306,49 +306,67 @@ as on any loopback address.
 
 Tests that need sandboxes, and the server, which needs the sandbox driver,
 use this procedure once per test session, before starting the worker
-(ADR-0053). It needs Docker with gVisor registered as the `runsc` runtime;
-where it is missing, these tests fail; they never skip.
+(ADR-0053, ADR-0114). It needs Docker with privileged containers allowed and
+cgroup v2, and nothing else on the host: no gVisor. Where they are missing,
+these tests fail; they never skip.
 
-1. Build the images `deploy/images/sandbox` and `deploy/images/netguard`,
-   with tags chosen by the test suite, unless `TEST_SANDBOX_IMAGE` and
-   `TEST_NETGUARD_IMAGE` name images already built from them, as CI does
-   with its build cache (ADR-0059); those are used and never removed.
-2. Start the network guard: the `netguard` image as a container named by the
-   test suite, with `--network host` and `--cap-add NET_ADMIN`, and nothing
+1. Build the images `deploy/images/sandbox`, `deploy/images/engine` and
+   `deploy/images/netguard`, with tags chosen by the test suite, unless
+   `TEST_SANDBOX_IMAGE`, `TEST_ENGINE_IMAGE` and `TEST_NETGUARD_IMAGE` name
+   images already built from them, as CI does with its build cache
+   (ADR-0059); those are used and never removed.
+2. Start the sandbox engine: the `engine` image as a privileged container
+   named by the test suite, on a network of its own, with a volume for its
+   data and a temporary directory of the host for the Unix sockets. Wait
+   until its Docker answers on its socket and holds the sandbox image.
+3. Start the network guard: the `netguard` image as a container named by the
+   test suite, with the engine's network namespace
+   (`--network container:<engine>`), `--cap-add NET_ADMIN`,
+   `SIBILLO_NETGUARD_SOCKET` in the directory of the sockets, and nothing
    else. Wait until Docker reports it healthy.
-3. From the repository root, start the sandbox driver,
+4. From the repository root, start the sandbox driver,
    `python -m sibillo_sandboxd`, with `SIBILLO_SANDBOXD_HOST` `127.0.0.1`, a
-   free port, a random `SIBILLO_SANDBOXD_TOKEN`, `SIBILLO_SANDBOX_IMAGE` and
-   `SIBILLO_NETGUARD_CONTAINER` from the steps above, and limits small enough for
-   tests to reach them. It is ready when `GET /v1/health` with the token
-   answers `200`, within 120 seconds.
-4. At the end of the session, stop the driver with `SIGTERM`, which detaches
+   free port, a random `SIBILLO_SANDBOXD_TOKEN`, `DOCKER_HOST` at the
+   engine's socket, `SIBILLO_SANDBOX_IMAGE` and `SIBILLO_NETGUARD_SOCKET` from
+   the steps above, and limits small enough for tests to reach them. It is
+   ready when `GET /v1/health` with the token answers `200`, within 120
+   seconds.
+5. At the end of the session, stop the driver with `SIGTERM`, which detaches
    the loop devices of its workspaces' disks (ADR-0098), then the network
-   guard, which removes its table, and remove every container and volume the
-   session's driver created, and the sandbox bridge.
+   guard, then the engine, and remove the engine's container, volume and
+   network and the directory of the sockets. Nothing of the session is left
+   in the host's Docker but the images, nor in the host's firewall.
 
 To check the gVisor minimum (SBX-017), a test starts a second driver, with
 the same environment, its own port, and `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`
-newer than the installed release (ADR-0058).
+newer than the engine's release (ADR-0058).
 To check configuration that the driver or the network guard refuses, such as
 a resolver at a local address (SBX-007), a test starts the driver process
 with another sandbox image, so that it cannot touch the session's sandboxes,
-or a container of the `netguard` image without host networking or
-`NET_ADMIN`, so that it cannot touch the host's table, and expects it to
-exit before it is ready, with an error naming the variable.
+or a container of the `netguard` image with a network namespace of its own
+or without `NET_ADMIN`, so that it cannot touch the engine's table, and
+expects it to exit before it is ready, with an error naming the variable.
 
 Security tests check isolation from inside sandboxes, through the driver's
 `exec`, and may remove the table with `nft` inside the network guard's
-container to check that sandboxes stop (SBX-015).
+container to check that sandboxes stop (SBX-015). They reach inside the
+engine through its Docker socket: to start a container with `NET_ADMIN` on a
+sandbox bridge, which stands for a compromised sandbox kernel (SBX-005,
+SBX-024), and to check that a sandbox reaches neither the engine nor its
+Docker (SBX-025). A test restarts the engine to check that no sandbox runs
+before the table is verified, in an engine of its own, so that the session's
+is left alone. A design test checks `deploy/compose.yaml`: no service mounts
+the host's Docker socket, only the engine is privileged, and no service uses
+host networking (SBX-025).
 
 ## End-to-end
 
 The end-to-end test follows the README on a fresh deployment (ADR-0054).
-It runs before the tests that use the procedures above, because the
-deployment's network guard and sandbox bridge are those of the host. For the
-same reason, and because it removes the deployment's images when it ends, it
-must not run on a host where Sibillo is deployed: one deployment per
-host (ADR-0054).
+The host it runs on has Docker and no gVisor (OPS-001, ADR-0114). A
+deployment keeps its sandboxes, their bridges and its egress table in its
+own sandbox engine, so the test no longer has to run before the others;
+but it removes the deployment's images when it ends, so it
+must not run on a host where Sibillo is deployed (ADR-0054).
 
 1. Run the README's commands on `deploy/compose.yaml`, with a Compose project
    name chosen by the test suite and an env file in a temporary directory, so
@@ -369,9 +387,11 @@ host (ADR-0054).
    and the env file's backup key, installed again from scratch, and the
    archive restored with the README's command: the conversation, the
    connection's API key and the file are back (OPS-006).
-4. At the end, stop the sandbox driver, remove the sandboxes it created with
-   their volumes and the sandbox bridge, then `docker compose down` with its
-   volumes and images, and remove the temporary directory.
+4. At the end, `docker compose down` with its volumes and images, which
+   removes the sandbox engine with everything in it, and remove the
+   temporary directory. The test then checks that the host's Docker holds no
+   container, volume or network of the deployment, and that the host's
+   firewall holds no table of Sibillo (OPS-001).
 
 
 ## Evals

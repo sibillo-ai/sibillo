@@ -82,8 +82,9 @@ read the variables above.
 
 ## Sandbox driver
 
-`python -m sibillo_sandboxd` (ADR-0022, ADR-0053). It reaches Docker
-through the standard `DOCKER_HOST` variable, or the default socket. The same
+`python -m sibillo_sandboxd` (ADR-0022, ADR-0053). It reaches the sandbox
+engine's Docker, never the host's, through the standard `DOCKER_HOST`
+variable, which names the Unix socket the two share (SBX-025, ADR-0114). The same
 rules apply: a missing, invalid or unknown `SIBILLO_*` variable stops it before
 it listens.
 
@@ -93,9 +94,10 @@ it listens.
 | `SIBILLO_SANDBOXD_PORT` | no | `8100` | Port the driver listens on. |
 | `SIBILLO_SANDBOXD_TOKEN` | yes | — | The secret every request must present, at least 32 characters. |
 | `SIBILLO_SANDBOX_IMAGE` | yes | — | The sandbox image, built from `deploy/images/sandbox`. |
-| `SIBILLO_SANDBOX_RUNTIME` | no | `runsc` | The Docker runtime name of gVisor; the canary checks that it is gVisor (SBX-002, SBX-003). |
-| `SIBILLO_NETGUARD_CONTAINER` | no | `sibillo-netguard` | The network guard's container, whose health the driver follows (ADR-0053). |
-| `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE` | no | the built-in minimum | A gVisor release such as `release-20261101.0`, newer than the built-in minimum, that the driver requires instead; an older one is an error (ADR-0058, SBX-017). |
+| `SIBILLO_SANDBOX_RUNTIME` | no | `runsc` | The name gVisor has as a runtime of the sandbox engine's Docker; the canary checks that it is gVisor (SBX-002, SBX-003). |
+| `SIBILLO_NETGUARD_SOCKET` | yes | — | The Unix socket of the network guard, in a volume only the two share: the driver follows the guard's health on it and gives it the sandbox bridges that have network (ADR-0113, ADR-0114). Replaces `SIBILLO_NETGUARD_CONTAINER`. |
+| `SIBILLO_SANDBOX_SUBNETS` | no | `10.213.0.0/16` | The private IPv4 range the sandbox bridges take their subnets of four addresses from, inside the sandbox engine, from a /24 to a /12; it bounds how many sandboxes run at once, 16384 by default (SBX-024, ADR-0113). |
+| `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE` | no | the built-in minimum | A gVisor release such as `release-20261101.0`, newer than the built-in minimum, that the driver requires instead; an older one is an error (ADR-0058, SBX-017). The release itself comes with the sandbox engine's image (ADR-0114). |
 | `SIBILLO_SANDBOX_RESOLVER` | no | `9.9.9.9` | Public IPv4 address of the resolver written into sandboxes, the only one they reach (ADR-0021, ADR-0053, ADR-0098); an address of a range SBX-005 blocks is an error. |
 | `SIBILLO_SANDBOX_CPUS` | no | `1` | CPUs per sandbox, from 0.1 to 64 (SBX-011). |
 | `SIBILLO_SANDBOX_MEMORY_MB` | no | `1024` | Memory per sandbox in MiB, from 64 to 262144. |
@@ -110,14 +112,31 @@ The minimum gVisor release is `release-20261026.0` (SBX-017, ADR-0053).
 
 ## Network guard
 
-`python -m sibillo_netguard`, in a container with host networking and
-`NET_ADMIN`, named as the driver's `SIBILLO_NETGUARD_CONTAINER` (ADR-0021,
-ADR-0053). The table `inet sibillo` and the interface `sibillosbx0` are
-fixed. Anything invalid or unknown stops it before it installs the table.
+`python -m sibillo_netguard`, in a container that shares the sandbox
+engine's network namespace, with `NET_ADMIN` and no other privilege, never
+with host networking (ADR-0021, ADR-0053, ADR-0114). The table
+`inet sibillo` and the prefix of the sandbox bridges' interface names,
+`sbx`, are fixed. It listens on the Unix socket it shares with the driver,
+where it reports its health and takes the whole list of the sandbox bridges
+that have network; a table it reinstalls starts with none (ADR-0113).
+Anything invalid or unknown stops it before it installs the table.
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
-| `SIBILLO_SANDBOX_RESOLVER` | no | `9.9.9.9` | The resolver of the sandboxes, as for the driver: the only address DNS traffic from the sandbox bridge may reach (SBX-007, ADR-0098). |
+| `SIBILLO_SANDBOX_RESOLVER` | no | `9.9.9.9` | The resolver of the sandboxes, as for the driver: the only address DNS traffic from a sandbox bridge may reach (SBX-007, ADR-0098). |
+| `SIBILLO_NETGUARD_SOCKET` | yes | — | The Unix socket it listens on, as for the driver (ADR-0113). |
+
+## Sandbox engine
+
+The sandbox engine (SBX-025, ADR-0114) is a container of the image
+`deploy/images/engine`: a Docker Engine with gVisor in it, of one release
+pinned and verified when the image is built (SBX-017), and the sandbox image.
+It is the only privileged container of the instance. Its Docker listens on
+a Unix socket in a volume it shares with the sandbox driver alone, never on
+a network address, and keeps its data, the workspaces among them, in a
+volume of its own. It reads no `SIBILLO_*` variable and runs no project code
+beyond starting Docker and loading the sandbox image when it changed. It
+starts no sandbox by itself: its containers have no restart policy.
 
 ## Operator commands
 

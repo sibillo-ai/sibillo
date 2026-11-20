@@ -5,7 +5,8 @@ info:
   summary: Internal API between the control plane and the sandbox driver (ADR-0022).
   description: |
     The sandbox driver is the only component with access to the container
-    runtime (SBX-009). This API is internal: it is reachable only on the
+    runtime (SBX-009), which is the sandbox engine's, never the host's
+    (SBX-025, ADR-0114). This API is internal: it is reachable only on the
     internal network shared with the control plane and is never published on
     a host port (OPS-003).
 
@@ -66,14 +67,44 @@ paths:
       summary: Create the conversation's sandbox, or return it if it is running (idempotent).
       description: |
         A sandbox that is not running is always created anew from the
-        sandbox image, with the conversation's workspace (SBX-018, ADR-0076).
-      x-requirements: [SBX-001, SBX-002, SBX-012, SBX-015, SBX-016, SBX-018]
+        sandbox image, with the conversation's workspace (SBX-018, ADR-0076),
+        on a sandbox bridge of its own and without network. It is given
+        network only when `internet_access` is true, and a running sandbox
+        is given it, or loses it, as the request says, without a restart
+        (SBX-024, ADR-0113). The control plane says on every call whether
+        the conversation has internet access; the driver keeps no memory of
+        it beyond the running sandbox.
+      x-requirements: [SBX-001, SBX-002, SBX-012, SBX-015, SBX-016, SBX-018, SBX-024, SBX-025]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnsureRequest" }
       responses:
         "200":
           description: The sandbox is running.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Sandbox" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /sandboxes/{tenant_id}/{user_id}/{conversation_id}/network:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - $ref: "#/components/parameters/UserId"
+      - $ref: "#/components/parameters/ConversationId"
+    delete:
+      operationId: withdrawNetwork
+      summary: Take the network from the conversation's sandbox, at once, if it is running (idempotent).
+      description: |
+        For when the user withdraws internet access (AGT-034). The sandbox
+        keeps running, without network; nothing happens when none is
+        running (SBX-024, ADR-0113).
+      x-requirements: [SBX-024]
+      responses:
+        "204":
+          description: The conversation's sandbox, if any, has no network.
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -534,14 +565,26 @@ components:
           properties:
             platform:
               $ref: "#/components/schemas/Check"
-              description: Docker runs on Linux, on x86_64 or aarch64 (OPS-002, ADR-0054).
-            isolation_runtime: { $ref: "#/components/schemas/Check" }
+              description: |
+                The sandbox engine's Docker runs on Linux, on x86_64 or
+                aarch64, with cgroup v2 (OPS-002, ADR-0054, ADR-0114).
+            isolation_runtime:
+              $ref: "#/components/schemas/Check"
+              description: gVisor is a runtime of the sandbox engine (SBX-002, SBX-025).
             runtime_version: { $ref: "#/components/schemas/Check" }
-            egress_table: { $ref: "#/components/schemas/Check" }
+            egress_table:
+              $ref: "#/components/schemas/Check"
+              description: |
+                The network guard answers on the socket it shares with the
+                driver, and reports the table in place in the sandbox
+                engine's network namespace, with the set of sandbox bridges
+                that have network as the driver last gave it (SBX-015,
+                SBX-024, ADR-0113, ADR-0114).
             canary:
               $ref: "#/components/schemas/Check"
               description: |
-                The canary sandbox runs under gVisor, reaches no blocked address,
+                The canary sandbox runs under gVisor, reaches nothing without
+                network (SBX-024) and no blocked address with it,
                 and its disk outside the workspace has the configured size
                 (SBX-003, SBX-016, ADR-0098).
             disks:
@@ -560,10 +603,22 @@ components:
         size: { type: integer, minimum: 0 }
         modified: { type: string, format: date-time }
 
+    EnsureRequest:
+      type: object
+      required: [internet_access]
+      additionalProperties: false
+      properties:
+        internet_access:
+          type: boolean
+          description: Whether the conversation has internet access, so that its sandbox has network (SBX-024).
+
     Sandbox:
       type: object
-      required: [state, started_at, working_dir]
+      required: [state, started_at, working_dir, internet_access]
       properties:
+        internet_access:
+          type: boolean
+          description: Whether the sandbox has network (SBX-024).
         state:
           type: string
           enum: [running]
