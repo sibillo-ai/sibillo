@@ -193,7 +193,7 @@ def test_notifications_that_are_off_show_a_sign_until_dismissed(page: Page, memb
     expect(sign).to_be_visible()
     expect(sign.get_by_role("button", name="Turn on")).to_be_visible()
     assert accessibility_violations(page) == []
-    sign.get_by_role("button", name="Dismiss").click()
+    sign.get_by_role("button", name="Hide").click()
     expect(sign).to_be_hidden()
     page.reload()
     expect(page.get_by_role("link", name="Settings")).to_be_visible()

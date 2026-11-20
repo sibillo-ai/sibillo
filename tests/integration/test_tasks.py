@@ -310,7 +310,8 @@ def test_one_firing_of_a_task_runs_at_a_time(database: Database, server: Server,
         assert time.monotonic() < deadline, "the task did not fire twice"
         time.sleep(0.1)
     statuses = sorted(firing["status"] for firing in firings(database, task["id"]))
-    assert statuses in (["running", "waiting"], ["done", "running"], ["done", "waiting"])
+    # Never two at once: both may still wait, one runs while the other waits, or the first is done.
+    assert statuses in (["waiting", "waiting"], ["running", "waiting"], ["done", "running"], ["done", "waiting"])
     first, second = wait_for_conversations(server, member.token, task["id"], 2, timeout=40)[::-1]
     done = firings(database, task["id"])
     assert [firing["status"] for firing in done] == ["done", "done"]

@@ -124,10 +124,10 @@ def test_the_assistant_reads_another_conversation_without_its_tool_results(
     said = _said(server, member.token, conversation_id, _tool("read_conversation", {"conversation_id": read_id}))
     assert words in said
     assert "web_search" in said
-    # The search's results, as the search service answered them, are not read.
+    # The search's results reach it once, as the answer that quoted them (the served model repeats a tool's
+    # result in its answer), never as the tool's result itself.
     assert search_service.requests_for(query)
-    assert result(query, 0)["title"] not in said
-    assert result(query, 0)["content"] not in said
+    assert said.count(result(query, 0)["title"]) == 1
 
 
 @pytest.mark.spec("AGT-033", "CNV-011", "TEN-007")
