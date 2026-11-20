@@ -16,7 +16,7 @@ import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
-import { Badge, Button, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
+import { Badge, Button, cx, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
 import { ModelSelect } from "./ModelPicker";
 import { MenuButton } from "./Shell";
 import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
@@ -324,21 +324,39 @@ export function ConversationView() {
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
       {/* The conversation's top bar: its title, its model, its cost and its context, its files and its settings, on a
-          computer and on a phone alike. The cost and the context are a line under the title, in view (UX-008, UX-039). */}
+          computer and on a phone alike (UX-008, UX-039). On a computer the cost and the context are a line under the
+          title; on a phone a second line of the bar holds the model, with its name, and the cost as an amount alone. */}
       <TopBar
         line
         start={<MenuButton />}
         title={conversation.data ? conversation.data.title || t("shell.untitled") : ""}
         detail={
-          <div className="flex min-w-0 items-center gap-x-4 overflow-hidden text-caption whitespace-nowrap text-ink-3 tabular-nums">
+          <div className="flex min-w-0 items-center gap-x-4 overflow-hidden text-caption whitespace-nowrap text-ink-3 tabular-nums max-md:hidden">
             <ConversationCost conversation={conversation.data} />
             {contextUsage && <ContextGauge usage={contextUsage} />}
           </div>
         }
+        below={{
+          className: "md:hidden",
+          children: (
+            <>
+              {conversation.data && (
+                <span className="-ml-1 flex min-w-0">
+                  <ModelSelect compact value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
+                </span>
+              )}
+              <span className="flex-1" />
+              <span className="flex flex-none items-center gap-3 text-caption text-ink-3 tabular-nums">
+                <ConversationCost brief conversation={conversation.data} />
+                {contextUsage && <ContextGauge brief usage={contextUsage} />}
+              </span>
+            </>
+          ),
+        }}
       >
         {conversation.data && (
-          <span className="flex min-w-0 flex-none md:flex-initial">
-            <ModelSelect compact narrow value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
+          <span className="flex min-w-0 max-md:hidden">
+            <ModelSelect compact value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
           </span>
         )}
         <Button variant="ghost" size="sm" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen} aria-label={t("files.title")}>
@@ -527,9 +545,16 @@ function Activity({ run }: { run: LiveRun }) {
 }
 
 /** What the conversation has cost so far (UX-008). */
-function ConversationCost({ conversation }: { conversation: { cost: Parameters<typeof formatMoney>[0] } | undefined }) {
+function ConversationCost({ conversation, brief = false }: { conversation: { cost: Parameters<typeof formatMoney>[0] } | undefined; brief?: boolean }) {
   const { t } = useTranslation();
   if (!conversation) return null;
+  // On a phone the amount alone, where the bar says whose it is (UX-039).
+  if (brief)
+    return (
+      <span className="font-medium text-ink-2" title={t("usage.conversation")}>
+        {formatMoney(conversation.cost)}
+      </span>
+    );
   return (
     <span className="flex flex-none items-center gap-1">
       <span>{t("usage.conversation")}</span>
@@ -543,13 +568,14 @@ function compact(tokens: number): string {
 }
 
 /** How much of the model's context window the conversation uses: tokens, window, share and a gauge (UX-008). */
-function ContextGauge({ usage }: { usage: RunUsage }) {
+function ContextGauge({ usage, brief = false }: { usage: RunUsage; brief?: boolean }) {
   const { t } = useTranslation();
   const percent = Math.round(Math.min(1, usage.context_tokens / Math.max(1, usage.context_window)) * 100);
   const text = t("usage.contextValue", { used: compact(usage.context_tokens), size: compact(usage.context_window), percent });
   return (
     <span className="flex items-center gap-2">
-      <span>{text}</span>
+      {/* On a phone the share alone; the gauge still says it in full (UX-039). */}
+      <span>{brief ? `${percent}%` : text}</span>
       <span
         role="meter"
         aria-label={t("usage.context")}
@@ -557,7 +583,7 @@ function ContextGauge({ usage }: { usage: RunUsage }) {
         aria-valuemax={usage.context_window}
         aria-valuenow={usage.context_tokens}
         aria-valuetext={text}
-        className="h-1 w-20 flex-none overflow-hidden rounded-full bg-hover"
+        className={cx("h-1 flex-none overflow-hidden rounded-full bg-hover", brief ? "w-10" : "w-20")}
       >
         <span className={`block h-full rounded-full ${percent >= 80 ? "bg-danger" : "bg-ink-2"}`} style={{ width: `${Math.max(3, percent)}%` }} />
       </span>
