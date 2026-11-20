@@ -17,7 +17,7 @@ import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsag
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
 import { useVoice, type VoiceMode } from "../voice";
-import { type AttachedFile, download, downloadUrl, formatSize, listFolder, useAttachments } from "../workspace";
+import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, listFolder, previewUrl, useAttachments } from "../workspace";
 import { ApprovalCard } from "./Approvals";
 import { ChatSettings } from "./AssistantSettings";
 import { Composer } from "./Composer";
@@ -370,7 +370,7 @@ export function ConversationView() {
           ))}
           {live && !settled && (
             <li className="my-5 flex flex-col gap-1">
-              {live.userText !== null && <UserBubble text={live.userText} attachments={live.attachments ?? []} onShow={show} />}
+              {live.userText !== null && <UserBubble text={live.userText} attachments={live.attachments ?? []} onShow={show} conversationId={conversationId} />}
               <Answer parts={live.parts} conversationId={conversationId} onShow={show} running={live.status === "running"} />
               {live.status === "failed" && live.errorCode !== "run.cancelled" ? (
                 <RunErrorView code={live.errorCode ?? "internal.error"} reason={live.reason ?? null} />
@@ -603,7 +603,7 @@ function TurnView(props: {
           </form>
         ) : (
           <div className="group/message flex flex-col items-end gap-1">
-            <UserBubble text={turn.userText} attachments={turn.attachments} onShow={props.onShow} />
+            <UserBubble text={turn.userText} attachments={turn.attachments} onShow={props.onShow} conversationId={props.conversationId} />
             <div className="flex gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100 [@media(hover:none)]:opacity-100">
               <CopyButton text={turn.userText} />
               <IconButton label={t("message.edit")} disabled={busy} onClick={props.onEdit}>
@@ -694,7 +694,17 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** A message's attachments, as chips that show the file in the workspace panel (CNV-017). */
-function UserBubble({ text, attachments, onShow }: { text: string; attachments: AttachedFile[]; onShow: (path: string) => void }) {
+function UserBubble({
+  text,
+  attachments,
+  onShow,
+  conversationId,
+}: {
+  text: string;
+  attachments: AttachedFile[];
+  onShow: (path: string) => void;
+  conversationId: string;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-end gap-1.5">
@@ -702,6 +712,12 @@ function UserBubble({ text, attachments, onShow }: { text: string; attachments: 
         <ul aria-label={t("files.attachments")} className="flex max-w-[min(85%,560px)] flex-wrap justify-end gap-1.5">
           {attachments.map((file) => (
             <li key={file.path}>
+              {/* An attached image shows as a small preview, from the workspace (UX-036). */}
+              {isImagePath(file.path) ? (
+                <button type="button" onClick={() => onShow(file.path)} className="block overflow-hidden rounded-xl border border-line hover:opacity-90">
+                  <img src={previewUrl(conversationId, file.path)} alt={file.path.split("/").at(-1) ?? ""} loading="lazy" className="max-h-40 max-w-[220px] object-cover" />
+                </button>
+              ) : (
               <button type="button" onClick={() => onShow(file.path)} className="flex max-w-[260px] items-center gap-2 rounded-xl border border-line bg-surface py-1.5 pr-3 pl-2.5 text-left text-[13px] hover:bg-hover">
                 <FileText className="size-4 flex-none text-muted" aria-hidden="true" />
                 <span className="flex min-w-0 flex-col">
@@ -709,6 +725,7 @@ function UserBubble({ text, attachments, onShow }: { text: string; attachments: 
                   <span className="text-muted">{formatSize(file.size)}</span>
                 </span>
               </button>
+              )}
             </li>
           ))}
         </ul>

@@ -177,6 +177,7 @@ function ModelPicker(props: {
                     <span className="truncate">{option.name}</span>
                     {sameModel(option, props.defaultModel) && <span className="rounded-full bg-accent-soft px-[7px] py-px text-[11px] font-bold text-accent">{t("picker.default")}</span>}
                     {option.tools === false && <span className="rounded-full border border-line-strong px-[7px] py-px text-[11px] font-semibold text-muted">{t("picker.chatOnly")}</span>}
+                    {option.images === true && <span className="rounded-full border border-line-strong px-[7px] py-px text-[11px] font-semibold text-muted">{t("picker.seesImages")}</span>}
                   </span>
                   <span className="row-span-2 self-center text-accent">{sameModel(option, props.chosen) && <Check className="size-[18px]" aria-hidden="true" />}</span>
                   <span className="text-[12.5px] text-muted tabular-nums">

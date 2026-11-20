@@ -464,12 +464,14 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
     }
     const key = field("api_key");
     const window = field("context_window");
+    const seeing = named(field("image_models"));
     return {
       name: field("name"),
       kind,
       base_url: field("base_url"),
       location: field("location") === "remote" ? ("remote" as const) : ("local" as const),
       ...(window ? { context_window: Number(window) } : {}),
+      ...(seeing.length > 0 ? { image_models: seeing } : {}),
       ...(key ? { api_key: key } : {}),
     };
   }
@@ -489,6 +491,9 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       if (location !== connection.location) update.location = location;
       const window = Number(field("context_window"));
       if (field("context_window") && window !== connection.context_window) update.context_window = window;
+      // A recognized server says which of its models see images, and the field is not shown (MOD-020).
+      const seeing = named(field("image_models"));
+      if (data.has("image_models") && seeing.join("\n") !== connection.image_models.join("\n")) update.image_models = seeing;
     }
     return update;
   }
@@ -604,6 +609,11 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
                 <Field id="server-window" label={t("connection.contextWindow")} hint={t("connection.contextWindowHint")}>
                   <input id="server-window" name="context_window" type="number" min={512} max={10000000} step={1} required defaultValue={editing?.context_window ?? DEFAULT_CONTEXT_WINDOW} className={INPUT} />
                 </Field>
+                {!editing?.server && (
+                  <Field id="server-images" label={t("connection.imageModels")} hint={t("connection.imageModelsHint")}>
+                    <textarea id="server-images" name="image_models" rows={2} defaultValue={editing?.image_models.join("\n") ?? ""} className={`${INPUT} h-auto py-2`} />
+                  </Field>
+                )}
                 <Field id="server-key" label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
                   <input id="server-key" name="api_key" type="password" autoComplete="off" className={INPUT} />
                 </Field>
@@ -638,6 +648,11 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+/** The model names of a field, one per line, without repeats (MOD-020). */
+function named(value: string): string[] {
+  return [...new Set(value.split("\n").map((name) => name.trim()).filter(Boolean))];
 }
 
 function Field(props: { id: string; label: string; hint?: string | undefined; children: React.ReactNode }) {

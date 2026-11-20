@@ -20,6 +20,26 @@ export interface Attachment {
   progress: number;
   path?: string;
   error?: string;
+  // An image's preview, from the file on the device (UX-036).
+  preview?: string;
+}
+
+/** The images a preview is shown for, by their type and by their extension (UX-036, ADR-0110). */
+const IMAGE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+
+export function isImagePath(path: string): boolean {
+  const dot = path.lastIndexOf(".");
+  return dot > 0 && IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
+}
+
+/** Pasted files as they are attached: an image without a name of its own is named `pasted-image` (UX-036). */
+export function pastedFiles(files: File[]): File[] {
+  return files.map((file) => {
+    const extension = IMAGE_TYPES[file.type];
+    const unnamed = file.name === "" || /^image\.[a-z]+$/i.test(file.name);
+    return extension !== undefined && unnamed ? new File([file], `pasted-image.${extension}`, { type: file.type }) : file;
+  });
 }
 
 const base = (conversationId: string) => `${API_BASE}/conversations/${conversationId}/workspace`;
@@ -193,7 +213,13 @@ export function useAttachments(conversation: () => Promise<string>) {
 
   const add = useCallback(
     (files: File[]) => {
-      const added = files.map((file) => ({ key: crypto.randomUUID(), name: file.name, size: file.size, progress: 0 }));
+      const added: Attachment[] = files.map((file) => ({
+        key: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        ...(file.type in IMAGE_TYPES ? { preview: URL.createObjectURL(file) } : {}),
+      }));
       setItems((all) => [...all, ...added]);
       void conversation().then(
         (conversationId) => {
@@ -224,13 +250,19 @@ export function useAttachments(conversation: () => Promise<string>) {
     (key: string) => {
       const item = items.find((candidate) => candidate.key === key);
       setItems((all) => all.filter((candidate) => candidate.key !== key));
+      if (item?.preview !== undefined) URL.revokeObjectURL(item.preview);
       aborts.current.get(key)?.();
       if (item?.path !== undefined && owner.current !== null) void deleteEntry(owner.current, item.path).catch(() => undefined);
     },
     [items],
   );
 
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => {
+    setItems((all) => {
+      for (const item of all) if (item.preview !== undefined) URL.revokeObjectURL(item.preview);
+      return [];
+    });
+  }, []);
   const uploading = items.some((item) => item.path === undefined && item.error === undefined);
   const ready: AttachedFile[] = items.flatMap((item) => (item.path === undefined ? [] : [{ path: item.path, size: item.size }]));
   return { items, add, remove, clear, uploading, ready };

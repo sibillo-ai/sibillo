@@ -1,11 +1,11 @@
 import { ArrowUp, FileText, Headphones, LoaderCircle, Mic, Paperclip, Square, X } from "lucide-react";
-import { type DragEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ModelChoice } from "../api/client";
 import { hasKeyboard } from "../focus";
 import { findModel, refusedBy, useModels } from "../models";
-import { type AttachedFile, formatSize, type useAttachments } from "../workspace";
+import { type AttachedFile, formatSize, pastedFiles, type useAttachments } from "../workspace";
 import { ModelSelect } from "./ModelPicker";
 import { Recorder, transcribe } from "../speech";
 import { VoiceLevel } from "./VoiceLevel";
@@ -100,6 +100,14 @@ export function Composer(props: {
     if (event.dataTransfer.files.length > 0) files.add([...event.dataTransfer.files]);
   }
 
+  /** Pasted files and images attach as picked ones do; text is pasted as ever (UX-036). */
+  function paste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = [...event.clipboardData.files];
+    if (pasted.length === 0) return;
+    event.preventDefault();
+    files.add(pastedFiles(pasted));
+  }
+
   const local = chosen?.location === "local";
   // A model the user's data egress policy refuses, said before anything is sent (UX-024).
   const refused = refusedBy(models.data?.egress.effective, chosen);
@@ -121,7 +129,11 @@ export function Composer(props: {
           <ul aria-label={t("files.attachments")} className="-ml-1.5 flex flex-wrap gap-1.5">
             {files.items.map((item) => (
               <li key={item.key} className="flex max-w-full items-center gap-2 rounded-xl border border-line bg-hover py-1.5 pr-1 pl-2.5 text-[13px]">
-                <FileText className="size-4 flex-none text-muted" aria-hidden="true" />
+                {item.preview ? (
+                  <img src={item.preview} alt={item.name} className="size-9 flex-none rounded-lg object-cover" />
+                ) : (
+                  <FileText className="size-4 flex-none text-muted" aria-hidden="true" />
+                )}
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-semibold">{item.name}</span>
                   <span className={item.error ? "text-danger" : "text-muted"}>
@@ -160,6 +172,7 @@ export function Composer(props: {
             if (!event.target.value.trim()) setDictated(false);
           }}
           onKeyDown={keyDown}
+          onPaste={paste}
           rows={1}
           autoFocus={props.autoFocus === true && hasKeyboard()}
           placeholder={props.placeholder}

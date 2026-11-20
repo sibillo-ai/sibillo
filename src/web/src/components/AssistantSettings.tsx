@@ -23,7 +23,7 @@ const REASONING: Reasoning[] = ["off", "on", "deep"];
 const TOOL_GROUPS: { id: string; tools: ToolName[] }[] = [
   { id: "web", tools: ["web_search", "read_page"] },
   { id: "commands", tools: ["run_command", "start_command", "check_command", "stop_command"] },
-  { id: "files", tools: ["read_file", "write_file", "edit_file", "create_directory", "list_directory", "find_files", "search_files", "file_info"] },
+  { id: "files", tools: ["read_file", "write_file", "edit_file", "create_directory", "list_directory", "find_files", "search_files", "file_info", "view_image"] },
   { id: "showing", tools: ["offer_download"] },
   { id: "questions", tools: ["ask_user_question"] },
   { id: "tasks", tools: ["write_plan", "read_plan", "add_task", "update_task_status", "update_task_statuses", "remove_task"] },
