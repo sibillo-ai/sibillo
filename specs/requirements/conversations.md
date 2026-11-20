@@ -324,7 +324,7 @@ Rationale: journey J3; moving and pinning from a menu takes three clicks.
 
 ## CNV-020: The model sees attached images
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
@@ -334,7 +334,7 @@ images attached to a message SHOULD reach the model as images, besides
 their paths in the workspace (CNV-017), as untrusted content (AGT-003); the
 assistant SHOULD also be able to look at an image of the workspace with a
 tool. With a model that does not accept images, the assistant SHOULD say so
-instead of attempting to read them some other way.
+instead of attempting to read them some other way (ADR-0110).
 
 Rationale: journey J5 and persona P2, who show the assistant photos;
 attached images now reach the model only as paths, which a model cannot

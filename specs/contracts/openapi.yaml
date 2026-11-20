@@ -3559,7 +3559,7 @@ components:
         returned; `has_api_key` says whether one is set. `private_network` is
         true when the address was set by a user who is the instance admin,
         which allows a private address (MOD-009).
-      required: [id, name, kind, base_url, location, has_api_key, private_network, context_window, model_count, models_refreshed_at, server, created_at, updated_at]
+      required: [id, name, kind, base_url, location, has_api_key, private_network, context_window, image_models, model_count, models_refreshed_at, server, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         name: { type: string }
@@ -3582,6 +3582,7 @@ components:
         context_window:
           type: [integer, "null"]
           description: For a connection to your own server, the context window of its models, in tokens; `null` for OpenRouter, which lists each model's (ADR-0073).
+        image_models: { $ref: "#/components/schemas/ImageModels" }
         model_count: { type: integer, minimum: 0 }
         models_refreshed_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
         created_at: { $ref: "#/components/schemas/Timestamp" }
@@ -3600,6 +3601,7 @@ components:
         base_url: { type: string, format: uri, maxLength: 2000, description: "Address of the API, such as `http://192.168.1.10:11434/v1`." }
         location: { $ref: "#/components/schemas/Location" }
         context_window: { type: integer, minimum: 512, maximum: 10000000, description: "For `openai` only; 8192 when not given." }
+        image_models: { $ref: "#/components/schemas/ImageModels" }
         api_key: { type: string, minLength: 1, maxLength: 1000, writeOnly: true }
     UpdateConnectionRequest:
       type: object
@@ -3611,7 +3613,18 @@ components:
         base_url: { type: string, format: uri, maxLength: 2000 }
         location: { $ref: "#/components/schemas/Location" }
         context_window: { type: integer, minimum: 512, maximum: 10000000, description: "For `openai` only; 8192 when not given." }
+        image_models: { $ref: "#/components/schemas/ImageModels" }
         api_key: { oneOf: [{ type: string, minLength: 1, maxLength: 1000 }, { type: "null" }], writeOnly: true }
+    ImageModels:
+      type: array
+      description: |
+        For `openai` only: the models of the server that a tenant admin says
+        accept images, by the provider's names for them; empty unless set.
+        A server Sibillo recognizes says it itself, and then the list is not
+        used (MOD-020, ADR-0110).
+      maxItems: 200
+      uniqueItems: true
+      items: { type: string, minLength: 1, maxLength: 200 }
     ConnectionTestStep:
       type: object
       required: [step, outcome, duration_ms, detail]
@@ -3679,7 +3692,7 @@ components:
     ModelOption:
       type: object
       description: One model a connection of the tenant offers (MOD-011, UX-015).
-      required: [connection_id, connection_name, model, name, location, prices, context_window, served_context_window, tools, kind, voices]
+      required: [connection_id, connection_name, model, name, location, prices, context_window, served_context_window, tools, images, kind, voices]
       properties:
         connection_id: { $ref: "#/components/schemas/Id" }
         connection_name: { type: string }
@@ -3720,6 +3733,14 @@ components:
         reasoning:
           type: [boolean, "null"]
           description: Whether the model can reason; `null` when the provider does not say. A model that cannot runs without reasoning (CNV-013).
+        images:
+          type: [boolean, "null"]
+          description: |
+            Whether the model accepts images: from OpenRouter or a recognized
+            Ollama server, or, for another server, true for the models a
+            tenant admin named in the connection's `image_models`; `null`
+            when nobody says. Only a model with `true` is sent images
+            (MOD-020, CNV-020, ADR-0110).
 
     Reasoning:
       type: string
@@ -3748,6 +3769,7 @@ components:
         - find_files
         - search_files
         - file_info
+        - view_image
         - offer_download
         - ask_user_question
         - write_plan

@@ -288,7 +288,7 @@ later evolution, not planned (ROADMAP, Later).
 
 ## MOD-020: Which models see images
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
@@ -297,4 +297,4 @@ The model gateway SHOULD know, for each model of a connection, whether it
 accepts images: from OpenRouter's `input_modalities`, from an Ollama
 server's capabilities, and, for another OpenAI-compatible server, from what
 a tenant admin says of the model. Clients SHOULD show it where a model is
-chosen (UX-015).
+chosen (UX-015) (ADR-0110).

@@ -606,6 +606,7 @@ A household's access to one provider (MOD-008, ADR-0069).
 | `speech_model` | text | the model of this connection that reads aloud for the household; at most one connection per tenant has one (API-006, ADR-0088) |
 | `speech_voice` | text | the voice of `speech_model`; set exactly when it is |
 | `context_window` | integer | for `openai`, the context window of its models in tokens, at least 512, 8192 unless set; null for `openrouter` (ADR-0073) |
+| `image_models` | text[] | not null, default empty; for `openai`, the models a tenant admin says accept images, at most 200 names of at most 200 characters (MOD-020, ADR-0110) |
 | `models_refreshed_at` | timestamptz | when its models were last listed |
 | `server_product` | text | `ollama` when Sibillo recognized the server behind a connection of kind `openai`; else null (MOD-019, ADR-0093) |
 | `server_version` | text | the recognized server's version; set exactly when `server_product` is |
@@ -635,6 +636,7 @@ ADR-0069).
 | `context_window` | integer | null when unknown |
 | `tools` | boolean | whether the model can call tools; null when unknown (MOD-014) |
 | `reasoning` | boolean | whether the model can reason; null when unknown (CNV-013, ADR-0081) |
+| `images` | boolean | whether the model accepts images, as its provider says; null when it does not say: the connection's `image_models` then decides (MOD-020, ADR-0110) |
 | `kind` | text | not null, default `chat`; `chat`, `transcription` or `speech` (ADR-0088) |
 | `voices` | text[] | a speech model's voices, when its provider lists them; else null (ADR-0088) |
 | `input_price`, `cached_input_price`, `output_price` | numeric(20, 10) | price per million tokens, or null |

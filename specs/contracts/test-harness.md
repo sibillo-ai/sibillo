@@ -136,6 +136,14 @@ and no content, as a model whose context is full does (MOD-017), and reports
 the prompt tokens a test asks for, as a server that cut the prompt reports
 them (MOD-018).
 
+It says which of its models accept images, as each kind of server does
+(MOD-020, ADR-0110): as OpenRouter, `image` among the `input_modalities` of
+some of its models; as Ollama, the capability `vision` for `test-model`
+only; as any other server, nothing. When a test asks, it answers with the
+number of images the request holds and the SHA-256 of the bytes of each, in
+their order, or first calls `view_image` with a path and then answers the
+same once the result has arrived (CNV-020).
+
 Under `/ollama`, it also answers as an Ollama server does (ADR-0093): the same
 scripts under `/ollama/v1`, `/ollama/api/version` with a version,
 `/ollama/api/show` with each model's capabilities, where `tools` and
