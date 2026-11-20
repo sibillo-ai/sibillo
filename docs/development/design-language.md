@@ -46,7 +46,9 @@ phone's screen are `pt-safe`, `pb-safe`, `pl-safe` and `pr-safe`.
 | Choose | `Select` among many, `Segmented` among a few, `ToggleGroup` among views, `Radio` in rows with descriptions, `Switch` for on or off, `Checkbox` for any of several |
 | Lay out a page | `Page`, then `Group`s, each with a `Card rows` of `Row`s: what it is on the left, the control on the right. Lists are rows too. Cards never nest. |
 | Say something in place | `Notice` (`neutral`, `warn`, `error`); `Badge` for a short state beside a name |
-| Show an empty list | `EmptyState`, with the action that adds the first entry (UX-038) |
+| Show an empty list | `EmptyState`: a title, a sentence that says what the list is for (required), and the action that adds the first entry where the user may add one (UX-038) |
+| Show a wait | `Loading` in place of the list or page while its query is pending, so that a list never says it is empty before it knows (UX-038) |
+| Run an action | `useBusy` from `src/web/src/busy.ts`: `run(key, work)` ignores a second press while the first is in progress, and `busy(key)` gives the button its busy state. A dialog that confirms an action stays open, its button busy, until the action is done (UX-038). |
 | Ask or edit apart | `Dialog`: a form with `onSubmit`, its buttons in `footer`, the action last; `asks` before what cannot be undone, with a `danger-solid` action |
 | Offer actions | `Menu` with `MenuItem`s |
 | Move through a list | `NavItem`, or `NAV_ITEM` on a link |
