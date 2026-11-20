@@ -602,3 +602,31 @@ again (ADR-0101).
 
 Rationale: journeys J8 and J15: a task's answer waits for a user who
 learns of it.
+
+## UX-034: Escape stops the answer
+
+- **Status:** draft
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+While a run of the open conversation is in progress, pressing Escape SHOULD
+stop it, as the stop button does (CNV-003), unless a dialog or a menu is open,
+which Escape closes instead.
+
+Rationale: journey J2; the keyboard reaches the stop button only by moving
+focus to it.
+
+## UX-035: The end of an answer leaves the thread where it is
+
+- **Status:** draft
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+When a run ends, clients SHOULD NOT scroll the conversation: what the user is
+reading stays in place, also when the conversation's history is reloaded
+after the run (UX-030).
+
+Rationale: the thread jumps to its end when an answer finishes, away from
+the part of the answer the user was reading.
