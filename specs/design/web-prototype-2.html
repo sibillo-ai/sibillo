@@ -185,6 +185,8 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
 .home { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: var(--s8); padding-bottom: var(--s12); }
 .greet { display: flex; align-items: flex-end; gap: var(--s6); } .greet .sp { width: 76px; flex: none; }
 .greet blockquote { font: italic 400 16px/26px var(--serif); color: var(--ink-2); margin-top: var(--s2); }
+.greet .pick { margin-top: var(--s3); margin-left: calc(-1 * var(--s3)); }
+.topbar .sub { display: block; font: 400 12px/16px var(--sans); color: var(--ink-3); }
 .greet cite { font: 500 12px/16px var(--sans); color: var(--ink-3); font-style: normal; }
 
 /* composer */
@@ -365,9 +367,9 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
   <div class="main">
     <div class="topbar"><span class="grow"></span><button class="btn ghost sm"><svg class="i" data-i="ghost"></svg>Temporary chat</button></div>
     <div class="col home">
-      <div class="greet"><span class="sp" data-sprite="wave"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote><cite>Aristotle, Politics</cite></div></div>
+      <div class="greet"><span class="sp" data-sprite="wave"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote><cite>Aristotle, Politics</cite><div class="pick"><button class="btn ghost sm" title="Runs remotely, at OpenRouter: your words leave the household"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button></div></div></div>
       <div>
-        <div class="composer"><textarea placeholder="What can I help with?"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="btn ghost sm" title="Runs remotely, at OpenRouter: your words leave the household"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
+        <div class="composer"><textarea placeholder="What can I help with?"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
       </div>
     </div>
   </div>
@@ -377,7 +379,7 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
 <div class="screen" id="chat"><div class="frame"><div class="app">
   <aside class="side" data-side="c1"></aside>
   <div class="main">
-    <div class="topbar line"><div class="grow title">Sourdough that will not rise</div><span class="t-caption faint">$0.0035</span><button class="btn ghost sm"><svg class="i" data-i="folder"></svg>Files<span class="badge">2</span></button><button class="btn icon ghost sm" aria-label="Chat settings"><svg class="i" data-i="sliders"></svg></button><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+    <div class="topbar line"><div class="grow title">Sourdough that will not rise<span class="sub">This conversation $0.0035 · Context 12%</span></div><button class="btn ghost sm" title="Runs remotely, at OpenRouter: your words leave the household"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="btn ghost sm"><svg class="i" data-i="folder"></svg>Files<span class="badge">2</span></button><button class="btn icon ghost sm" aria-label="Chat settings"><svg class="i" data-i="sliders"></svg></button><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
     <div class="scroll"><div class="col thread">
       <div class="bubble">My sourdough stays flat after eight hours. The kitchen is about 18 degrees. What am I doing wrong?</div>
       <div class="answer">
@@ -392,8 +394,7 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
     </div></div>
     <div class="dock"><div class="col">
       <div class="ask"><header><svg class="i" data-i="shield"></svg>Sibillo asks to run a command</header><div class="body"><div class="code"><pre>python schedule.py --temp 18 --flour 500</pre></div><span class="t-small muted">It runs in the sandbox of this conversation, with no access to the network.</span></div><footer><button class="btn ghost sm" style="margin-right:auto">Always allow in this chat</button><button class="btn sm">Deny</button><button class="btn primary sm">Allow once</button></footer></div>
-      <div class="composer"><textarea placeholder="Reply…"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="btn ghost sm" title="Runs remotely, at OpenRouter: your words leave the household"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
-      <div class="under">Context 12% used</div>
+      <div class="composer"><textarea placeholder="Reply…"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
     </div></div>
   </div>
 </div></div></div>
@@ -543,12 +544,12 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
 <!-- ================= PHONE ================= -->
 <div class="screen" id="phone"><div class="phones">
   <div class="frame phone">
-    <div class="topbar"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><span class="grow"></span><button class="btn icon ghost" aria-label="Temporary chat"><svg class="i" data-i="ghost"></svg></button><button class="btn icon ghost" aria-label="New chat"><svg class="i" data-i="edit"></svg></button></div>
-    <div class="col home" style="gap:24px"><div class="greet" style="gap:16px"><span class="sp" data-sprite="wave" style="width:56px"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote></div></div></div>
-    <div class="dock"><div class="col"><div class="composer"><textarea placeholder="What can I help with?" style="height:32px"></textarea><div class="bar"><button class="btn icon ghost" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><span class="grow"></span><button class="btn ghost sm">DeepSeek V4.1<svg class="i" data-i="chevron-down"></svg></button><button class="send" style="width:40px;height:40px" aria-label="Speak"><svg class="i" data-i="mic"></svg></button></div></div></div></div>
+    <div class="topbar"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><span class="grow"></span><button class="btn ghost sm" aria-label="Temporary chat"><svg class="i" data-i="ghost"></svg>Temporary chat</button></div>
+    <div class="col home" style="gap:24px"><div class="greet" style="gap:16px"><span class="sp" data-sprite="wave" style="width:56px"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote><div class="pick"><button class="btn ghost sm"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button></div></div></div></div>
+    <div class="dock"><div class="col"><div class="composer"><textarea placeholder="What can I help with?" style="height:32px"></textarea><div class="bar"><button class="btn icon ghost" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><span class="grow"></span><button class="send" style="width:40px;height:40px" aria-label="Speak"><svg class="i" data-i="mic"></svg></button></div></div></div></div>
   </div>
   <div class="frame phone">
-    <div class="topbar line"><button class="btn icon ghost" aria-label="Back"><svg class="i" data-i="chevron-left"></svg></button><div class="grow title">Settings</div></div>
+    <div class="topbar line"><button class="btn icon ghost" aria-label="Back to the conversations"><svg class="i" data-i="chevron-left"></svg></button><div class="grow title">Settings</div></div>
     <div class="scroll"><div class="col" style="display:flex;flex-direction:column;gap:24px;padding-top:24px;padding-bottom:32px">
       <div class="group"><header><h2 class="t-caption faint">Yours</h2></header><div class="card rows">
         <div class="row link"><svg class="i" data-i="message"></svg><div class="text t-heading">Assistant</div><svg class="i faint" data-i="chevron-right"></svg></div>
@@ -564,12 +565,33 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
     </div></div>
   </div>
   <div class="frame phone">
-    <div class="topbar line"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><div class="grow title">Sourdough that will not rise</div></div>
+    <div class="topbar line"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><div class="grow title">Sourdough that will not rise<span class="sub">$0.0035 · Context 12%</span></div><button class="btn ghost sm" style="max-width:120px"><svg class="i" data-i="cloud"></svg><span style="overflow:hidden;text-overflow:ellipsis">DeepSeek V4.1 Flash</span></button><button class="btn icon ghost" aria-label="Files"><svg class="i" data-i="folder"></svg></button><button class="btn icon ghost" aria-label="Chat settings"><svg class="i" data-i="sliders"></svg></button></div>
     <div class="scroll"><div class="col thread"><div class="bubble">My sourdough stays flat after eight hours.</div><div class="answer"><p>Nothing is wrong with the dough: it is cold.</p></div></div></div>
     <div class="overlay"><div class="dialog sheet">
       <header><div><h2 class="t-title">Sibillo asks to run a command</h2><p class="t-small">In the sandbox of this conversation, with no network.</p></div></header>
       <div class="body"><div class="code"><pre>python schedule.py --temp 18</pre></div></div>
       <footer><button class="btn ghost block">Always allow in this chat</button><button class="btn block">Deny</button><button class="btn primary block">Allow once</button></footer>
+    </div></div>
+  </div>
+  <div class="frame phone">
+    <div class="topbar line"><button class="btn icon ghost" aria-label="Back to the settings"><svg class="i" data-i="chevron-left"></svg></button><div class="grow title">Assistant</div></div>
+    <div class="scroll"><div class="col" style="display:flex;flex-direction:column;gap:24px;padding-top:24px;padding-bottom:32px">
+      <p class="t-small muted">How your new conversations start. Each conversation can change these in its own settings.</p>
+      <div class="group"><header><h2 class="t-heading">Model</h2></header><div class="card rows">
+        <div class="row"><div class="text"><div class="t-heading">Use only local models</div><div class="t-small muted">Your messages never leave the house.</div></div><span class="switch"></span></div>
+      </div></div>
+    </div></div>
+  </div>
+  <div class="frame phone">
+    <div class="topbar"><div class="grow title"><span class="sp" data-sprite="idle" style="display:inline-block;width:20px;vertical-align:middle"></span> Sibillo</div><button class="btn icon ghost" aria-label="Close the conversation list"><svg class="i" data-i="x"></svg></button></div>
+    <div class="scroll"><div class="col" style="display:flex;flex-direction:column;gap:4px">
+      <button class="btn block"><svg class="i" data-i="plus"></svg>New chat</button>
+      <div class="label" style="padding-top:12px">Today</div>
+      <button class="nav-item on"><span>Sourdough that will not rise, and what to do about it</span></button>
+      <button class="nav-item"><span>Gift ideas for Nonna's eightieth birthday</span></button>
+      <div class="label" style="padding-top:12px">This week</div>
+      <button class="nav-item"><span>Electricity bill, explained line by line</span></button>
+      <button class="nav-item"><span>Trip to Ascoli in March</span></button>
     </div></div>
   </div>
 </div></div>

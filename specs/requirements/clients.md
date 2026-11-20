@@ -688,3 +688,30 @@ or an action of the user is in progress, clients SHOULD show that it is, and
 SHOULD NOT let the action be started twice (ADR-0111).
 
 Rationale: persona P4; an empty page reads as a broken one.
+
+## UX-039: The top bar and the way back
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+A conversation SHOULD have a bar at its top (ADR-0111) that holds its
+title, its model picker (UX-015), its cost and its context (UX-008), its
+files and its settings, on every size of screen; the model of a new chat SHOULD be chosen
+beside the greeting (UX-012), and the temporary chat (CNV-011) SHOULD sit
+at the right end of the bar. The message box SHOULD NOT hold the model
+picker.
+
+On a phone the conversation list SHOULD take the whole screen, and every
+page SHOULD have a bar at its top, the only one there: it SHOULD hold the button that opens the
+conversation list, or Back where the page has a parent, and the name of the
+page that is open. In the settings, Back SHOULD lead from a section to the
+list of sections, and from that list to the conversation list. The device's
+own Back SHOULD lead to the same place as the bar's, and SHOULD close the
+conversation list when it is open.
+
+Rationale: the model belongs to the conversation rather than to the next
+message; on a phone, a list that covers half the screen cuts the titles
+short, and a Back that leaves the settings at once, under a bar that does
+not say where the user is, gets the user lost.

@@ -107,6 +107,7 @@ new entry here first (ADR-0005).
 | Design language | The look and behavior every screen of the clients shares: its design tokens, its shared components, its typefaces, its icons and the sprite, as the reference prototype shows them (UX-017, ADR-0111). |
 | Design token | A named value of the design language: a color, a size of text, a spacing step, a radius, a control height, a width, a shadow or a duration. Clients use no other value (UX-037, ADR-0111). |
 | Shared component | The one implementation of a control or a pattern of the design language, such as a button, a field, a dialog or a row, from which screens are assembled (UX-037, ADR-0111). |
+| Top bar | The bar at the top of a page of the clients, on a phone of every page: where the user is, the way back, and the page's own actions, such as a conversation's model (UX-039, ADR-0111). |
 | Sprite | The animated character of the clients: Sibillo, a mazzamurello, the house sprite of folklore, who greets the user and acts out what a run is doing (ADR-0111). |
 
 ## Execution

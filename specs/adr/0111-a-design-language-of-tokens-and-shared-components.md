@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-11-20
 - **Deciders:** @tapionx
-- **Related:** UX-017, UX-037, UX-038, UX-003, UX-005, UX-007, UX-008, UX-011, UX-012, UX-013, UX-014, UX-015, UX-019, UX-033, OBS-001, I18N-001, ADR-0067, ADR-0070, ADR-0088
+- **Related:** UX-017, UX-037, UX-038, UX-039, UX-003, UX-005, UX-007, UX-008, UX-011, UX-012, UX-013, UX-014, UX-015, UX-019, UX-033, OBS-001, I18N-001, ADR-0067, ADR-0070, ADR-0088
 
 ## Context
 
@@ -96,6 +96,7 @@ sprite and the quotes, and replaces the rest.
    | Dialog | A title, a body and a footer whose rightmost button is the action; three widths; a sheet from the bottom on a phone |
    | Menu | Actions or options that float; the model picker is a menu with a search (UX-015) |
    | Navigation item | An entry of the conversation list, of the settings' sections, or of a tree of files (UX-019) |
+   | Top bar | The bar at the top of a page: on a phone, the button that opens the conversation list or the one that goes back, then where the user is; then the page's own actions, at its right end (UX-039) |
    | Message box, Message, Activity, Request card | The parts of a conversation: the composer; a user's message and an answer; what a run did, as compact lines that each expand (UX-003); an approval or a question waiting above the message box |
 
    Outside that directory the client does not style a native control, does
@@ -109,16 +110,32 @@ sprite and the quotes, and replaces the rest.
      the user, with their spend over the last 24 hours and the last 30 days
      (UX-008) and the button that signs out. A notice that notifications are
      off sits above the foot (UX-033). The user may resize the sidebar
-     (UX-021); 272 is the width it starts with.
-   - *A conversation.* A bar has its title, its cost, its files and its
-     settings: above the conversation on a computer, above the message box on
-     a phone, where the top of the screen already has the bar that opens the
-     sidebar. The answer is plain text in the reading role; the user's message
-     is a bubble. Approvals and questions wait above the message box.
+     (UX-021); 272 is the width it starts with. On a phone the sidebar is a
+     page of its own, as wide as the screen, so that the titles of the
+     conversations can be read (UX-039).
+   - *On a phone every page has a top bar* (UX-039). It holds what the
+     computer shows elsewhere: the button that opens the conversation list,
+     or Back where the page has a parent, and where the user is. There is no
+     other bar above it. On a computer a conversation and a new chat have
+     one too, for their own actions.
+   - *A new chat.* The top bar has the temporary chat at its right end. The
+     greeting, its quote and the model the chat will start with sit together
+     in the middle, above the message box: the model is chosen before the
+     first message, as part of starting.
+   - *A conversation.* Its top bar has its title, its model, its cost and
+     its context, its files and its settings, on a computer and on a phone
+     alike. The cost and the context are a line under the title; on a phone
+     the files are an icon. The model belongs to the conversation, not to
+     the next message, so it is not in the message box. The answer is plain
+     text in the reading role; the user's message is a bubble. Approvals and
+     questions wait above the message box.
    - *Settings.* One column of the form width: a page header, then groups of
      rows. The household's settings stay apart from the user's and named as
      the household's (UX-015). On a phone the sections are a list the user
-     enters, one page at a time.
+     enters, one page at a time; the top bar names the page that is open and
+     has Back, which leads from a section to the list of sections, and from
+     the list to the conversation list. The device's own Back does the same
+     (UX-039).
    - *Side panels*, such as the files of a conversation, open beside the
      conversation, and full-screen on a phone (UX-019).
 8. **Nothing is blank.** A list with nothing in it shows an empty state, and
