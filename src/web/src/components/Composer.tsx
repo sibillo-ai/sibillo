@@ -17,7 +17,8 @@ import { Attachment, Attachments, MessageBar, MessageBox, MessageInput, SendButt
 /** The message box: Enter sends, Shift+Enter starts a new line; while a run goes on, Stop. Files attach by picking or dropping (CNV-017). */
 export function Composer(props: {
   // `voice`: how the message came, when it was not typed (ADR-0088).
-  onSend: (text: string, attachments: AttachedFile[], voice?: VoiceMode) => void;
+  // `focused`: whether the message box had the focus, which it keeps (UX-018).
+  onSend: (text: string, attachments: AttachedFile[], voice?: VoiceMode, focused?: boolean) => void;
   attachments: ReturnType<typeof useAttachments>;
   onStop?: () => void;
   running: boolean;
@@ -26,6 +27,8 @@ export function Composer(props: {
   placeholder: string;
   // Take the focus when shown, on devices with a keyboard (UX-018).
   autoFocus?: boolean;
+  // Take the focus when shown on any device: the box the message was sent from had it (UX-018).
+  keepFocus?: boolean;
   // The text the box starts with, as what another app shared (UX-006).
   initialText?: string;
 }) {
@@ -47,6 +50,11 @@ export function Composer(props: {
   useEffect(() => voice?.register((said, mode) => onSend.current(said, [], mode)), [voice?.register]);
   // Whether the box holds dictated words, which the assistant is told about (ADR-0088).
   const [dictated, setDictated] = useState(false);
+  // The first message of a new chat was sent from a box with the focus: this one, in its conversation, takes it.
+  const keepFocus = useRef(props.keepFocus === true);
+  useEffect(() => {
+    if (keepFocus.current) area.current?.focus();
+  }, []);
 
   /** Dictation: the spoken turn becomes the text of the box, to review before sending (UX-005). */
   async function dictate() {
@@ -86,10 +94,13 @@ export function Composer(props: {
     event?.preventDefault();
     const message = text.trim();
     if (!message || props.running || files.uploading) return;
-    props.onSend(message, files.ready, dictated ? "dictated" : undefined);
+    // Sent from the box, by a key or its send button, the box keeps the focus for the next message (UX-018).
+    const focused = area.current?.form?.contains(document.activeElement) ?? false;
+    props.onSend(message, files.ready, dictated ? "dictated" : undefined, focused);
     setText("");
     setDictated(false);
     files.clear();
+    if (focused) area.current?.focus();
   }
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -110,7 +121,6 @@ export function Composer(props: {
     files.add(pastedFiles(pasted));
   }
 
-  const local = chosen?.location === "local";
   // A model the user's data egress policy refuses, said before anything is sent (UX-024).
   const refused = refusedBy(models.data?.egress.effective, chosen);
   return (
@@ -125,7 +135,7 @@ export function Composer(props: {
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={drop}
-      // Where the conversation's data goes (MOD-010), and whether the model can use tools (MOD-014).
+      // Whether the model can use tools (MOD-014); where the data goes is said by the model's button (MOD-010).
       caption={
         models.data && models.data.items.length === 0
           ? t("composer.noModel")
@@ -133,11 +143,7 @@ export function Composer(props: {
             ? t("composer.refused")
             : chosen?.tools === false
               ? t("composer.chatOnly")
-              : chosen
-                ? local
-                  ? t("composer.local")
-                  : t("composer.remote", { connection: chosen.connection_name })
-                : null
+              : null
       }
     >
       {files.items.length > 0 && (

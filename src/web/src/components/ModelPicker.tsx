@@ -28,6 +28,7 @@ export function ModelSelect(props: {
   // defaults (MOD-003, ADR-0091).
   policy?: "effective" | "household";
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const models = useModels();
@@ -37,9 +38,13 @@ export function ModelSelect(props: {
   const local = chosen?.location === "local";
   const shown = chosen ? (props.compact ? chosen.name : `${chosen.name} · ${chosen.connection_name}`) : props.placeholder;
   const icon = chosen && (local ? <House aria-hidden="true" /> : <Cloud aria-hidden="true" />);
+  // Where the model runs, in words beside its sign: the warning that a remote model's data leaves the household (MOD-010).
+  const where = chosen && (local ? t("picker.runsLocally") : t("picker.runsRemotely", { connection: chosen.connection_name }));
+  const named = [props.label ? `${props.label}: ${shown ?? ""}` : shown, where].filter(Boolean).join(", ");
   const trigger = {
     // The name holds what the button shows, so that it can be spoken as it reads (UX-007).
-    ...(props.label ? { "aria-label": `${props.label}: ${shown ?? ""}` } : {}),
+    ...(props.label || where ? { "aria-label": named } : {}),
+    ...(where ? { title: where } : {}),
     "aria-haspopup": "dialog" as const,
     "aria-expanded": open,
     onClick: () => setOpen(!open),

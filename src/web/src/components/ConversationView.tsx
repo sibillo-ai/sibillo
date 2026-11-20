@@ -184,7 +184,7 @@ export function ConversationView() {
   }, []);
 
   // The first message of a new chat, handed over by the new-chat screen, with its attachments.
-  const handedOver = location.state as { firstMessage?: string; attachments?: AttachedFile[]; voice?: VoiceMode } | null;
+  const handedOver = location.state as { firstMessage?: string; attachments?: AttachedFile[]; voice?: VoiceMode; focused?: boolean } | null;
   const firstVoice = handedOver?.voice;
   const firstMessage = handedOver?.firstMessage;
   const firstAttachments = handedOver?.attachments;
@@ -451,6 +451,7 @@ export function ConversationView() {
               model={conversation.data?.model ?? null}
               onModel={(choice) => void chooseModel(choice)}
               placeholder={t("composer.placeholder")}
+              keepFocus={handedOver?.focused === true}
             />
           )}
         </div>

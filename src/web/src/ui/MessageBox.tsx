@@ -86,6 +86,8 @@ export function SendButton({ label, type = "submit", children, ...rest }: Omit<C
       type={type}
       aria-label={label}
       title={label}
+      // Pressed, it leaves the focus in the message box, and a phone's keyboard open (UX-018).
+      onMouseDown={(event) => event.preventDefault()}
       className="grid size-8 flex-none cursor-pointer place-items-center rounded-full bg-accent text-on-accent transition-[opacity,scale] duration-120 ease-soft hover:opacity-90 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100 pointer-coarse:size-11 [&_svg]:size-4 [&_svg]:flex-none"
       {...rest}
     >

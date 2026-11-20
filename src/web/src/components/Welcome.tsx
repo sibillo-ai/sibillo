@@ -69,10 +69,10 @@ export function Welcome({ me }: { me: User }) {
     })();
   }, [shared, navigate, notify, t, add]);
 
-  async function start(text: string, files: AttachedFile[], voice?: VoiceMode) {
+  async function start(text: string, files: AttachedFile[], voice?: VoiceMode, focused?: boolean) {
     const id = await conversation();
     await refresh();
-    await navigate(`/c/${id}`, { state: { firstMessage: text, attachments: files, voice } });
+    await navigate(`/c/${id}`, { state: { firstMessage: text, attachments: files, voice, focused } });
   }
 
   function another() {
@@ -135,7 +135,7 @@ export function Welcome({ me }: { me: User }) {
           <Composer
             key={draft?.key ?? 0}
             initialText={draft?.text ?? ""}
-            onSend={(text, files, voice) => void start(text, files, voice)}
+            onSend={(text, files, voice, focused) => void start(text, files, voice, focused)}
             attachments={attachments}
             running={false}
             model={model}
