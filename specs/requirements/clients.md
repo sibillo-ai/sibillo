@@ -720,7 +720,7 @@ not say where the user is, gets the user lost.
 
 ## UX-040: A new version of the app takes over
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e, integration
