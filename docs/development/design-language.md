@@ -52,6 +52,7 @@ phone's screen are `pt-safe`, `pb-safe`, `pl-safe` and `pr-safe`.
 | Ask or edit apart | `Dialog`: a form with `onSubmit`, its buttons in `footer`, the action last; `asks` before what cannot be undone, with a `danger-solid` action |
 | Offer actions | `Menu` with `MenuItem`s |
 | Move through a list | `NavItem`, or `NAV_ITEM` on a link |
+| Put a bar on top of a page | `TopBar`: on a phone `MenuButton` from `components/Shell.tsx`, or Back, then the page's name; its actions at the end. Under a bar that names a page on a phone, wrap the page in `NamedByTopBar` so its title is not shown twice (UX-039) |
 | Build a conversation | `ui/MessageBox`, `ui/Message`, `ui/RequestCard`, `ui/Panel` |
 
 The accent is rare: it marks sending a message, the focused control and the
