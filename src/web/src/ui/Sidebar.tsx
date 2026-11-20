@@ -1,7 +1,7 @@
 // The parts of the sidebar that the navigation item alone cannot say: an entry that is a link, with a second
 // line and a menu of its own, and the mark of where a dragged entry may be dropped (UX-037, ADR-0111).
 import type { ComponentProps, ReactNode } from "react";
-import { Link, NavLink } from "react-router";
+import { NavLink } from "react-router";
 
 import { cx } from "./cx";
 import { NAV_ITEM } from "./NavItem";
@@ -51,20 +51,5 @@ export function NavEntry({
       </NavLink>
       {menu !== undefined && <span className="absolute inset-y-0 right-0 flex items-center">{menu}</span>}
     </li>
-  );
-}
-
-/**
- * The lead entry of a list, which starts something new, such as a new chat: as tall as the other entries, in
- * ink, with its icon on a small square of ink (ADR-0111).
- */
-export function NavLead({ to, icon, children }: { to: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <Link to={to} className={cx(NAV_ITEM, "font-semibold text-ink!")}>
-      <span aria-hidden="true" className="-ml-1 grid size-6 flex-none place-items-center rounded-sm bg-ink text-canvas">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-    </Link>
   );
 }

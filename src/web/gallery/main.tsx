@@ -10,10 +10,9 @@ import "@fontsource/jetbrains-mono/400.css";
 import "../src/styles.css";
 import "../src/i18n";
 
-import { Bell, CalendarClock, Check, ChevronLeft, Cloud, Copy, Ellipsis, Folder, FolderOpen, House, LogOut, Menu as MenuIcon, Plus, SlidersHorizontal, SquarePen, Trash2, Users } from "lucide-react";
+import { Bell, CalendarClock, Check, ChevronLeft, Cloud, Copy, Ellipsis, Folder, FolderOpen, House, LogOut, Menu as MenuIcon, Plus, SlidersHorizontal, Trash2, Users } from "lucide-react";
 import { type ReactNode, StrictMode, useId, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router";
 
 import {
   Avatar,
@@ -45,7 +44,6 @@ import {
   TopBar,
   Tile,
 } from "../src/ui";
-import { NavLead } from "../src/ui/Sidebar";
 
 function Demo({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -265,9 +263,6 @@ function Gallery() {
 
       <Group title="Navigation">
         <div className="w-full max-w-sidebar rounded-lg bg-sunken p-3">
-          <NavLead to="#" icon={<SquarePen />}>
-            New chat
-          </NavLead>
           <NavLabel>Today</NavLabel>
           <NavItem current>Sourdough that will not rise</NavItem>
           <NavItem>Gift ideas for Nonna</NavItem>
@@ -364,9 +359,6 @@ const root = document.getElementById("root");
 if (root === null) throw new Error("no #root element");
 createRoot(root).render(
   <StrictMode>
-    {/* The entries of a list that are links need a router. */}
-    <MemoryRouter>
-      <Gallery />
-    </MemoryRouter>
+    <Gallery />
   </StrictMode>,
 );

@@ -1,4 +1,4 @@
-import { LogOut, Menu as MenuIcon, SlidersHorizontal, SquarePen, X } from "lucide-react";
+import { LogOut, Menu as MenuIcon, SlidersHorizontal, X } from "lucide-react";
 import { createContext, type CSSProperties, useCallback, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
@@ -10,8 +10,7 @@ import { useSignOut } from "../session";
 import { useLeavingTemporary } from "../temporary";
 import { useChangeStream } from "../changes";
 import { Avatar, cx, IconButton, NAV_ITEM } from "../ui";
-import { NavLead } from "../ui/Sidebar";
-import { ConversationList } from "./ConversationList";
+import { ConversationList, NewFolderButton } from "./ConversationList";
 import { NotificationsSign } from "./NotificationSettings";
 import { ResizeHandle, usePanelWidth } from "./ResizeHandle";
 import { HandsFreeOverlay, VoiceProvider } from "../voice";
@@ -84,16 +83,13 @@ export function Shell({ me }: { me: User }) {
                 <Sprite pose="waiting" head className="size-7 flex-none" />
                 <span className="truncate">{t("app.name")}</span>
               </Link>
+              <NewFolderButton />
               <span className="flex flex-none md:hidden">
                 <IconButton label={t("shell.closeMenu")} onClick={closeMenu}>
                   <X aria-hidden="true" />
                 </IconButton>
               </span>
             </div>
-            {/* The new chat leads the list, as tall as its entries (ADR-0111). */}
-            <NavLead to="/" icon={<SquarePen />}>
-              {t("shell.newChat")}
-            </NavLead>
             <ConversationList />
             <NotificationsSign />
             <div className="flex flex-none flex-col">
