@@ -321,3 +321,21 @@ conversation's menu cannot do, so that a user without a pointer loses
 nothing (CNV-007, CNV-008, UX-007).
 
 Rationale: journey J3; moving and pinning from a menu takes three clicks.
+
+## CNV-020: The model sees attached images
+
+- **Status:** draft
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration
+
+When the conversation's model accepts images, as its provider says (MOD-020),
+images attached to a message SHOULD reach the model as images, besides
+their paths in the workspace (CNV-017), as untrusted content (AGT-003); the
+assistant SHOULD also be able to look at an image of the workspace with a
+tool. With a model that does not accept images, the assistant SHOULD say so
+instead of attempting to read them some other way.
+
+Rationale: journey J5 and persona P2, who show the assistant photos;
+attached images now reach the model only as paths, which a model cannot
+see.

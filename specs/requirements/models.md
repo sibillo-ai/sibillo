@@ -285,3 +285,16 @@ the strictest of the space's policy and the policy that applies to the user
 
 Set aside: sharing data between users, and the file library, are a possible
 later evolution, not planned (ROADMAP, Later).
+
+## MOD-020: Which models see images
+
+- **Status:** draft
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** integration
+
+The model gateway SHOULD know, for each model of a connection, whether it
+accepts images: from OpenRouter's `input_modalities`, from an Ollama
+server's capabilities, and, for another OpenAI-compatible server, from what
+a tenant admin says of the model. Clients SHOULD show it where a model is
+chosen (UX-015).
