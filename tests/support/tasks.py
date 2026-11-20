@@ -13,6 +13,7 @@ import hashlib
 import json
 import time
 import uuid
+import zoneinfo
 from typing import Any
 
 import httpx
@@ -26,12 +27,24 @@ FIRING_TIMEOUT_SECONDS = 20
 # How long a test waits to be sure that nothing fired: a few sweeps of the worker.
 QUIET_SECONDS = 3
 FINAL_OUTCOMES = frozenset({"completed", "failed", "cancelled", "interrupted"})
-# A schedule that would not fire during a test by itself.
-DAILY = "0 7 * * *"
+# A schedule that would not fire during a test by itself: every day at 07:00, since a day long gone (ADR-0109).
+START = "2026-01-01T07:00:00"
+DAILY = ["RRULE:FREQ=DAILY"]
 
 
-def schedule(expression: str = DAILY) -> dict[str, Any]:
-    return {"kind": "schedule", "schedule": expression}
+def schedule(*recurrence: str, start: str = START) -> dict[str, Any]:
+    """A schedule trigger: its start, in the task's time zone, and its lines of RFC 5545; once without lines."""
+    return {"kind": "schedule", "start": start, "recurrence": list(recurrence) if recurrence else list(DAILY)}
+
+
+def once(start: str) -> dict[str, Any]:
+    """A schedule that fires once, at its start."""
+    return {"kind": "schedule", "start": start, "recurrence": []}
+
+
+def local(when: datetime.datetime, zone: str = "Europe/Rome") -> str:
+    """The instant as a start in the task's time zone, as a schedule takes it."""
+    return when.astimezone(zoneinfo.ZoneInfo(zone)).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
 def webhook() -> dict[str, Any]:

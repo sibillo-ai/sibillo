@@ -44,8 +44,9 @@ def test_a_user_creates_a_scheduled_task_and_sees_when_it_fires(page: Page, memb
     dialog.get_by_label("Instructions").fill("Summarize the news of the day.")
     dialog.get_by_label("Time zone").fill("Europe/Rome")
     dialog.get_by_role("button", name="Add a schedule").click()
-    dialog.get_by_label("Schedule").fill("0 7 * * 1-5")
-    # The schedule is said in words before it is saved.
+    dialog.get_by_label("Starts").fill("2026-12-01T07:00")
+    dialog.get_by_label("Repeats").fill("RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR")
+    # The schedule is said in words before it is saved (ADR-0109).
     expect(dialog).to_contain_text("At 07:00, Monday to Friday")
     dialog.get_by_role("group", name="Grants").get_by_role("checkbox", name="Search the web").check()
     assert accessibility_violations(page) == []
@@ -103,7 +104,8 @@ def test_grants_that_complete_the_lethal_trifecta_are_shown_with_what_to_remove(
     dialog.get_by_label("Name").fill("Risky")
     dialog.get_by_label("Instructions").fill("Read my files and search the web.")
     dialog.get_by_role("button", name="Add a schedule").click()
-    dialog.get_by_label("Schedule").fill("0 7 * * *")
+    dialog.get_by_label("Starts").fill("2026-12-01T07:00")
+    dialog.get_by_label("Repeats").fill("RRULE:FREQ=DAILY")
     grants = dialog.get_by_role("group", name="Grants")
     grants.get_by_role("checkbox", name="Search the web").check()
     grants.get_by_role("checkbox", name="Read files").check()
@@ -198,3 +200,24 @@ def test_notifications_that_are_off_show_a_sign_until_dismissed(page: Page, memb
     page.reload()
     expect(page.get_by_role("link", name="Settings")).to_be_visible()
     expect(page.get_by_role("region", name="Notifications are off")).to_be_hidden()
+
+
+@pytest.mark.spec("UX-031", "TSK-003")
+@pytest.mark.parametrize(
+    ("recurrence", "words"),
+    [
+        ("", "Once, on"),
+        ("RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2", "At 09:30, on the first Monday of every month, 2 times"),
+        ("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SA;UNTIL=20991231T235959Z", "At 09:30, every 2 weeks on Saturday, until"),
+    ],
+    ids=["once", "first Monday twice", "every other Saturday until"],
+)
+def test_a_recurrence_is_said_in_words(page: Page, member: Account, recurrence: str, words: str) -> None:
+    sign_in(page, member)
+    _tasks_page(page)
+    page.get_by_role("region", name="Tasks").get_by_role("button", name="New task").click()
+    dialog = page.get_by_role("dialog", name="New task")
+    dialog.get_by_role("button", name="Add a schedule").click()
+    dialog.get_by_label("Starts").fill("2099-03-01T09:30")
+    dialog.get_by_label("Repeats").fill(recurrence)
+    expect(dialog).to_contain_text(words)

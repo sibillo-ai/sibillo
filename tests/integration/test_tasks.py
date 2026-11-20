@@ -12,6 +12,7 @@ import datetime
 import time
 import uuid
 import zoneinfo
+from typing import Any
 
 import pytest
 
@@ -23,6 +24,7 @@ from tests.support.runs import start_run, wait_for_run
 from tests.support.server import Server
 from tests.support.tasks import (
     DAILY,
+    START,
     arrange_done_firings,
     conversations_of,
     create_task,
@@ -30,6 +32,8 @@ from tests.support.tasks import (
     firings,
     get_task,
     hook,
+    local,
+    once,
     schedule,
     stays_quiet,
     task_request,
@@ -72,7 +76,7 @@ def test_a_user_creates_lists_changes_and_deletes_their_task(server: Server, mem
     assert task["model"] == {"connection_id": member.model.connection_id, "model": "test-model"}
     (trigger,) = task["triggers"]
     assert trigger["kind"] == "schedule"
-    assert trigger["schedule"] == DAILY
+    assert (trigger["start"], trigger["recurrence"]) == (START, DAILY)
     assert trigger["next_fire_at"] is not None
 
     with server.client(member.token) as client:
@@ -102,11 +106,12 @@ def test_a_task_keeps_at_least_one_trigger(server: Server, member: Member) -> No
     (only,) = task["triggers"]
     with server.client(member.token) as client:
         assert_problem(client.delete(f"/tasks/{task['id']}/triggers/{only['id']}"), 409, "resource.conflict")
-        added = client.post(f"/tasks/{task['id']}/triggers", json=schedule("30 18 * * 5"))
+        friday = schedule("RRULE:FREQ=WEEKLY;BYDAY=FR", start="2026-01-02T18:30:00")
+        added = client.post(f"/tasks/{task['id']}/triggers", json=friday)
         assert added.status_code == 201, added.text
         assert client.delete(f"/tasks/{task['id']}/triggers/{only['id']}").status_code == 204
-    assert [trigger["schedule"] for trigger in get_task(server, member.token, task["id"])["triggers"]] == [
-        "30 18 * * 5"
+    assert [trigger["recurrence"] for trigger in get_task(server, member.token, task["id"])["triggers"]] == [
+        ["RRULE:FREQ=WEEKLY;BYDAY=FR"]
     ]
 
 
@@ -212,22 +217,82 @@ def test_a_conversation_a_task_started_continues_like_any_other(
 # --- TSK-003: schedules ---
 
 
+REFUSED: dict[str, dict[str, Any]] = {
+    "every five minutes": schedule("RRULE:FREQ=MINUTELY;INTERVAL=5"),
+    "twice an hour, ten minutes apart": schedule("RRULE:FREQ=HOURLY;BYMINUTE=0,10"),
+    "an extra date too close": schedule("RRULE:FREQ=DAILY", "RDATE:20260101T071000"),
+    "not a rule": schedule("RRULE:FREQ=SOMETIMES"),
+    "not a recurrence line": schedule("EVERY:DAY"),
+    "once, in the past": once("2020-01-01T07:00:00"),
+    "ended before now": schedule("RRULE:FREQ=DAILY;COUNT=3", start="2020-01-01T07:00:00"),
+    "a start that is no date": schedule(start="2026-02-30T07:00:00"),
+}
+
+
 @pytest.mark.spec("TSK-003")
-@pytest.mark.parametrize("expression", ["*/5 * * * *", "* * * * *", "0,10 * * * *", "not a schedule", "0 7 * *"])
-def test_schedules_that_fire_too_often_or_do_not_parse_are_refused(
-    server: Server, member: Member, expression: str
+@pytest.mark.parametrize("trigger", REFUSED.values(), ids=REFUSED.keys())
+def test_schedules_that_do_not_parse_fire_too_often_or_never_are_refused(
+    server: Server, member: Member, trigger: dict[str, Any]
 ) -> None:
-    response = try_create(server, member.token, task_request(triggers=[schedule(expression)]))
+    response = try_create(server, member.token, task_request(triggers=[trigger]))
     assert_problem(response, 422, "request.validation_failed")
 
 
+ACCEPTED: dict[str, list[str]] = {
+    "every fifteen minutes": ["RRULE:FREQ=MINUTELY;INTERVAL=15"],
+    "weekdays until a date": ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20991231T235959Z"],
+    "first Monday, twice": ["RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2"],
+    "monthly with an exception": ["RRULE:FREQ=MONTHLY;BYMONTHDAY=1", "EXDATE:20270101T070000"],
+}
+
+
 @pytest.mark.spec("TSK-003")
-@pytest.mark.parametrize("expression", ["*/15 * * * *", "0 7 * * 1-5", "30 6 1 * *"])
-def test_schedules_that_fire_at_most_every_15_minutes_are_accepted(
-    server: Server, member: Member, expression: str
+@pytest.mark.parametrize("recurrence", ACCEPTED.values(), ids=ACCEPTED.keys())
+def test_recurrences_that_fire_at_most_every_15_minutes_are_accepted(
+    server: Server, member: Member, recurrence: list[str]
 ) -> None:
-    response = try_create(server, member.token, task_request(triggers=[schedule(expression)]))
+    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
+    response = try_create(server, member.token, task_request(triggers=[schedule(*recurrence, start=start)]))
     assert response.status_code == 201, response.text
+    assert response.json()["triggers"][0]["next_fire_at"] is not None
+
+
+@pytest.mark.spec("TSK-003")
+def test_the_first_monday_of_the_month_twice_fires_on_those_mondays(server: Server, member: Member) -> None:
+    trigger = schedule("RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2", start="2099-03-01T09:00:00")
+    task = create_task(server, member.token, triggers=[trigger])
+    next_fire_at = datetime.datetime.fromisoformat(trigger_of(task, "schedule")["next_fire_at"])
+    # 1 March 2099 is a Sunday: the first Monday is the 2nd.
+    assert next_fire_at.astimezone(zoneinfo.ZoneInfo("Europe/Rome")).isoformat() == "2099-03-02T09:00:00+01:00"
+
+
+@pytest.mark.spec("TSK-003")
+def test_a_schedule_without_recurrence_fires_once_and_then_ends(
+    database: Database, server: Server, member: Member
+) -> None:
+    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=2))
+    task = create_task(server, member.token, triggers=[once(start)])
+    trigger = trigger_of(task, "schedule")
+    assert (trigger["start"], trigger["recurrence"]) == (start, [])
+    fire_schedule(database, trigger["id"])
+    wait_for_conversations(server, member.token, task["id"])
+    stays_quiet(server, member.token, task["id"], 1)
+    assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is None
+
+
+@pytest.mark.spec("TSK-003")
+def test_a_recurrence_with_a_count_ends_after_its_last_firing(
+    database: Database, server: Server, member: Member
+) -> None:
+    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
+    task = create_task(server, member.token, triggers=[schedule("RRULE:FREQ=DAILY;COUNT=2", start=start)])
+    trigger_id = trigger_of(task, "schedule")["id"]
+    fire_schedule(database, trigger_id)
+    wait_for_conversations(server, member.token, task["id"], 1)
+    assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is not None
+    fire_schedule(database, trigger_id)
+    wait_for_conversations(server, member.token, task["id"], 2)
+    assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is None
 
 
 @pytest.mark.spec("TSK-003")
@@ -239,7 +304,7 @@ def test_unknown_time_zones_are_refused(server: Server, member: Member) -> None:
 @pytest.mark.spec("TSK-003")
 @pytest.mark.parametrize("time_zone", ["Europe/Rome", "America/New_York", "Asia/Tokyo"])
 def test_a_schedule_fires_at_its_time_in_the_tasks_time_zone(server: Server, member: Member, time_zone: str) -> None:
-    task = create_task(server, member.token, time_zone=time_zone, triggers=[schedule("0 7 * * *")])
+    task = create_task(server, member.token, time_zone=time_zone, triggers=[schedule()])
     next_fire_at = datetime.datetime.fromisoformat(trigger_of(task, "schedule")["next_fire_at"])
     local = next_fire_at.astimezone(zoneinfo.ZoneInfo(time_zone))
     assert (local.hour, local.minute) == (7, 0)
@@ -249,7 +314,7 @@ def test_a_schedule_fires_at_its_time_in_the_tasks_time_zone(server: Server, mem
 
 @pytest.mark.spec("TSK-003")
 def test_firings_missed_while_down_fire_once(database: Database, server: Server, member: Member) -> None:
-    task = create_task(server, member.token, triggers=[schedule("0 * * * *")])
+    task = create_task(server, member.token, triggers=[schedule("RRULE:FREQ=HOURLY")])
     trigger_id = trigger_of(task, "schedule")["id"]
     # Five hourly firings were missed.
     fire_schedule(database, trigger_id, datetime.timedelta(hours=5, minutes=1))
@@ -302,7 +367,7 @@ def test_a_task_starts_at_most_10_conversations_an_hour(database: Database, serv
 @pytest.mark.spec("TSK-009")
 def test_one_firing_of_a_task_runs_at_a_time(database: Database, server: Server, member: Member) -> None:
     # Two schedules of the task come due together; its runs take a few seconds.
-    task = create_task(server, member.token, "slow:6", triggers=[schedule("0 7 * * *"), schedule("0 8 * * *")])
+    task = create_task(server, member.token, "slow:6", triggers=[schedule(), schedule(start="2026-01-01T08:00:00")])
     for trigger in task["triggers"]:
         fire_schedule(database, trigger["id"])
     deadline = time.monotonic() + 10
