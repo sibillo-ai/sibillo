@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { EgressPolicy, ModelChoice, ModelOption } from "../api/client";
 import { findModel, refusedBy, sameModel, shortPrice, useModels } from "../models";
-import { Badge, Button, PickerEmpty, PickerGroup, PickerOption, PickerPanel, SearchInput, SelectButton } from "../ui";
+import { Badge, Button, cx, PickerEmpty, PickerGroup, PickerOption, PickerPanel, SearchInput, SelectButton } from "../ui";
 
 // The space the panel keeps from the window's edges and from its button.
 const MARGIN = 12;
@@ -20,6 +20,8 @@ export function ModelSelect(props: {
   value: ModelChoice | null;
   onChange: (choice: ModelChoice) => void;
   compact?: boolean;
+  // On a phone only its sign shows, where it runs, and its name is spoken and shown as a tooltip (UX-039, MOD-010).
+  narrow?: boolean;
   label?: string;
   placeholder?: string;
   // Which models to offer: chat models unless said otherwise (ADR-0088).
@@ -44,7 +46,7 @@ export function ModelSelect(props: {
   const trigger = {
     // The name holds what the button shows, so that it can be spoken as it reads (UX-007).
     ...(props.label || where ? { "aria-label": named } : {}),
-    ...(where ? { title: where } : {}),
+    ...(where ? { title: props.narrow ? `${shown ?? ""}: ${where}` : where } : {}),
     "aria-haspopup": "dialog" as const,
     "aria-expanded": open,
     onClick: () => setOpen(!open),
@@ -54,7 +56,7 @@ export function ModelSelect(props: {
       {props.compact ? (
         <Button ref={button} variant="ghost" size="sm" shrink {...trigger}>
           {icon}
-          <span className="truncate">{shown}</span>
+          <span className={cx("truncate", props.narrow && icon && "max-md:sr-only")}>{shown}</span>
           <ChevronDown aria-hidden="true" />
         </Button>
       ) : (

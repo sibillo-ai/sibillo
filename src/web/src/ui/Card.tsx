@@ -1,13 +1,17 @@
 // Pages are a header and groups; a group is a card of rows (UX-037, ADR-0111).
-import { type ReactNode, useId } from "react";
+import { createContext, type ReactNode, useContext, useId } from "react";
 
 import { cx } from "./cx";
 
+/** Pages under a top bar that names them on a phone, as the settings' sections are (UX-039): their title is then not shown twice. */
+export const NamedByTopBar = createContext(false);
+
 /** The title of a page, in the voice of the house, and what the page is for. */
 export function PageHeader({ title, id, children }: { title: string; id?: string; children?: ReactNode }) {
+  const named = useContext(NamedByTopBar);
   return (
     <header className="flex flex-col gap-2">
-      <h1 id={id} className="font-serif text-display">
+      <h1 id={id} className={cx("font-serif text-display", named && "max-md:sr-only")}>
         {title}
       </h1>
       {children && <p className="max-w-prose text-body text-ink-2">{children}</p>}

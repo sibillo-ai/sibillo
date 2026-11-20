@@ -9,7 +9,8 @@ import { api, ApiError, ok, unwrap, type Schemas } from "../api/client";
 import { HOUSEHOLD_MCP_SERVERS, MCP_SERVERS, useHouseholdMcpServers, useMcpServers, type McpServer, type McpServerAuth, type McpServerSummary, type McpServerTool } from "../mcp";
 import { useBusy } from "../busy";
 import { useNotify } from "../notices";
-import { Badge, Button, Card, Checkbox, Dialog, EmptyState, FormField, Loading, Notice, Page, Row, Select, TextInput, Tile } from "../ui";
+import { Badge, Button, Card, Checkbox, Dialog, EmptyState, FormField, Loading, Notice, Page, Row, Select, TextInput, Tile, TopBar } from "../ui";
+import { MenuButton } from "./Shell";
 import { Switch } from "./AssistantSettings";
 
 const AUTHS: McpServerAuth[] = ["none", "token", "oauth"];
@@ -541,16 +542,20 @@ export function McpSignIn() {
 
   const back = () => void navigate("/settings?section=services", { replace: true });
   return (
-    <div className="mx-auto w-full max-w-form p-6">
-      <Page title={t("mcp.services.signingIn")}>
-        {failed ? (
-          <Notice tone="error" action={<Button size="sm" onClick={back}>{t("mcp.services.back")}</Button>}>
-            {failed}
-          </Notice>
-        ) : (
-          <Notice role="status">{t("mcp.services.completing")}</Notice>
-        )}
-      </Page>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* On a phone the top bar is the only way to the conversation list (UX-039). */}
+      <TopBar className="md:hidden" start={<MenuButton />} />
+      <div className="mx-auto w-full max-w-form p-6">
+        <Page title={t("mcp.services.signingIn")}>
+          {failed ? (
+            <Notice tone="error" action={<Button size="sm" onClick={back}>{t("mcp.services.back")}</Button>}>
+              {failed}
+            </Notice>
+          ) : (
+            <Notice role="status">{t("mcp.services.completing")}</Notice>
+          )}
+        </Page>
+      </div>
     </div>
   );
 }

@@ -16,7 +16,9 @@ import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
-import { Badge, Button, Dialog, IconButton, Loading, Notice, TextArea } from "../ui";
+import { Badge, Button, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
+import { ModelSelect } from "./ModelPicker";
+import { MenuButton } from "./Shell";
 import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
 import { useVoice, type VoiceMode } from "../voice";
 import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, listFolder, previewUrl, useAttachments } from "../workspace";
@@ -321,33 +323,34 @@ export function ConversationView() {
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-      {/* The conversation's bar: its title, its cost and its context, its files and its settings (UX-008). Above the
-          conversation on a computer, above the message box on a phone (ADR-0111). */}
-      <div className="flex flex-none items-center gap-x-2 gap-y-1 px-4 max-md:relative max-md:order-1 max-md:flex-wrap max-md:py-1 md:h-14 md:border-b md:border-line">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-linear-to-b from-transparent to-canvas md:hidden" />
-        <p className="min-w-0 flex-1 truncate text-body font-semibold max-md:hidden">{conversation.data ? conversation.data.title || t("shell.untitled") : ""}</p>
-        <div className="flex flex-none items-center gap-1 max-md:-ml-2 md:order-2">
-          <Button variant="ghost" size="sm" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen}>
-            <FolderOpen aria-hidden="true" />
-            {t("files.title")}
-          </Button>
-          {conversation.data && (
-            <IconButton label={t("assistant.chat")} onClick={() => setSettingsOpen(true)}>
-              <SlidersHorizontal aria-hidden="true" />
-            </IconButton>
-          )}
-        </div>
-        {/* The open conversation's cost and its context stay in view (UX-008). */}
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-4 gap-y-1 text-caption text-ink-3 tabular-nums max-md:ml-auto md:order-1">
-          {conversation.data && (
-            <span className="flex items-center gap-1">
-              <span>{t("usage.conversation")}</span>
-              <span className="font-medium text-ink-2">{formatMoney(conversation.data.cost)}</span>
-            </span>
-          )}
-          {contextUsage && <ContextGauge usage={contextUsage} />}
-        </div>
-      </div>
+      {/* The conversation's top bar: its title, its model, its cost and its context, its files and its settings, on a
+          computer and on a phone alike. The cost and the context are a line under the title, in view (UX-008, UX-039). */}
+      <TopBar
+        line
+        start={<MenuButton />}
+        title={conversation.data ? conversation.data.title || t("shell.untitled") : ""}
+        detail={
+          <div className="flex min-w-0 items-center gap-x-4 overflow-hidden text-caption whitespace-nowrap text-ink-3 tabular-nums">
+            <ConversationCost conversation={conversation.data} />
+            {contextUsage && <ContextGauge usage={contextUsage} />}
+          </div>
+        }
+      >
+        {conversation.data && (
+          <span className="flex min-w-0 flex-none md:flex-initial">
+            <ModelSelect compact narrow value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
+          </span>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen} aria-label={t("files.title")}>
+          <FolderOpen aria-hidden="true" />
+          <span className="max-md:hidden">{t("files.title")}</span>
+        </Button>
+        {conversation.data && (
+          <IconButton label={t("assistant.chat")} onClick={() => setSettingsOpen(true)}>
+            <SlidersHorizontal aria-hidden="true" />
+          </IconButton>
+        )}
+      </TopBar>
       <div ref={thread} onScroll={onThreadScroll} className="relative min-h-0 flex-1 overflow-y-auto" aria-busy={running}>
         <ol className="mx-auto flex w-full max-w-read flex-col gap-6 px-6 pt-6 pb-8 max-md:px-4">
           {temporary && (
@@ -429,8 +432,8 @@ export function ConversationView() {
         )}
       </div>
       {/* The message box and what waits above it, in the reading column; the canvas fades in above it. */}
-      <div className="relative flex-none pt-1 pb-safe max-md:order-2">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-linear-to-b from-transparent to-canvas max-md:hidden" />
+      <div className="relative flex-none pt-1 pb-safe">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-linear-to-b from-transparent to-canvas" />
         <div className="mx-auto w-full max-w-read px-6 max-md:px-4">
           <TaskList steps={live?.plan ?? conversation.data?.plan ?? []} />
           {/* A pending approval or question takes the message box's place until it is answered (AGT-015, UX-009, UX-022). */}
@@ -449,7 +452,6 @@ export function ConversationView() {
               onStop={() => void stop()}
               running={running}
               model={conversation.data?.model ?? null}
-              onModel={(choice) => void chooseModel(choice)}
               placeholder={t("composer.placeholder")}
               keepFocus={handedOver?.focused === true}
             />
@@ -521,6 +523,18 @@ function Activity({ run }: { run: LiveRun }) {
         {working && cost && <span className="tabular-nums">· {cost}</span>}
       </span>
     </SpriteLine>
+  );
+}
+
+/** What the conversation has cost so far (UX-008). */
+function ConversationCost({ conversation }: { conversation: { cost: Parameters<typeof formatMoney>[0] } | undefined }) {
+  const { t } = useTranslation();
+  if (!conversation) return null;
+  return (
+    <span className="flex flex-none items-center gap-1">
+      <span>{t("usage.conversation")}</span>
+      <span className="font-medium text-ink-2">{formatMoney(conversation.cost)}</span>
+    </span>
   );
 }
 

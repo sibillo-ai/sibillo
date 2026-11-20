@@ -6,7 +6,6 @@ import type { ModelChoice } from "../api/client";
 import { hasKeyboard } from "../focus";
 import { findModel, refusedBy, useModels } from "../models";
 import { type AttachedFile, formatSize, pastedFiles, type useAttachments } from "../workspace";
-import { ModelSelect } from "./ModelPicker";
 import { Recorder, transcribe } from "../speech";
 import { VoiceLevel } from "./VoiceLevel";
 import { useVoice, type VoiceMode } from "../voice";
@@ -22,8 +21,8 @@ export function Composer(props: {
   attachments: ReturnType<typeof useAttachments>;
   onStop?: () => void;
   running: boolean;
+  // The conversation's model, chosen elsewhere (UX-039): what it can do and where it runs is said here.
   model: ModelChoice | null;
-  onModel: (choice: ModelChoice) => void;
   placeholder: string;
   // Take the focus when shown, on devices with a keyboard (UX-018).
   autoFocus?: boolean;
@@ -242,12 +241,6 @@ export function Composer(props: {
         }
         end={
           <>
-            <ModelSelect
-              compact
-              value={props.model}
-              onChange={props.onModel}
-              {...(models.data && models.data.items.length > 0 ? { placeholder: t("composer.chooseModel") } : {})}
-            />
             {props.running && props.onStop ? (
               <SendButton type="button" label={t("composer.stop")} onClick={props.onStop}>
                 <Square fill="currentColor" aria-hidden="true" />

@@ -244,6 +244,8 @@
   "settings": {
     "title": "Settings",
     "sections": "Settings sections",
+    "backToSettings": "Back to the settings",
+    "backToConversations": "Back to the conversations",
     "yours": "Yours",
     "household": "Household",
     "householdNote": "These settings apply to every user of the household. Only its admins see them.",

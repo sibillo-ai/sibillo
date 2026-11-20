@@ -8,9 +8,11 @@ import { createConversation, useRefreshConversations } from "../conversations";
 import { useModels } from "../models";
 import { useNotify } from "../notices";
 import { messageOf, takeShare } from "../share";
-import { Button, IconButton } from "../ui";
+import { Button, IconButton, TopBar } from "../ui";
 import { type AttachedFile, useAttachments } from "../workspace";
 import { Composer } from "./Composer";
+import { ModelSelect } from "./ModelPicker";
+import { MenuButton } from "./Shell";
 import { Sprite } from "./Sprite";
 import type { VoiceMode } from "../voice";
 
@@ -84,7 +86,8 @@ export function Welcome({ me }: { me: User }) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-      <div className="flex flex-none justify-end px-3 pt-3">
+      {/* The top bar: on a phone the button for the conversation list, and the temporary chat at its end (UX-039). */}
+      <TopBar start={<MenuButton />}>
         <Button
           // Ghost, as a toolbar's button is; with a border when it is on, which is what shows that it is.
           variant={temporary ? "secondary" : "ghost"}
@@ -97,10 +100,10 @@ export function Welcome({ me }: { me: User }) {
           <Ghost aria-hidden="true" />
           {t("temporary.toggle")}
         </Button>
-      </div>
+      </TopBar>
       {/* On a computer the greeting and the message box are centered together; on a phone the message box stays at the bottom. */}
       <div className="mx-auto flex w-full max-w-read flex-1 flex-col gap-8 px-4 pt-6 pb-4 md:justify-center md:px-6 md:pb-12">
-        <div className="flex items-end gap-4 max-md:my-auto md:gap-6">
+        <div className="flex items-center gap-4 max-md:my-auto md:items-end md:gap-6">
           <Sprite pose="greeting" className="h-auto w-14 flex-none md:w-20" />
           <div className="min-w-0 flex-1">
             <h1 className="font-serif text-display text-balance">{greeting}</h1>
@@ -123,6 +126,15 @@ export function Welcome({ me }: { me: User }) {
                 </figcaption>
               </figure>
             )}
+            {/* The model the chat starts with is chosen with the greeting, not in the message box (UX-039). */}
+            <div className="-ml-3 mt-2 flex">
+              <ModelSelect
+                compact
+                value={model}
+                onChange={setChosen}
+                {...(models.data && models.data.items.length > 0 ? { placeholder: t("composer.chooseModel") } : {})}
+              />
+            </div>
           </div>
         </div>
         <div className="flex flex-col gap-2">
@@ -139,7 +151,6 @@ export function Welcome({ me }: { me: User }) {
             attachments={attachments}
             running={false}
             model={model}
-            onModel={setChosen}
             placeholder={t("welcome.placeholder")}
             autoFocus
           />

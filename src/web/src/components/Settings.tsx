@@ -2,14 +2,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, ChevronLeft, Cloud, House, KeyRound, Minus, Palette, Plug, Plus, ShieldCheck, Sparkles, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, Fragment, type ReactNode, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { ApiError, api, unwrap, type Connection, type ConnectionTest, type ModelChoice, type Schemas, type User } from "../api/client";
 import { findModel, MODELS, useModels } from "../models";
 import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { type Theme, useTheme } from "../theme";
-import { Badge, Button, Card, Checkbox, cx, Dialog, EmptyState, FormField, Group, Loading, NavItem, NavLabel, Notice, Page, Radio, Row, Select, TextArea, TextInput, Tile, ToggleGroup } from "../ui";
+import { Badge, Button, Card, Checkbox, cx, Dialog, EmptyState, FormField, Group, IconButton, Loading, NamedByTopBar, NavItem, NavLabel, Notice, Page, Radio, Row, Select, TextArea, TextInput, Tile, ToggleGroup, TopBar } from "../ui";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
@@ -21,6 +21,7 @@ import { MembersSection, PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
 import { TasksSection } from "./TaskSettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
+import { useOpenMenu } from "./Shell";
 
 type SpeechSettings = Schemas["SpeechSettings"];
 
@@ -74,58 +75,82 @@ export function Settings({ me }: { me: User }) {
   // The open section is in the address, so that a link opens it, such as the Memory page from a chat
   // (UX-027), and a reload keeps it.
   const [search, setSearch] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openMenu = useOpenMenu();
   const entered = [...yours, ...household].find((item) => item.id === search.get("section"))?.id;
   const tab = entered ?? (admin ? "models" : "assistant");
-  const setTab = (id: Tab) => setSearch({ section: id }, { replace: true });
   // On a phone no section is open until the user enters one, so none is marked as the current one.
   const beside = useSyncExternalStore(watchWidth, () => WIDE.matches);
   const shown = entered ?? (beside ? tab : null);
+  // On a phone a section is a step of the history over the list of sections, so that the device's Back returns
+  // to the list; beside the list, choosing a section only changes the address (UX-039).
+  const from = location.state as { fromList?: boolean; fromMenu?: boolean } | null;
+  const setTab = (id: Tab) => setSearch({ section: id }, beside ? { replace: true } : { state: { fromList: true } });
+  /** Back, on a phone: from a section to the list of sections, and from the list to the conversation list. */
+  function back() {
+    if (entered) {
+      if (from?.fromList) void navigate(-1);
+      else setSearch({}, { replace: true });
+    } else if (from?.fromMenu) void navigate(-1);
+    else openMenu();
+  }
+  const title = [...yours, ...household].find((item) => item.id === entered)?.label ?? t("settings.title");
   return (
-    <div className="relative min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-12 md:flex-row md:justify-center md:gap-12 md:px-6 md:pt-8">
-        {/* On a phone: the list of sections until one is entered, then the section alone. */}
-        <nav aria-label={t("settings.sections")} className={cx("flex flex-none flex-col gap-px md:sticky md:top-8 md:w-52 md:self-start", entered && "max-md:hidden")}>
-          <h1 className="px-2 pb-3 font-serif text-display md:sr-only">{t("settings.title")}</h1>
-          <TabGroup title={t("settings.yours")} items={yours} tab={shown} onChoose={setTab} />
-          {household.length > 0 && <TabGroup title={t("settings.household")} items={household} tab={shown} onChoose={setTab} />}
-        </nav>
-        <div className={cx("flex w-full min-w-0 max-w-form flex-col gap-8", !entered && "max-md:hidden")}>
-          <div className="md:hidden">
-            <Button variant="ghost" size="sm" onClick={() => setSearch({}, { replace: true })}>
-              <ChevronLeft aria-hidden="true" />
-              {t("settings.title")}
-            </Button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* On a phone the top bar names the open page and leads back (UX-039). */}
+      <TopBar
+        line
+        className="md:hidden"
+        title={title}
+        start={
+          <IconButton label={entered ? t("settings.backToSettings") : t("settings.backToConversations")} onClick={back}>
+            <ChevronLeft aria-hidden="true" />
+          </IconButton>
+        }
+      />
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-12 md:flex-row md:justify-center md:gap-12 md:px-6 md:pt-8">
+          {/* On a phone: the list of sections until one is entered, then the section alone. */}
+          <nav aria-label={t("settings.sections")} className={cx("flex flex-none flex-col gap-px md:sticky md:top-8 md:w-52 md:self-start", entered && "max-md:hidden")}>
+            <h1 className="sr-only">{t("settings.title")}</h1>
+            <TabGroup title={t("settings.yours")} items={yours} tab={shown} onChoose={setTab} />
+            {household.length > 0 && <TabGroup title={t("settings.household")} items={household} tab={shown} onChoose={setTab} />}
+          </nav>
+          <div className={cx("flex w-full min-w-0 max-w-form flex-col gap-8", !entered && "max-md:hidden")}>
+            <NamedByTopBar value>
+              {tab === "models" && admin ? (
+                <ModelsSection />
+              ) : tab === "mcp-servers" && admin ? (
+                <McpServersSection />
+              ) : tab === "permissions" && admin ? (
+                <ToolPermissionsSection />
+              ) : tab === "members" && admin ? (
+                <MembersSection />
+              ) : tab === "security" ? (
+                <>
+                  <PasswordSection />
+                  <PasskeysSection />
+                </>
+              ) : tab === "notifications" ? (
+                <NotificationsSection />
+              ) : tab === "assistant" ? (
+                <AssistantSection />
+              ) : tab === "tasks" ? (
+                <TasksSection />
+              ) : tab === "memory" ? (
+                <MemorySection />
+              ) : tab === "skills" ? (
+                <SkillsSection />
+              ) : tab === "services" ? (
+                <ServicesSection />
+              ) : tab === "activity" ? (
+                <ActivitySection />
+              ) : (
+                <AppearanceSection />
+              )}
+            </NamedByTopBar>
           </div>
-          {tab === "models" && admin ? (
-            <ModelsSection />
-          ) : tab === "mcp-servers" && admin ? (
-            <McpServersSection />
-          ) : tab === "permissions" && admin ? (
-            <ToolPermissionsSection />
-          ) : tab === "members" && admin ? (
-            <MembersSection />
-          ) : tab === "security" ? (
-            <>
-              <PasswordSection />
-              <PasskeysSection />
-            </>
-          ) : tab === "notifications" ? (
-            <NotificationsSection />
-          ) : tab === "assistant" ? (
-            <AssistantSection />
-          ) : tab === "tasks" ? (
-            <TasksSection />
-          ) : tab === "memory" ? (
-            <MemorySection />
-          ) : tab === "skills" ? (
-            <SkillsSection />
-          ) : tab === "services" ? (
-            <ServicesSection />
-          ) : tab === "activity" ? (
-            <ActivitySection />
-          ) : (
-            <AppearanceSection />
-          )}
         </div>
       </div>
     </div>
