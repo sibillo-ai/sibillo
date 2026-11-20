@@ -10,7 +10,7 @@ import "@fontsource/jetbrains-mono/400.css";
 import "../src/styles.css";
 import "../src/i18n";
 
-import { Bell, CalendarClock, Check, Cloud, Copy, Ellipsis, Folder, House, LogOut, Plus, SlidersHorizontal, Trash2, Users } from "lucide-react";
+import { Bell, CalendarClock, Check, ChevronLeft, Cloud, Copy, Ellipsis, Folder, FolderOpen, House, LogOut, Menu as MenuIcon, Plus, SlidersHorizontal, Trash2, Users } from "lucide-react";
 import { type ReactNode, StrictMode, useId, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -41,6 +41,7 @@ import {
   Switch,
   TextArea,
   TextInput,
+  TopBar,
   Tile,
 } from "../src/ui";
 
@@ -269,6 +270,44 @@ function Gallery() {
           <NavItem icon={<Folder />} end="12">
             Recipes
           </NavItem>
+        </div>
+      </Group>
+
+      <Group title="Top bar" description="On a phone the only bar at the top: the conversation list or Back, where the user is, and the page's actions.">
+        <div className="flex w-full flex-col gap-3">
+          <div className="rounded-lg border border-line bg-canvas">
+            <TopBar
+              start={
+                <IconButton label="Open the conversation list">
+                  <MenuIcon />
+                </IconButton>
+              }
+              title="Sourdough that will not rise"
+              detail={<p className="truncate text-caption text-ink-3">This conversation $0.0035</p>}
+            >
+              <Button variant="ghost" size="sm" title="Runs remotely, at OpenRouter">
+                <Cloud />
+                <span className="truncate">DeepSeek V4.1 Flash</span>
+              </Button>
+              <IconButton label="Files">
+                <FolderOpen />
+              </IconButton>
+              <IconButton label="Chat settings">
+                <SlidersHorizontal />
+              </IconButton>
+            </TopBar>
+          </div>
+          <div className="rounded-lg border border-line bg-canvas">
+            <TopBar
+              line
+              start={
+                <IconButton label="Back to the settings">
+                  <ChevronLeft />
+                </IconButton>
+              }
+              title="Assistant"
+            />
+          </div>
         </div>
       </Group>
 
