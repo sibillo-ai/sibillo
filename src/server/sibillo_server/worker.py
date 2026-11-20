@@ -59,7 +59,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sibillo_server import schemas
 from sibillo_server.approvals import Approvals
+from sibillo_server.changes import announce
+from sibillo_server.changes import event as change_event
 from sibillo_server.config import WorkerConfiguration
+from sibillo_server.conversation_tools import TOOLS as CONVERSATION_TOOLS
 from sibillo_server.conversations import delete_everything, find_conversation, path_runs, stored_messages
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, create_engine, transaction
@@ -345,7 +348,7 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
     # And the user's memory, kept through tools of its own (MEM-007, ADR-0095).
     # And saving a skill (AGT-026, ADR-0096).
     # And proposing a task (TSK-006, ADR-0106).
-    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS, *TASK_TOOLS),
+    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS, *TASK_TOOLS, *CONVERSATION_TOOLS),
     capabilities=[
         Gateway(),
         # The user's sandbox, and the harness's tools that work in it (AGT-011, ADR-0035).
@@ -388,13 +391,19 @@ async def _set_status(identity: Identity, run_id: uuid.UUID, status: str, error_
     started = "started_at = coalesce(started_at, now())," if status == "running" else ""
     finished = "finished_at = now()," if status in ("completed", "failed", "interrupted") else ""
     async with transaction(_engine(), identity) as connection:
-        await connection.execute(
-            text(
-                f"UPDATE runs SET {started} {finished} status = :status, error_code = :error_code"  # noqa: S608
-                " WHERE id = :id AND status IN ('queued', 'running')"
-            ),
-            {"id": run_id, "status": status, "error_code": error_code},
-        )
+        conversation_id = (
+            await connection.execute(
+                text(
+                    f"UPDATE runs SET {started} {finished} status = :status, error_code = :error_code"  # noqa: S608
+                    " WHERE id = :id AND status IN ('queued', 'running') RETURNING conversation_id"
+                ),
+                {"id": run_id, "status": status, "error_code": error_code},
+            )
+        ).scalar_one_or_none()
+        # The user's clients learn at once that a run started or ended (API-008, ADR-0108).
+        if conversation_id is not None:
+            kind = "run_started" if status == "running" else "run_finished"
+            await announce(connection, identity, change_event(kind, conversation_id=conversation_id, run_id=run_id))
 
 
 async def _history(

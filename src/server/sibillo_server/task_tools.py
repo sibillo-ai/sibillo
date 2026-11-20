@@ -8,6 +8,7 @@ the API. A task's own runs can never use it: it cannot be granted.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from pydantic import ValidationError
@@ -16,7 +17,7 @@ from pydantic_ai import RunContext, Tool
 from sibillo_server import errors, schemas
 from sibillo_server.database import transaction
 from sibillo_server.gateway import RunDeps
-from sibillo_server.tasks import create
+from sibillo_server.tasks import change, create
 
 
 async def propose_task(
@@ -79,4 +80,60 @@ async def propose_task(
     return f"Saved the task {task.name!r}; the user can change, pause or delete it in their settings.{webhook}"
 
 
-TOOLS = (Tool(propose_task),)
+async def update_task(
+    ctx: RunContext[RunDeps],
+    task_id: str,
+    name: str | None = None,
+    instructions: str | None = None,
+    time_zone: str | None = None,
+    paused: bool | None = None,
+    grants: list[dict[str, Any]] | None = None,
+    uses_memory: bool | None = None,
+    reasoning: str | None = None,
+    disabled_tools: list[str] | None = None,
+) -> str:
+    """Change one of the user's tasks, such as its instructions or grants, or pause or resume it; the user approves it.
+
+    Only the fields given change; `grants` replaces every grant. `list_tasks` gives each task's ID.
+
+    Args:
+        task_id: The task's ID.
+        name: Its new name.
+        instructions: Its new instructions.
+        time_zone: Its new IANA time zone.
+        paused: Whether it stops firing, or fires again.
+        grants: Its grants, all of them, as `propose_task` takes them.
+        uses_memory: Whether it uses what you remember about the user.
+        reasoning: `off`, `on` or `deep`.
+        disabled_tools: Tools it does without.
+    """
+    given = {
+        "name": name,
+        "instructions": instructions,
+        "time_zone": time_zone,
+        "paused": paused,
+        "grants": grants,
+        "uses_memory": uses_memory,
+        "reasoning": reasoning,
+        "disabled_tools": disabled_tools,
+    }
+    try:
+        task = uuid.UUID(task_id)
+        request = schemas.UpdateTaskRequest.model_validate(
+            {key: value for key, value in given.items() if value is not None}
+        )
+    except (ValueError, ValidationError):
+        return "The task was not changed: the change is not valid."
+    deps = ctx.deps
+    try:
+        async with transaction(deps.engine, deps.identity) as connection:
+            changed = await change(connection, deps.identity, task, request)
+    except errors.ApiError as error:
+        detail = error.extra.get("detail")
+        return f"The task was not changed ({error.code}){f': {detail}' if detail else ''}."
+    except Exception:
+        return "The task was not changed: it could not be stored now."
+    return f"Changed the task {changed.name!r}."
+
+
+TOOLS = (Tool(propose_task), Tool(update_task))

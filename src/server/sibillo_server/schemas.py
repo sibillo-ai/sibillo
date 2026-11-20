@@ -400,6 +400,10 @@ type ToolName = Literal[
     "forget",
     "save_skill",
     "propose_task",
+    "update_task",
+    "list_tasks",
+    "search_conversations",
+    "read_conversation",
 ]
 
 
@@ -1200,7 +1204,7 @@ class UpdateTaskRequest(Request):
 class TaskConversation(Response):
     conversation_id: uuid.UUID
     title: str
-    trigger_kind: TriggerKind
+    trigger_kind: TriggerKind | Literal["manual"]
     outcome: Literal["queued", "running", "interrupted", "completed", "failed", "cancelled"] | None
     without_grants: bool
     started_at: Timestamp

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sibillo_server import egress, errors, schemas
 from sibillo_server.approvals import record
 from sibillo_server.auth import Authenticated, Engine
+from sibillo_server.changes import announce, event
 from sibillo_server.connections import allowed, default_model
 from sibillo_server.conversations import Durable, find_conversation
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
@@ -349,6 +350,7 @@ async def fail_unqueued(engine: AsyncEngine, identity: Identity, run_id: uuid.UU
                 ),
                 {"id": conversation},
             )
+            await announce(connection, identity, event("run_finished", conversation_id=conversation, run_id=run_id))
 
 
 @router.post("/conversations/{conversation_id}/runs")
@@ -441,7 +443,7 @@ async def cancel_run(
     # A queued run never starts; a running one starts no further model or tool calls (CNV-003).
     await durable.cancel_workflow_async(str(run_id))
     async with transaction(engine, identity) as connection:
-        await connection.execute(
+        stopped = await connection.execute(
             text(
                 "UPDATE runs SET status = 'cancelled', finished_at = now()"
                 " WHERE id = :id AND status IN ('queued', 'running')"
@@ -449,6 +451,10 @@ async def cancel_run(
             {"id": run_id},
         )
         cancelled = await find_run(connection, run_id)
+        if stopped.rowcount == 1:
+            await announce(
+                connection, identity, event("run_finished", conversation_id=cancelled.conversation_id, run_id=run_id)
+            )
     # What the run started in its sandbox stops with it (SBX-018, ADR-0078).
     configuration = request.app.state.configuration
     driver = SandboxDriver(configuration.sandboxd_url, configuration.sandboxd_token)

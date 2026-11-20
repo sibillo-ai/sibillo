@@ -107,6 +107,7 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
   const notify = useNotify();
   const [replacing, setReplacing] = useState<TaskTrigger | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const refresh = () => queries.invalidateQueries({ queryKey: TASKS });
 
   async function setPaused(paused: boolean) {
@@ -114,6 +115,16 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
       unwrap(await api.PATCH("/tasks/{task_id}", { params: { path: { task_id: task.id } }, body: { paused } }));
     } catch {
       notify({ kind: "error", title: t("assistant.notSaved") });
+    }
+    await refresh();
+  }
+
+  async function runNow() {
+    try {
+      unwrap(await api.POST("/tasks/{task_id}/fire", { params: { path: { task_id: task.id } } }));
+      notify({ kind: "info", title: t("taskSettings.fired") });
+    } catch (failure) {
+      notify({ kind: "error", title: failure instanceof ApiError && failure.code === "task.limit_reached" ? t("taskSettings.limitReached") : t("assistant.notSaved") });
     }
     await refresh();
   }
@@ -164,10 +175,17 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
       {task.skipped.count !== 0 && skipped && <p className="text-[13px] text-muted">{t("taskSettings.skipped", { count: task.skipped.count, when: skipped })}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Switch label={t("taskSettings.active")} checked={!task.paused} onChange={(on) => void setPaused(!on)} />
+        <button type="button" className={SMALL} onClick={() => void runNow()} aria-label={t("taskSettings.runLabel", { name: task.name })}>
+          {t("taskSettings.run")}
+        </button>
+        <button type="button" className={SMALL} onClick={() => setEditing(true)} aria-label={t("taskSettings.editLabel", { name: task.name })}>
+          {t("taskSettings.editShort")}
+        </button>
         <button type="button" className={SMALL} onClick={() => setDeleting(true)} aria-label={t("taskSettings.deleteLabel", { name: task.name })}>
           {t("taskSettings.delete")}
         </button>
       </div>
+      {editing && <TaskDialog task={task} onClose={() => setEditing(false)} onWebhook={onWebhook} />}
       {replacing && (
         <Confirm
           title={t("taskSettings.replaceTitle")}
@@ -249,17 +267,22 @@ function WebhookAddress({ path, onClose }: { path: string; onClose: () => void }
 type DraftTrigger = { key: number; kind: "schedule"; schedule: string } | { key: number; kind: "webhook" } | { key: number; kind: "mcp_event"; server_id: string; event: string; arguments: string };
 
 /** Creating a task: its instructions, time zone, triggers and grants (UX-031). */
-function TaskDialog({ onClose, onWebhook }: { onClose: () => void; onWebhook: (path: string) => void }) {
+function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => void; onWebhook: (path: string) => void }) {
   const { t } = useTranslation();
   const ids = { name: useId(), instructions: useId(), zone: useId(), fixed: useId() };
   const queries = useQueryClient();
   const servers = useMcpServers();
-  const [name, setName] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [zone, setZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [name, setName] = useState(task?.name ?? "");
+  const [instructions, setInstructions] = useState(task?.instructions ?? "");
+  const [zone, setZone] = useState(() => task?.time_zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // A task's triggers as they are, which the user may remove, and the ones to add.
+  const [kept, setKept] = useState<TaskTrigger[]>(task?.triggers ?? []);
   const [triggers, setTriggers] = useState<DraftTrigger[]>([]);
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [fixed, setFixed] = useState("");
+  const [open, setOpen] = useState<Set<string>>(() => new Set((task?.grants ?? []).filter((grant) => grant.arguments === null).map((grant) => grant.tool)));
+  const [fixed, setFixed] = useState(() => {
+    const exact = (task?.grants ?? []).find((grant) => grant.arguments !== null);
+    return exact ? JSON.stringify({ tool: exact.tool, arguments: exact.arguments }) : "";
+  });
   const [error, setError] = useState<React.ReactNode>(null);
   const [busy, setBusy] = useState(false);
   const eventTypes = (servers.data ?? []).filter((server) => !server.denied).flatMap((server) => server.event_types.map((type) => ({ server, type })));
@@ -290,22 +313,30 @@ function TaskDialog({ onClose, onWebhook }: { onClose: () => void; onWebhook: (p
         if (typeof parsed.tool !== "string" || typeof parsed.arguments !== "object") throw new SyntaxError("fixed");
         grants.push({ tool: parsed.tool, arguments: parsed.arguments });
       }
-      const body: Schemas["CreateTaskRequest"] = {
-        name,
-        instructions,
-        time_zone: zone,
-        triggers: triggers.map((item): TriggerInput => {
-          if (item.kind === "schedule") return { kind: "schedule", schedule: item.schedule };
-          if (item.kind === "webhook") return { kind: "webhook" };
-          return { kind: "mcp_event", server_id: item.server_id, event: item.event, arguments: JSON.parse(item.arguments || "{}") as Record<string, unknown> };
-        }),
-        grants,
-      };
-      const created = unwrap(await api.POST("/tasks", { body }));
+      const added = triggers.map((item): TriggerInput => {
+        if (item.kind === "schedule") return { kind: "schedule", schedule: item.schedule };
+        if (item.kind === "webhook") return { kind: "webhook" };
+        return { kind: "mcp_event", server_id: item.server_id, event: item.event, arguments: JSON.parse(item.arguments || "{}") as Record<string, unknown> };
+      });
+      let shown: string | null = null;
+      if (task === undefined) {
+        const created = unwrap(await api.POST("/tasks", { body: { name, instructions, time_zone: zone, triggers: added, grants } }));
+        shown = created.triggers.find((item) => item.webhook_path)?.webhook_path ?? null;
+      } else {
+        const path = { task_id: task.id };
+        unwrap(await api.PATCH("/tasks/{task_id}", { params: { path }, body: { name, instructions, time_zone: zone, grants } }));
+        // New triggers first, so that the task always keeps one (TSK-001).
+        for (const trigger of added) {
+          const made = unwrap(await api.POST("/tasks/{task_id}/triggers", { params: { path }, body: trigger }));
+          shown = made.webhook_path ?? shown;
+        }
+        for (const removed of task.triggers.filter((item) => !kept.some((other) => other.id === item.id))) {
+          await api.DELETE("/tasks/{task_id}/triggers/{trigger_id}", { params: { path: { ...path, trigger_id: removed.id } } });
+        }
+      }
       await queries.invalidateQueries({ queryKey: TASKS });
       onClose();
-      const webhook = created.triggers.find((item) => item.webhook_path);
-      if (webhook?.webhook_path) onWebhook(webhook.webhook_path);
+      if (shown) onWebhook(shown);
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === "task.lethal_trifecta" && failure.problem.grant_check) {
         setError(trifectaText(failure.problem.grant_check as GrantCheck));
@@ -328,7 +359,7 @@ function TaskDialog({ onClose, onWebhook }: { onClose: () => void; onWebhook: (p
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content className={DIALOG}>
-          <Dialog.Title className="mb-2 text-lg font-bold">{t("taskSettings.new")}</Dialog.Title>
+          <Dialog.Title className="mb-2 text-lg font-bold">{task ? t("taskSettings.edit") : t("taskSettings.new")}</Dialog.Title>
           <Dialog.Description className="text-sm text-muted">{t("taskSettings.newHint")}</Dialog.Description>
           <form onSubmit={(event) => void save(event)} className="mt-3.5 flex flex-col gap-3.5">
             <label htmlFor={ids.name} className="flex flex-col gap-1.5">
@@ -345,6 +376,14 @@ function TaskDialog({ onClose, onWebhook }: { onClose: () => void; onWebhook: (p
             </label>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-[13.5px] font-semibold">{t("taskSettings.triggers")}</legend>
+              {kept.map((trigger) => (
+                <div key={trigger.id} className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+                  <TriggerText trigger={trigger} />
+                  <button type="button" className={SMALL} onClick={() => setKept(kept.filter((item) => item.id !== trigger.id))}>
+                    {t("taskSettings.removeTrigger")}
+                  </button>
+                </div>
+              ))}
               {triggers.map((item) => (
                 <TriggerEditor
                   key={item.key}
@@ -409,7 +448,7 @@ function TaskDialog({ onClose, onWebhook }: { onClose: () => void; onWebhook: (p
             )}
             <div className="flex flex-wrap justify-end gap-2">
               <Dialog.Close className={BUTTON}>{t("taskSettings.cancel")}</Dialog.Close>
-              <button type="submit" className={PRIMARY} disabled={busy || triggers.length === 0}>
+              <button type="submit" className={PRIMARY} disabled={busy || triggers.length + kept.length === 0}>
                 {t("taskSettings.save")}
               </button>
             </div>

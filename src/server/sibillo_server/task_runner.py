@@ -20,6 +20,7 @@ from dbos import DBOS, DBOSClient, SetWorkflowID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from sibillo_server.changes import announce, event
 from sibillo_server.conversations import find_conversation
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
@@ -347,6 +348,7 @@ async def _start_firing(firing_id: str, tenant_id: str, owner_id: str) -> str | 
             },
         )
         conversation = await find_conversation(connection, conversation_id, lock=True)
+        await announce(connection, identity, event("conversation_created", conversation_id=conversation_id))
         run_id = uuid7()
         try:
             await create_run(

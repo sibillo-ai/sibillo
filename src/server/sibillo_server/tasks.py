@@ -32,6 +32,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from sibillo_server import errors, schemas
 from sibillo_server.auth import Authenticated, Engine, request_source
+from sibillo_server.changes import announce
+from sibillo_server.changes import event as change_event
 from sibillo_server.connections import SecretKey, allowed, offered
 from sibillo_server.conversations import decode_cursor, encode_cursor
 from sibillo_server.credentials import uuid7
@@ -564,77 +566,80 @@ async def _restart_triggers(connection: AsyncConnection, state: TaskState, zone:
             )
 
 
-@router.patch("/tasks/{task_id}", response_model=schemas.Task)
-async def update_task(
-    task_id: uuid.UUID, body: schemas.UpdateTaskRequest, identity: Authenticated, engine: Engine
+async def change(
+    connection: AsyncConnection, identity: Identity, task_id: uuid.UUID, body: schemas.UpdateTaskRequest
 ) -> schemas.Task:
+    """Change the task in the caller's transaction, after the checks of TSK-001 to TSK-005."""
     present = body.model_fields_set
     if not present:
         raise errors.invalid("/", "empty")
     for name in present:
         if getattr(body, name) is None:
             raise errors.invalid(f"/{name}", "null")
+    state = await find_task(connection, task_id, lock=True)
+    row = state.row
+    zone = body.time_zone if body.time_zone is not None else row.time_zone
+    _zone(zone)
+    if body.model is not None:
+        await _check_model(connection, body.model)
+    grants = (
+        await _check_grants(connection, identity, body.grants)
+        if body.grants is not None
+        else [(grant, None) for grant in state.grants]
+    )
+    uses_memory = body.uses_memory if body.uses_memory is not None else row.uses_memory
+    memory = uses_memory and await memory_enabled(connection)
+    found = check(
+        [grant for grant, _ in grants],
+        memory=memory,
+        event_trigger=has_event_trigger([t.kind for t in state.triggers]),
+    )
+    # A change that would complete the trifecta is refused; a task that no longer passes for other
+    # reasons keeps its other changes (TSK-005).
+    if not found.passes and bool(present & {"grants", "uses_memory"}):
+        raise trifecta(found)
+    await connection.execute(
+        text(
+            "UPDATE tasks SET name = :name, instructions = :instructions, connection_id = :connection,"
+            " model = :model, reasoning = :reasoning, disabled_tools = :disabled_tools,"
+            " disabled_skills = :disabled_skills, disabled_servers = :disabled_servers,"
+            " uses_memory = :uses_memory, time_zone = :time_zone,"
+            " paused_at = CASE WHEN CAST(:paused AS boolean) IS NULL THEN paused_at"
+            " WHEN CAST(:paused AS boolean) THEN coalesce(paused_at, now())"
+            " ELSE NULL END, updated_at = now() WHERE id = :id"
+        ),
+        {
+            "id": task_id,
+            "name": body.name or row.name,
+            "instructions": body.instructions or row.instructions,
+            "connection": body.model.connection_id if body.model is not None else row.connection_id,
+            "model": body.model.model if body.model is not None else row.model,
+            "reasoning": body.reasoning or row.reasoning,
+            "disabled_tools": list(body.disabled_tools if body.disabled_tools is not None else row.disabled_tools),
+            "disabled_skills": list(body.disabled_skills if body.disabled_skills is not None else row.disabled_skills),
+            "disabled_servers": list(
+                body.disabled_servers if body.disabled_servers is not None else row.disabled_servers
+            ),
+            "uses_memory": uses_memory,
+            "time_zone": zone,
+            "paused": body.paused,
+        },
+    )
+    if body.grants is not None:
+        await _insert_grants(connection, identity, task_id, grants)
+    resumed = body.paused is False and row.paused_at is not None
+    if resumed or (body.time_zone is not None and body.time_zone != row.time_zone):
+        await _restart_triggers(connection, state, zone)
+    return await task_response(connection, await find_task(connection, task_id))
+
+
+@router.patch("/tasks/{task_id}", response_model=schemas.Task)
+async def update_task(
+    task_id: uuid.UUID, body: schemas.UpdateTaskRequest, identity: Authenticated, engine: Engine
+) -> schemas.Task:
     try:
         async with transaction(engine, identity) as connection:
-            state = await find_task(connection, task_id, lock=True)
-            row = state.row
-            zone = body.time_zone if body.time_zone is not None else row.time_zone
-            _zone(zone)
-            if body.model is not None:
-                await _check_model(connection, body.model)
-            grants = (
-                await _check_grants(connection, identity, body.grants)
-                if body.grants is not None
-                else [(grant, None) for grant in state.grants]
-            )
-            uses_memory = body.uses_memory if body.uses_memory is not None else row.uses_memory
-            memory = uses_memory and await memory_enabled(connection)
-            found = check(
-                [grant for grant, _ in grants],
-                memory=memory,
-                event_trigger=has_event_trigger([t.kind for t in state.triggers]),
-            )
-            # A change that would complete the trifecta is refused; a task that no longer passes for other
-            # reasons keeps its other changes (TSK-005).
-            if not found.passes and bool(present & {"grants", "uses_memory"}):
-                raise trifecta(found)
-            await connection.execute(
-                text(
-                    "UPDATE tasks SET name = :name, instructions = :instructions, connection_id = :connection,"
-                    " model = :model, reasoning = :reasoning, disabled_tools = :disabled_tools,"
-                    " disabled_skills = :disabled_skills, disabled_servers = :disabled_servers,"
-                    " uses_memory = :uses_memory, time_zone = :time_zone,"
-                    " paused_at = CASE WHEN CAST(:paused AS boolean) IS NULL THEN paused_at"
-                    " WHEN CAST(:paused AS boolean) THEN coalesce(paused_at, now())"
-                    " ELSE NULL END, updated_at = now() WHERE id = :id"
-                ),
-                {
-                    "id": task_id,
-                    "name": body.name or row.name,
-                    "instructions": body.instructions or row.instructions,
-                    "connection": body.model.connection_id if body.model is not None else row.connection_id,
-                    "model": body.model.model if body.model is not None else row.model,
-                    "reasoning": body.reasoning or row.reasoning,
-                    "disabled_tools": list(
-                        body.disabled_tools if body.disabled_tools is not None else row.disabled_tools
-                    ),
-                    "disabled_skills": list(
-                        body.disabled_skills if body.disabled_skills is not None else row.disabled_skills
-                    ),
-                    "disabled_servers": list(
-                        body.disabled_servers if body.disabled_servers is not None else row.disabled_servers
-                    ),
-                    "uses_memory": uses_memory,
-                    "time_zone": zone,
-                    "paused": body.paused,
-                },
-            )
-            if body.grants is not None:
-                await _insert_grants(connection, identity, task_id, grants)
-            resumed = body.paused is False and row.paused_at is not None
-            if resumed or (body.time_zone is not None and body.time_zone != row.time_zone):
-                await _restart_triggers(connection, state, zone)
-            return await task_response(connection, await find_task(connection, task_id))
+            return await change(connection, identity, task_id, body)
     except DBAPIError as error:
         if _unique_violation(error):
             raise errors.conflict() from None
@@ -701,6 +706,26 @@ async def list_task_conversations(
         last = rows[limit - 1]
         next_cursor = encode_cursor([last.started_at.isoformat(), str(last.id)])
     return schemas.TaskConversationPage(items=items, next_cursor=next_cursor)
+
+
+@router.post("/tasks/{task_id}/fire", status_code=status.HTTP_202_ACCEPTED, response_class=Response)
+async def fire_task(task_id: uuid.UUID, identity: Authenticated, engine: Engine) -> Response:
+    """Fire the task at once, also while it is paused; it waits its turn as any firing (TSK-011, ADR-0107)."""
+    async with transaction(engine, identity) as connection:
+        await find_task(connection, task_id)
+        fired = await record_firing(
+            connection,
+            identity,
+            task_id=task_id,
+            trigger_id=None,
+            kind="manual",
+            fire_key=f"manual:{uuid.uuid4()}",
+            event=None,
+            manual=True,
+        )
+    if not fired:
+        raise errors.ApiError(409, "task.limit_reached", "Limit reached")
+    return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
 # --- Triggers ---
@@ -799,14 +824,16 @@ async def record_firing(
     identity: Identity,
     *,
     task_id: uuid.UUID,
-    trigger_id: uuid.UUID,
+    trigger_id: uuid.UUID | None,
     kind: str,
     fire_key: str,
     event: dict[str, Any] | None,
+    manual: bool = False,
 ) -> bool:
     """Record that the trigger fired, once for what it stands for: whether a firing now waits to run.
 
-    A paused task, or one that started 10 conversations in the last hour, only counts it (TSK-009).
+    A paused task, unless its user fires it at once, or one that started 10 conversations in the last hour,
+    only counts it (TSK-009, TSK-011).
     """
     task = (
         await connection.execute(text("SELECT paused_at FROM tasks WHERE id = :id FOR UPDATE"), {"id": task_id})
@@ -827,7 +854,7 @@ async def record_firing(
             {"task": task_id},
         )
     ).scalar_one()
-    if task.paused_at is not None or recent >= FIRINGS_PER_HOUR:
+    if (task.paused_at is not None and not manual) or recent >= FIRINGS_PER_HOUR:
         await connection.execute(
             text("UPDATE tasks SET skipped_count = skipped_count + 1, last_skipped_at = now() WHERE id = :id"),
             {"id": task_id},
@@ -850,6 +877,9 @@ async def record_firing(
             "event": None if event is None else json.dumps(bounded_event(event)),
         },
     )
+    if result.rowcount == 1:
+        # The user's clients learn at once that the task fired (API-008, ADR-0108).
+        await announce(connection, identity, change_event("task_fired", task_id=task_id))
     return result.rowcount == 1
 
 

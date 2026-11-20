@@ -51,8 +51,12 @@ SERVER_SEPARATOR = "__"
 ATTACHMENTS_ORIGIN = "sibillo.attachments"
 # Labels the part of a task's first message that holds the event that fired it, untrusted content (ADR-0106).
 EVENT_ORIGIN = "sibillo.event"
-# The tool that proposes a task: every call asked, once (TSK-006, ADR-0106).
+# The tools that propose or change a task: every call asked, once (TSK-006, TSK-012, ADR-0106, ADR-0107).
 PROPOSE_TASK = "propose_task"
+UPDATE_TASK = "update_task"
+TASK_PROPOSALS = frozenset({PROPOSE_TASK, UPDATE_TASK})
+# Labels the result of reading the user's conversations with whether what it shows is untrusted (ADR-0107).
+PROVENANCE_ORIGIN = "sibillo.provenance"
 # Labels the result of loading a skill with the skill's name and whether it is untrusted (AGT-025, ADR-0096).
 SKILL_ORIGIN = "sibillo.skill"
 # What the model is told of a call the user did not approve.
@@ -111,6 +115,12 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "save_skill": Declaration(frozenset(), "ask"),
     # Saves a task that runs later with standing grants: the user sees all of it first (TSK-006, ADR-0106).
     PROPOSE_TASK: Declaration(frozenset(), "ask"),
+    # Changes a task: the user sees the whole change first (TSK-012, ADR-0107).
+    UPDATE_TASK: Declaration(frozenset(), "ask"),
+    # They read the user's tasks and conversations: private data, untrusted only by what they read (ADR-0107).
+    "list_tasks": _WRITES,
+    "search_conversations": _WRITES,
+    "read_conversation": _WRITES,
     # Loads a skill: what it brings in is untrusted when the skill is, by provenance (AGT-025, ADR-0096).
     "load_capability": _OWN,
     # The output limits' own tool, which reads back a large result set aside (AGT-014): no switch (ADR-0087).
@@ -143,13 +153,24 @@ def _untrusted_skill(part: ToolReturnPart) -> bool:
     return isinstance(skill, dict) and cast(dict[str, Any], skill).get("untrusted") is True
 
 
+def _untrusted_reading(part: ToolReturnPart) -> bool:
+    """Whether the part read another conversation that holds untrusted content (AGT-033, ADR-0107)."""
+    metadata: Any = part.metadata
+    if not isinstance(metadata, dict):
+        return False
+    provenance: Any = cast(dict[str, Any], metadata).get(PROVENANCE_ORIGIN)
+    return isinstance(provenance, dict) and cast(dict[str, Any], provenance).get("untrusted") is True
+
+
 def has_untrusted_content(messages: Sequence[ModelMessage]) -> bool:
     """Whether the messages hold untrusted content: results of tools that ingest it, or attachments (AGT-003)."""
     for message in messages:
         if not isinstance(message, ModelRequest):
             continue
         for part in message.parts:
-            if isinstance(part, ToolReturnPart) and (ingests_untrusted(part.tool_name) or _untrusted_skill(part)):
+            if isinstance(part, ToolReturnPart) and (
+                ingests_untrusted(part.tool_name) or _untrusted_skill(part) or _untrusted_reading(part)
+            ):
                 return True
             if isinstance(part, UserPromptPart) and not isinstance(part.content, str):
                 for item in part.content:
@@ -247,7 +268,7 @@ def decide(tool: str, permissions: Permissions, untrusted: bool, allowances: All
     if is_server_tool(tool):
         # Every call to a server is approved, once, and nothing lifts it (AGT-018, ADR-0099).
         return Decision(Request("device", ("once",)))
-    if tool == PROPOSE_TASK:
+    if tool in TASK_PROPOSALS:
         return Decision(Request("task_proposal", ("once",)))
     declaration = DECLARATIONS.get(tool)
     if declaration is None:
@@ -289,6 +310,12 @@ def describe(tool: str, arguments: Mapping[str, Any]) -> tuple[str, str, str]:
         purpose = str(arguments.get("description", "") or arguments.get("purpose", ""))
         action = "Run a command in the sandbox" if tool == "run_command" else "Start a command in the sandbox"
         return (f"{action}: {purpose}" if purpose else action), command, "The internet, from the conversation's sandbox"
+    if tool == UPDATE_TASK:
+        return (
+            "Change one of your tasks, with what the change lists",
+            str(arguments.get("task_id", "")),
+            "Your tasks, which run without asking for what they grant",
+        )
     if tool == PROPOSE_TASK:
         return (
             "Save a task that runs on its own, with the grants it lists",

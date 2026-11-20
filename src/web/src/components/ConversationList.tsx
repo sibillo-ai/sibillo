@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 
 import { api, unwrap, type Conversation, type Folder, type ListEntry } from "../api/client";
+import { useRunning } from "../changes";
 import { CONVERSATIONS, createFolder, updateConversation, updateFolder, useConversationList } from "../conversations";
 import { ConversationMenu } from "./ConversationMenu";
 
@@ -143,6 +144,7 @@ function Group({ title, entries, folders, move }: { title: string | null; entrie
 
 function ConversationItem({ conversation, folders, nested = false }: { conversation: Conversation; folders: Folder[]; nested?: boolean }) {
   const { t } = useTranslation();
+  const running = useRunning();
   const { dragged, start } = useContext(Dragging);
   return (
     <li
@@ -161,6 +163,7 @@ function ConversationItem({ conversation, folders, nested = false }: { conversat
         {conversation.title || t("shell.untitled")}
         {/* A conversation a task started says which (UX-031). */}
         {conversation.task && <span className="block truncate text-[12px] font-normal text-muted">{t("shell.byTask", { name: conversation.task.name })}</span>}
+        {running.has(conversation.id) && <span className="block text-[12px] font-semibold text-accent">{t("shell.running")}</span>}
       </NavLink>
       <ConversationMenu conversation={conversation} folders={folders} />
     </li>

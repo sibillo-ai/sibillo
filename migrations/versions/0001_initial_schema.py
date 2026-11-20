@@ -114,7 +114,11 @@ TOOL_NAMES = (
     "'update_memory', "
     "'forget', "
     "'save_skill', "
-    "'propose_task'"
+    "'propose_task', "
+    "'update_task', "
+    "'list_tasks', "
+    "'search_conversations', "
+    "'read_conversation'"
     "]"
 )
 # The capability classes of tools (AGT-005, ADR-0012).
@@ -810,7 +814,7 @@ TABLES = [
       owner_id uuid NOT NULL,
       task_id uuid NOT NULL,
       trigger_id uuid,
-      trigger_kind text NOT NULL CHECK (trigger_kind IN ('schedule', 'webhook', 'mcp_event')),
+      trigger_kind text NOT NULL CHECK (trigger_kind IN ('schedule', 'webhook', 'mcp_event', 'manual')),
       fire_key text NOT NULL,
       event jsonb,
       status text NOT NULL CHECK (status IN ('waiting', 'running', 'done')),

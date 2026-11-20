@@ -32,7 +32,7 @@ from sibillo_server.gateway import RunDeps
 from sibillo_server.mcp_runs import offered_names, shown
 from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
-    PROPOSE_TASK,
+    TASK_PROPOSALS,
     decide,
     denied,
     has_external_effects,
@@ -160,7 +160,7 @@ class Approvals(AbstractCapability[RunDeps]):
                 if (described := shown(deps, call.tool_name)) is not None:
                     metadata["approval"] = described
                 # A proposed task says whether the run holds untrusted content (TSK-006, ADR-0106).
-                if call.tool_name == PROPOSE_TASK:
+                if call.tool_name in TASK_PROPOSALS:
                     metadata["untrusted_content"] = untrusted
                 raise ApprovalRequired(metadata=metadata)
             else:

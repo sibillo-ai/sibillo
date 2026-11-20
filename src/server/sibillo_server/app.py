@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from sibillo_server import (
     admin,
     auth,
+    changes,
     connections,
     conversations,
     costs,
@@ -45,9 +46,14 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
         app.state.engine = engine
         durable = create_client(configuration.database_url)
         app.state.durable = durable
+        # The stream of the user's changes (API-008, ADR-0108).
+        listener = changes.Listener(configuration.database_url)
+        listener.start()
+        app.state.changes = listener
         try:
             yield
         finally:
+            await listener.stop()
             durable.destroy()
             await engine.dispose()
 
@@ -77,6 +83,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(egress.router, prefix=API_PREFIX)
     app.include_router(speech.router, prefix=API_PREFIX)
     app.include_router(tasks.router, prefix=API_PREFIX)
+    app.include_router(changes.router, prefix=API_PREFIX)
     app.include_router(workspace.router, prefix=API_PREFIX)
     app.include_router(health.router, prefix=API_PREFIX)
     if configuration.web_root.is_dir():

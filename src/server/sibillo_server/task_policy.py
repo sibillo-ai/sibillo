@@ -19,6 +19,7 @@ from sibillo_server.tool_policy import (
     DECLARATIONS,
     PROPOSE_TASK,
     SERVER_CLASSES,
+    UPDATE_TASK,
     CapabilityClass,
     Permissions,
     effective,
@@ -27,7 +28,7 @@ from sibillo_server.tool_policy import (
 
 # Tools of the agent that a user has no switch for, and that a grant never names.
 # The assistant's tool that proposes a task is never granted, so that a task never creates tasks (TSK-006).
-UNGRANTABLE = frozenset({PROPOSE_TASK, "read_tool_result", "load_capability"})
+UNGRANTABLE = frozenset({PROPOSE_TASK, UPDATE_TASK, "read_tool_result", "load_capability"})
 # The names `GrantCheck` gives the sources that are not tools.
 MEMORY = "memory"
 EVENT_TRIGGER = "event_trigger"

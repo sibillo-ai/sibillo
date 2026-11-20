@@ -7,7 +7,9 @@ import type { User } from "../api/client";
 import { formatMoney, useUsage } from "../costs";
 import { useSignOut } from "../session";
 import { useLeavingTemporary } from "../temporary";
+import { useChangeStream } from "../changes";
 import { ConversationList } from "./ConversationList";
+import { NotificationsSign } from "./NotificationSettings";
 import { ResizeHandle, usePanelWidth } from "./ResizeHandle";
 import { HandsFreeOverlay, VoiceProvider } from "../voice";
 import { Sprite } from "./Sprite";
@@ -20,6 +22,8 @@ export function Shell({ me }: { me: User }) {
   const signOut = useSignOut();
   const location = useLocation();
   useLeavingTemporary();
+  // What changes elsewhere, such as a conversation a task started, shows at once (UX-032).
+  useChangeStream();
   // Close the list on phones after choosing a conversation.
   const [shownFor, setShownFor] = useState(location.pathname);
   if (shownFor !== location.pathname) {
@@ -53,6 +57,7 @@ export function Shell({ me }: { me: User }) {
             {t("shell.newChat")}
           </Link>
           <ConversationList />
+          <NotificationsSign />
           <UsageSummary />
           <div className="flex flex-col gap-0.5 border-t border-line pt-2">
             <Link to="/settings" className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-sm hover:bg-hover">

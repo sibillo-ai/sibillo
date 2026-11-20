@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from sibillo_server import errors, schemas
 from sibillo_server.auth import Authenticated, Engine
+from sibillo_server.changes import announce, event
 from sibillo_server.connections import offered
 from sibillo_server.costs import CONVERSATION_COST, money, run_costs
 from sibillo_server.credentials import uuid7
@@ -158,6 +159,9 @@ async def create_conversation(
                 },
             )
         ).one()
+        # Other clients of the user list it at once; a temporary one is listed nowhere (API-008, CNV-011).
+        if not row.temporary:
+            await announce(connection, identity, event("conversation_created", conversation_id=row.id))
     return conversation_response(row)
 
 
@@ -425,6 +429,7 @@ async def fork_conversation(
         ).one()
         source = {"from_conversation_id": str(conversation_id)}
         await workspace_request(_driver(request), identity, fork_id, "POST", source)
+        await announce(connection, identity, event("conversation_created", conversation_id=fork_id))
     return conversation_response(row)
 
 

@@ -186,22 +186,15 @@ def _snippet(content: str, words: list[str]) -> str:
     return ("…" if start > 0 else "") + piece
 
 
-@router.get("/search", response_model=schemas.SearchResults)
-async def search(
-    identity: Authenticated,
-    engine: Engine,
-    q: Annotated[str, Query(min_length=1, max_length=200)],
-    limit: Annotated[int, Query(ge=1, le=50)] = 20,
-) -> schemas.SearchResults:
-    """Titles and message text, in any language, ranked, then newest first (CNV-009, ADR-0073)."""
-    words = [word for word in q.split() if word]
-    if not words:
-        raise errors.invalid("q", "empty")
-    async with transaction(engine, identity) as connection:
-        rows = (
+async def search_rows(connection: AsyncConnection, q: str, limit: int) -> list[Any]:
+    """The user's conversations whose titles or messages match, ranked, then newest first (CNV-009, ADR-0073).
+
+    Temporary conversations are not searched (CNV-011); what a rewind removed is gone (ADR-0068).
+    """
+    return list(
+        (
             await connection.execute(
                 text(
-                    # Temporary conversations are not searched (CNV-011).
                     "WITH query AS (SELECT plainto_tsquery('simple', :q) AS q),"
                     " matches AS ("
                     " SELECT m.conversation_id, ts_rank(m.search, query.q) AS rank, m.text AS content"
@@ -219,6 +212,22 @@ async def search(
                 {"q": q, "limit": limit},
             )
         ).all()
+    )
+
+
+@router.get("/search", response_model=schemas.SearchResults)
+async def search(
+    identity: Authenticated,
+    engine: Engine,
+    q: Annotated[str, Query(min_length=1, max_length=200)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> schemas.SearchResults:
+    """Titles and message text, in any language, ranked, then newest first (CNV-009, ADR-0073)."""
+    words = [word for word in q.split() if word]
+    if not words:
+        raise errors.invalid("q", "empty")
+    async with transaction(engine, identity) as connection:
+        rows = await search_rows(connection, q, limit)
     return schemas.SearchResults(
         items=[
             schemas.SearchResult(
