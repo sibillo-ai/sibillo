@@ -227,9 +227,24 @@ export function ConversationView() {
     setBehind(false);
     if (element) element.scrollTop = element.scrollHeight;
   }, []);
-  // Another conversation, or a run the user just started, begins at the end.
+  // Another conversation, or a run the user just started, begins at the end; a run that ends
+  // leaves the thread where it is (UX-035).
   const liveRunId = live?.runId;
-  useLayoutEffect(toEnd, [conversationId, liveRunId, toEnd]);
+  useLayoutEffect(toEnd, [conversationId, toEnd]);
+  useLayoutEffect(() => {
+    if (liveRunId !== undefined) toEnd();
+  }, [liveRunId, toEnd]);
+  // Escape stops the run, as the stop button does, unless it closed a dialog or a menu (UX-034).
+  useEffect(() => {
+    if (!running) return;
+    function key(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      if (document.querySelector("[role=dialog], [role=alertdialog], [role=menu], [role=listbox]")) return;
+      void stop();
+    }
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [running, stop]);
   // A layout effect, so that the thread grows and scrolls before the browser reports a scroll.
   useLayoutEffect(() => {
     const element = thread.current;
