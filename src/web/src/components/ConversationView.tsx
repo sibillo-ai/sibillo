@@ -1,6 +1,5 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Brain, CalendarClock, Check, ChevronRight, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
+import { ArrowDown, Brain, CalendarClock, Check, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -16,6 +15,8 @@ import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
+import { Badge, Button, Dialog, IconButton, Notice, TextArea } from "../ui";
+import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
 import { useVoice, type VoiceMode } from "../voice";
 import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, listFolder, previewUrl, useAttachments } from "../workspace";
 import { ApprovalCard } from "./Approvals";
@@ -292,7 +293,7 @@ export function ConversationView() {
   }
 
   if (conversation.error instanceof ApiError && conversation.error.status === 404) {
-    return <p className="p-6">{t("errors.notFound")}</p>;
+    return <p className="p-6 text-body">{t("errors.notFound")}</p>;
   }
 
   const turns = history.data ? turnsOf(history.data) : [];
@@ -318,19 +319,47 @@ export function ConversationView() {
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
+      {/* The conversation's bar: its title, its cost and its context, its files and its settings (UX-008). Above the
+          conversation on a computer, above the message box on a phone (ADR-0111). */}
+      <div className="flex flex-none items-center gap-x-2 gap-y-1 px-4 max-md:relative max-md:order-1 max-md:flex-wrap max-md:py-1 md:h-14 md:border-b md:border-line">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-linear-to-b from-transparent to-canvas md:hidden" />
+        <p className="min-w-0 flex-1 truncate text-body font-semibold max-md:hidden">{conversation.data ? conversation.data.title || t("shell.untitled") : ""}</p>
+        <div className="flex flex-none items-center gap-1 max-md:-ml-2 md:order-2">
+          <Button variant="ghost" size="sm" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen}>
+            <FolderOpen aria-hidden="true" />
+            {t("files.title")}
+          </Button>
+          {conversation.data && (
+            <IconButton label={t("assistant.chat")} onClick={() => setSettingsOpen(true)}>
+              <SlidersHorizontal aria-hidden="true" />
+            </IconButton>
+          )}
+        </div>
+        {/* The open conversation's cost and its context stay in view (UX-008). */}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-4 gap-y-1 text-caption text-ink-3 tabular-nums max-md:ml-auto md:order-1">
+          {conversation.data && (
+            <span className="flex items-center gap-1">
+              <span>{t("usage.conversation")}</span>
+              <span className="font-medium text-ink-2">{formatMoney(conversation.data.cost)}</span>
+            </span>
+          )}
+          {contextUsage && <ContextGauge usage={contextUsage} />}
+        </div>
+      </div>
       <div ref={thread} onScroll={onThreadScroll} className="relative min-h-0 flex-1 overflow-y-auto" aria-busy={running}>
-        <ol className="mx-auto w-full max-w-[740px] px-4 pt-2 pb-6">
+        <ol className="mx-auto flex w-full max-w-read flex-col gap-6 px-6 pt-6 pb-8 max-md:px-4">
           {temporary && (
-            <li className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] text-muted">
-              <Ghost className="size-4 flex-none" aria-hidden="true" />
-              {t("temporary.notice")}
+            <li>
+              <Notice role="note" icon={<Ghost aria-hidden="true" />}>
+                {t("temporary.notice")}
+              </Notice>
             </li>
           )}
           {conversation.data?.task && (
-            <li className="mt-3 flex items-center gap-2 text-[13px] text-muted">
+            <li className="flex items-center gap-2 text-small text-ink-2">
               <CalendarClock className="size-4 flex-none" aria-hidden="true" />
               {conversation.data.task.id ? (
-                <Link to={`/settings?section=tasks&task=${conversation.data.task.id}`} className="underline underline-offset-2 hover:text-fg">
+                <Link to={`/settings?section=tasks&task=${conversation.data.task.id}`} className="underline underline-offset-2 hover:text-ink">
                   {t("message.startedByTask", { name: conversation.data.task.name })}
                 </Link>
               ) : (
@@ -339,10 +368,10 @@ export function ConversationView() {
             </li>
           )}
           {conversation.data?.forked_from && (
-            <li className="mt-3 flex items-center gap-2 text-[13px] text-muted">
-              <GitFork className="size-4" aria-hidden="true" />
+            <li className="flex items-center gap-2 text-small text-ink-2">
+              <GitFork className="size-4 flex-none" aria-hidden="true" />
               {conversation.data.forked_from.conversation_id ? (
-                <Link to={`/c/${conversation.data.forked_from.conversation_id}`} className="underline underline-offset-2 hover:text-fg">
+                <Link to={`/c/${conversation.data.forked_from.conversation_id}`} className="underline underline-offset-2 hover:text-ink">
                   {t("message.forkedFrom")}
                 </Link>
               ) : (
@@ -369,7 +398,7 @@ export function ConversationView() {
             />
           ))}
           {live && !settled && (
-            <li className="my-5 flex flex-col gap-1">
+            <TurnItem>
               {live.userText !== null && <UserBubble text={live.userText} attachments={live.attachments ?? []} onShow={show} conversationId={conversationId} />}
               <Answer parts={live.parts} conversationId={conversationId} onShow={show} running={live.status === "running"} />
               {live.status === "failed" && live.errorCode !== "run.cancelled" ? (
@@ -377,53 +406,24 @@ export function ConversationView() {
               ) : (
                 <Activity run={live} />
               )}
-            </li>
+            </TurnItem>
           )}
         </ol>
         {behind && (
-          <div className="pointer-events-none sticky bottom-3 flex h-0 items-end justify-center">
-            <button
-              type="button"
-              onClick={toEnd}
-              className="slide pointer-events-auto flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold shadow-md hover:bg-hover"
-            >
-              <ArrowDown className="size-4 motion-safe:animate-bounce" aria-hidden="true" />
-              {t("message.newText")}
-            </button>
+          <div className="pointer-events-none sticky bottom-3 z-10 flex h-0 items-end justify-center">
+            <div className="slide pointer-events-auto rounded-md shadow-float">
+              <Button size="sm" onClick={toEnd}>
+                <ArrowDown className="motion-safe:animate-bounce" aria-hidden="true" />
+                {t("message.newText")}
+              </Button>
+            </div>
           </div>
         )}
       </div>
-      <div className="flex-none px-4 pt-1.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-[740px]">
-          {/* The open conversation's cost and its context stay in view (UX-008). */}
-          <div className="mb-1.5 flex min-h-4 flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-muted tabular-nums">
-            <button
-              type="button"
-              onClick={() => setPanelOpen((open) => !open)}
-              aria-expanded={panelOpen}
-              className="-ml-1.5 mr-auto flex items-center gap-1.5 rounded-lg px-1.5 py-1 font-semibold hover:bg-hover hover:text-fg"
-            >
-              <FolderOpen className="size-4" aria-hidden="true" />
-              {t("files.title")}
-            </button>
-            {conversation.data && (
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="-ml-1.5 flex items-center gap-1.5 rounded-lg px-1.5 py-1 font-semibold hover:bg-hover hover:text-fg"
-              >
-                <SlidersHorizontal className="size-4" aria-hidden="true" />
-                {t("assistant.chat")}
-              </button>
-            )}
-            {conversation.data && (
-              <span className="flex items-center gap-1.5">
-                <span>{t("usage.conversation")}</span>
-                <span className="font-semibold text-fg">{formatMoney(conversation.data.cost)}</span>
-              </span>
-            )}
-            {contextUsage && <ContextGauge usage={contextUsage} />}
-          </div>
+      {/* The message box and what waits above it, in the reading column; the canvas fades in above it. */}
+      <div className="relative flex-none pt-1 pb-safe max-md:order-2">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-full h-6 bg-linear-to-b from-transparent to-canvas max-md:hidden" />
+        <div className="mx-auto w-full max-w-read px-6 max-md:px-4">
           <TaskList steps={live?.plan ?? conversation.data?.plan ?? []} />
           {/* A pending approval or question takes the message box's place until it is answered (AGT-015, UX-009, UX-022). */}
           {!running && approvals.length > 0 && decisions === null ? (
@@ -450,32 +450,27 @@ export function ConversationView() {
       </div>
       <WorkspacePanel conversationId={conversationId} open={panelOpen} onOpenChange={setPanelOpen} reveal={reveal} />
       {conversation.data && <ChatSettings conversation={conversation.data} open={settingsOpen} onOpenChange={setSettingsOpen} />}
-      <Dialog.Root open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-          <Dialog.Content role="alertdialog" className="rise fixed top-1/2 left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] shadow-soft">
-            <Dialog.Title className="mb-2 text-lg font-bold tracking-tight">{t("rewind.title")}</Dialog.Title>
-            <Dialog.Description className="mb-2.5 text-muted">
-              {pending?.deleted === 1 ? t("rewind.bodyOne", { count: 1 }) : t("rewind.bodyMany", { count: pending?.deleted ?? 0 })}
-            </Dialog.Description>
-            {/* Rewinding never changes the workspace, and the user is told so (UX-010). */}
-            <p className="flex items-center gap-2 rounded-[10px] bg-hover px-3 py-2.5 text-sm">
-              <FilePen className="size-[18px] flex-none" aria-hidden="true" />
-              {t("rewind.files")}
-            </p>
-            <div className="mt-[18px] flex flex-wrap justify-end gap-2">
-              <Dialog.Close className="h-[38px] rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover">{t("rewind.cancel")}</Dialog.Close>
-              <button
-                type="button"
-                className="h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold text-on-danger"
-                onClick={() => pending && void sendEdit(pending)}
-              >
-                {t("rewind.confirm")}
-              </button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <Dialog
+        asks
+        size="sm"
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        title={t("rewind.title")}
+        description={pending?.deleted === 1 ? t("rewind.bodyOne", { count: 1 }) : t("rewind.bodyMany", { count: pending?.deleted ?? 0 })}
+        footer={
+          <>
+            <Button onClick={() => setPending(null)}>{t("rewind.cancel")}</Button>
+            <Button variant="danger-solid" onClick={() => pending && void sendEdit(pending)}>
+              {t("rewind.confirm")}
+            </Button>
+          </>
+        }
+      >
+        {/* Rewinding never changes the workspace, and the user is told so (UX-010). */}
+        <Notice role="note" icon={<FilePen aria-hidden="true" />}>
+          {t("rewind.files")}
+        </Notice>
+      </Dialog>
     </div>
   );
 }
@@ -489,14 +484,9 @@ function codeKey(error: unknown): string {
 function RunErrorView({ code, reason }: { code: string; reason: string | null }) {
   const { t } = useTranslation();
   return (
-    <div role="alert" className="mt-1 flex items-start gap-2.5 rounded-2xl border border-danger/45 bg-raised py-2.5 pr-3.5 pl-2">
-      <Sprite pose="error" className="h-[53px] w-[46px] flex-none" />
-      <div className="min-w-0 flex-1 pt-1 text-sm">
-        <strong className="block">{t("errors.title")}</strong>
-        <p className="mt-0.5 text-muted">{t(`errors.${codeKey(new ApiError(0, code))}`)}</p>
-        {reason && <blockquote className="mt-1.5 border-l-2 border-line-strong pl-2.5 break-words whitespace-pre-wrap">{reason}</blockquote>}
-      </div>
-    </div>
+    <ErrorCard sprite={<Sprite pose="error" className="h-14 w-12 flex-none" />} title={t("errors.title")} reason={reason}>
+      {t(`errors.${codeKey(new ApiError(0, code))}`)}
+    </ErrorCard>
   );
 }
 
@@ -516,13 +506,12 @@ function Activity({ run }: { run: LiveRun }) {
   const usage = run.usage;
   const cost = usage?.cost && isPaid([usage.cost]) ? formatMoney([usage.cost]) : null;
   return (
-    <div className="mt-0.5 flex min-h-[58px] items-center gap-2.5">
-      <Sprite pose={pose} className="h-[53px] w-[46px] flex-none" />
-      <span role="status" className="flex items-center gap-2 text-sm text-muted">
+    <SpriteLine sprite={<Sprite pose={pose} className="h-14 w-12 flex-none" />}>
+      <span role="status" className="flex items-center gap-2 text-small text-ink-2">
         <span className={working ? "live-text" : ""}>{words}</span>
         {working && cost && <span className="tabular-nums">· {cost}</span>}
       </span>
-    </div>
+    </SpriteLine>
   );
 }
 
@@ -545,9 +534,9 @@ function ContextGauge({ usage }: { usage: RunUsage }) {
         aria-valuemax={usage.context_window}
         aria-valuenow={usage.context_tokens}
         aria-valuetext={text}
-        className="h-1.5 w-20 overflow-hidden rounded-full bg-hover"
+        className="h-1 w-20 flex-none overflow-hidden rounded-full bg-hover"
       >
-        <span className={`block h-full rounded-full ${percent >= 80 ? "bg-danger" : "bg-accent"}`} style={{ width: `${Math.max(3, percent)}%` }} />
+        <span className={`block h-full rounded-full ${percent >= 80 ? "bg-danger" : "bg-ink-2"}`} style={{ width: `${Math.max(3, percent)}%` }} />
       </span>
     </span>
   );
@@ -576,11 +565,11 @@ function TurnView(props: {
   const { turn, busy } = props;
   const answerText = turn.parts.flatMap((part) => (part.kind === "text" ? [part.text] : [])).join("\n\n");
   return (
-    <li className="group/turn my-5 flex flex-col gap-1">
+    <TurnItem>
       {turn.userText !== null &&
         (props.editing ? (
           <form
-            className="flex w-full max-w-[600px] flex-col gap-2.5 self-end rounded-[18px] border border-line-strong bg-surface px-3.5 py-3"
+            className="flex w-full flex-col gap-2 self-end md:w-4/5"
             onSubmit={(event) => {
               event.preventDefault();
               const text = String(new FormData(event.currentTarget).get("text") ?? "").trim();
@@ -590,27 +579,30 @@ function TurnView(props: {
             <label className="sr-only" htmlFor={`edit-${turn.run.run_id}`}>
               {t("message.editLabel")}
             </label>
-            <textarea id={`edit-${turn.run.run_id}`} name="text" defaultValue={turn.userText} rows={3} autoFocus className="min-h-[60px] resize-none bg-transparent outline-none" />
+            <TextArea id={`edit-${turn.run.run_id}`} name="text" defaultValue={turn.userText} rows={3} autoFocus />
             <div className="flex items-center justify-end gap-2">
-              <small className="flex-1 text-[12.5px] text-muted">{t("message.editHint")}</small>
-              <button type="button" className="h-8 rounded-[10px] border border-line-strong px-3 text-[13px] font-semibold hover:bg-hover" onClick={props.onCancelEdit}>
+              <small className="flex-1 text-caption text-ink-3">{t("message.editHint")}</small>
+              <Button size="sm" onClick={props.onCancelEdit}>
                 {t("message.cancelEdit")}
-              </button>
-              <button type="submit" className="h-8 rounded-[10px] bg-fg px-3 text-[13px] font-semibold text-bg">
+              </Button>
+              <Button type="submit" variant="primary" size="sm">
                 {t("message.saveEdit")}
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
-          <div className="group/message flex flex-col items-end gap-1">
+          <UserMessage
+            actions={
+              <MessageActions reveal="message">
+                <CopyButton text={turn.userText} />
+                <IconButton label={t("message.edit")} disabled={busy} onClick={props.onEdit}>
+                  <Pencil aria-hidden="true" />
+                </IconButton>
+              </MessageActions>
+            }
+          >
             <UserBubble text={turn.userText} attachments={turn.attachments} onShow={props.onShow} conversationId={props.conversationId} />
-            <div className="flex gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100 [@media(hover:none)]:opacity-100">
-              <CopyButton text={turn.userText} />
-              <IconButton label={t("message.edit")} disabled={busy} onClick={props.onEdit}>
-                <Pencil className="size-4" aria-hidden="true" />
-              </IconButton>
-            </div>
-          </div>
+          </UserMessage>
         ))}
       <Answer parts={turn.parts} conversationId={props.conversationId} onShow={props.onShow} decided={props.decided} />
       {turn.run.error && turn.run.error.code !== "run.cancelled" && (
@@ -618,46 +610,27 @@ function TurnView(props: {
       )}
       {/* The last answer: the sprite waits, and says so if the user just stopped the run (CNV-003). */}
       {props.last && !turn.run.error && (
-        <div className="mt-0.5 flex min-h-[58px] items-center gap-2.5">
-          <Sprite pose="waiting" className="h-[53px] w-[46px] flex-none" />
+        <SpriteLine sprite={<Sprite pose="waiting" className="h-14 w-12 flex-none" />}>
           {props.stopped && (
-            <span role="status" className="text-sm text-muted">
+            <span role="status" className="text-small text-ink-2">
               {t("message.stopped")}
             </span>
           )}
-        </div>
+        </SpriteLine>
       )}
       {answerText && (
-        <div className="flex items-center gap-0.5">
-          <div className={`flex gap-0.5 transition-opacity group-hover/turn:opacity-100 group-focus-within/turn:opacity-100 [@media(hover:none)]:opacity-100 ${props.last ? "opacity-100" : "opacity-0"}`}>
-            <CopyButton text={answerText} />
-            <ReadAloudButton id={turn.run.run_id} text={answerText} />
-            {props.onFork && (
-              <IconButton label={t("message.fork")} disabled={busy} onClick={props.onFork}>
-                <GitFork className="size-4" aria-hidden="true" />
-              </IconButton>
-            )}
-          </div>
-          {/* Each answer's cost, beside its actions and always in view; a local model's is nothing to show (UX-008). */}
-          {isPaid(turn.run.cost) && <span className="pl-1.5 text-xs text-muted tabular-nums">{formatMoney(turn.run.cost)}</span>}
-        </div>
+        // Each answer's cost, beside its actions and always in view; a local model's is nothing to show (UX-008).
+        <MessageActions reveal="turn" shown={props.last} caption={isPaid(turn.run.cost) ? formatMoney(turn.run.cost) : undefined}>
+          <CopyButton text={answerText} />
+          <ReadAloudButton id={turn.run.run_id} text={answerText} />
+          {props.onFork && (
+            <IconButton label={t("message.fork")} disabled={busy} onClick={props.onFork}>
+              <GitFork aria-hidden="true" />
+            </IconButton>
+          )}
+        </MessageActions>
       )}
-    </li>
-  );
-}
-
-function IconButton(props: { label: string; description?: string | undefined; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="grid size-[30px] place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg disabled:opacity-40"
-      aria-label={props.label}
-      title={props.description ?? props.label}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
-      {props.children}
-    </button>
+    </TurnItem>
   );
 }
 
@@ -671,9 +644,10 @@ function ReadAloudButton({ id, text }: { id: string; text: string }) {
     <IconButton
       label={reading ? t("voice.stopReading") : t("voice.readAloud")}
       disabled={voice.speechRefused}
-      description={voice.speechRefused ? t("voice.refused") : undefined}
-      onClick={() => (reading ? voice.stopReading() : voice.readAloud(id, text))}>
-      {reading ? <Square className="size-3.5" fill="currentColor" aria-hidden="true" /> : <Volume2 className="size-4" aria-hidden="true" />}
+      {...(voice.speechRefused ? { title: t("voice.refused") } : {})}
+      onClick={() => (reading ? voice.stopReading() : voice.readAloud(id, text))}
+    >
+      {reading ? <Square fill="currentColor" aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
     </IconButton>
   );
 }
@@ -688,7 +662,7 @@ function CopyButton({ text }: { text: string }) {
         void navigator.clipboard.writeText(text).then(() => notify({ kind: "info", title: t("message.copied") }));
       }}
     >
-      <Copy className="size-4" aria-hidden="true" />
+      <Copy aria-hidden="true" />
     </IconButton>
   );
 }
@@ -707,35 +681,22 @@ function UserBubble({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex w-full min-w-0 flex-col gap-2">
       {attachments.length > 0 && (
-        <ul aria-label={t("files.attachments")} className="flex max-w-[min(85%,560px)] flex-wrap justify-end gap-1.5">
+        <Attachments label={t("files.attachments")}>
           {attachments.map((file) => (
             <li key={file.path}>
               {/* An attached image shows as a small preview, from the workspace (UX-036). */}
               {isImagePath(file.path) ? (
-                <button type="button" onClick={() => onShow(file.path)} className="block overflow-hidden rounded-xl border border-line hover:opacity-90">
-                  <img src={previewUrl(conversationId, file.path)} alt={file.path.split("/").at(-1) ?? ""} loading="lazy" className="max-h-40 max-w-[220px] object-cover" />
-                </button>
+                <AttachmentImage src={previewUrl(conversationId, file.path)} alt={file.path.split("/").at(-1) ?? ""} onShow={() => onShow(file.path)} />
               ) : (
-              <button type="button" onClick={() => onShow(file.path)} className="flex max-w-[260px] items-center gap-2 rounded-xl border border-line bg-surface py-1.5 pr-3 pl-2.5 text-left text-[13px] hover:bg-hover">
-                <FileText className="size-4 flex-none text-muted" aria-hidden="true" />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-semibold">{file.path.split("/").at(-1)}</span>
-                  <span className="text-muted">{formatSize(file.size)}</span>
-                </span>
-              </button>
+                <AttachmentChip icon={<FileText aria-hidden="true" />} name={file.path.split("/").at(-1)} detail={formatSize(file.size)} onShow={() => onShow(file.path)} />
               )}
             </li>
           ))}
-        </ul>
+        </Attachments>
       )}
-    <div className="flex w-full justify-end">
-      <div className="max-w-[min(85%,560px)] rounded-[20px] bg-bubble px-[15px] py-2.5 break-words whitespace-pre-wrap">
-        <span className="sr-only">{t("message.you")}: </span>
-        {text}
-      </div>
-    </div>
+      <Bubble speaker={t("message.you")}>{text}</Bubble>
     </div>
   );
 }
@@ -787,7 +748,7 @@ function Answer({
     }
   }
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
+    <AnswerBody>
       {blocks.map((block) =>
         block.kind === "text" ? (
           <Markdown key={block.part.id} text={block.part.text} />
@@ -798,21 +759,21 @@ function Answer({
         ) : block.kind === "skill" ? (
           <SkillCard key={block.part.id} name={block.name} saved={block.saved} />
         ) : (
-          <div key={block.parts[0]?.id} className="flex flex-col items-start gap-1.5">
+          <Steps key={block.parts[0]?.id}>
             {block.parts.map((part) => (
               <ToolCall key={part.id} part={part} running={running} decision={decided?.get(part.id)} />
             ))}
-          </div>
+          </Steps>
         ),
       )}
       {offers.length > 0 && (
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-2">
           {offers.map((offer) => (
             <OfferCard key={offer.id} offer={offer} conversationId={conversationId} onShow={onShow} />
           ))}
         </div>
       )}
-    </div>
+    </AnswerBody>
   );
 }
 
@@ -820,14 +781,11 @@ function Answer({
 function ReasoningView({ text }: { text: string }) {
   const { t } = useTranslation();
   return (
-    <details className="group/reasoning max-w-full">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg py-1 pr-2 text-[13.5px] font-semibold text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
-        <Brain className="size-4" aria-hidden="true" />
-        {t("message.reasoning")}
-        <ChevronRight className="size-4 flex-none transition-transform group-open/reasoning:rotate-90" aria-hidden="true" />
-      </summary>
-      <p className="mt-1.5 mb-1 ml-2 border-l-2 border-line py-1 pl-3.5 text-[13.5px] whitespace-pre-wrap text-muted">{text}</p>
-    </details>
+    <Steps>
+      <Step icon={<Brain aria-hidden="true" />} verb={t("message.reasoning")}>
+        <p className="whitespace-pre-wrap">{text}</p>
+      </Step>
+    </Steps>
   );
 }
 
@@ -857,7 +815,7 @@ function CallState({ done, running }: { done: boolean; running: boolean }) {
   if (done) {
     return (
       <>
-        <Check className="size-4 flex-none text-accent" aria-hidden="true" />
+        <Check aria-hidden="true" />
         <span className="sr-only">{t("activity.callDone")}</span>
       </>
     );
@@ -865,7 +823,7 @@ function CallState({ done, running }: { done: boolean; running: boolean }) {
   if (!running) return null;
   return (
     <>
-      <LoaderCircle className="size-4 flex-none animate-spin" aria-hidden="true" />
+      <LoaderCircle className="animate-spin" aria-hidden="true" />
       <span className="sr-only">{t("activity.callRunning")}</span>
     </>
   );
@@ -904,32 +862,21 @@ function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind:
   const refused = decision !== undefined && ["denied", "expired", "refused", "not_granted"].includes(decision.outcome);
   const done = part.result !== undefined && !refused;
   return (
-    <details className="group/tool max-w-full">
-      <summary className={`flex max-w-full cursor-pointer list-none items-center gap-2 border border-line py-[5px] pr-2.5 pl-[9px] text-[13.5px] text-muted hover:bg-hover hover:text-fg [&::-webkit-details-marker]:hidden ${command !== null ? "rounded-xl" : "w-fit rounded-full"}`}>
-        <CallState done={done} running={running} />
-        <span className={`flex min-w-0 ${command !== null ? "flex-col" : "items-center gap-2"}`}>
-          <b className="truncate font-semibold text-fg">{label}</b>
-          {preview && <span className="min-w-0 truncate font-mono text-[12.5px]">{preview}</span>}
-        </span>
-        {/* How the call was decided, when it needed approval (UX-023). */}
-        {decision && (
-          <span className={`flex-none rounded-full px-2 py-0.5 text-xs font-semibold ${decision.outcome === "denied" || decision.outcome === "expired" || decision.outcome === "refused" || decision.outcome === "not_granted" ? "bg-danger/15 text-danger" : "bg-accent-soft text-accent"}`}>
-            {outcomeLabel(t, decision.outcome, decision.scope)}
-          </span>
-        )}
-        <ChevronRight className="size-4 flex-none transition-transform group-open/tool:rotate-90" aria-hidden="true" />
-      </summary>
-      <div className="mt-2 mb-1 ml-3.5 flex flex-col gap-2 border-l-2 border-line py-1 pl-3.5 text-[13.5px] text-muted">
-        <p className="font-semibold">{t("message.toolArguments")}</p>
-        <pre className="overflow-x-auto rounded-lg bg-hover p-2 font-mono text-[12.5px] text-fg">{command ?? part.args}</pre>
-        {part.result !== undefined && (
-          <>
-            <p className="font-semibold">{t("message.toolResult")}</p>
-            <pre className="max-h-80 overflow-auto rounded-lg bg-hover p-2 font-mono text-[12.5px] whitespace-pre-wrap text-fg">{part.result}</pre>
-          </>
-        )}
-      </div>
-    </details>
+    <Step
+      icon={<CallState done={done} running={running} />}
+      verb={label}
+      caption={preview}
+      stacked={command !== null}
+      // How the call was decided, when it needed approval (UX-023).
+      end={decision && <Badge tone={refused ? "danger" : "ok"}>{outcomeLabel(t, decision.outcome, decision.scope)}</Badge>}
+    >
+      <StepDetail title={t("message.toolArguments")}>{command ?? part.args}</StepDetail>
+      {part.result !== undefined && (
+        <StepDetail title={t("message.toolResult")} tall>
+          {part.result}
+        </StepDetail>
+      )}
+    </Step>
   );
 }
 
@@ -940,20 +887,17 @@ function MemoryCard({ part, change }: { part: Extract<LivePart, { kind: "tool" }
   const label = change === "remember" ? t("memory.chatRemembered") : change === "update_memory" ? t("memory.chatChanged") : t("memory.chatForgot");
   const said = change !== "forget" && typeof args.text === "string" ? args.text : t("memory.chatForgotItem");
   return (
-    <div role="group" aria-label={label} className="flex w-[min(100%,460px)] items-start gap-3 rounded-2xl border border-line bg-surface py-2.5 pr-3 pl-3 shadow-soft">
-      <span className="grid size-9 flex-none place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
-        <Brain className="size-[18px]" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center justify-between gap-2">
-          <b className="text-[13.5px] font-semibold">{label}</b>
-          <Link to={MEMORY_SECTION} className="text-[13px] font-semibold text-accent underline-offset-2 hover:underline">
-            {t("memory.chatLink")}
-          </Link>
-        </span>
-        <span className="text-[13.5px] break-words text-muted">{said}</span>
-      </span>
-    </div>
+    <ThreadCard
+      label={label}
+      icon={<Brain />}
+      link={
+        <Link to={MEMORY_SECTION} className="flex-none text-small font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
+          {t("memory.chatLink")}
+        </Link>
+      }
+    >
+      {said}
+    </ThreadCard>
   );
 }
 
@@ -962,20 +906,18 @@ function SkillCard({ name, saved }: { name: string; saved: boolean }) {
   const { t } = useTranslation();
   const label = saved ? t("skills.chatSaved") : t("skills.chatUsing");
   return (
-    <div role="group" aria-label={label} className="flex w-[min(100%,460px)] items-start gap-3 rounded-2xl border border-line bg-surface py-2.5 pr-3 pl-3 shadow-soft">
-      <span className="grid size-9 flex-none place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
-        <Sparkles className="size-[18px]" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center justify-between gap-2">
-          <b className="text-[13.5px] font-semibold">{label}</b>
-          <Link to={SKILLS_SECTION} className="text-[13px] font-semibold text-accent underline-offset-2 hover:underline">
-            {t("skills.chatLink")}
-          </Link>
-        </span>
-        <span className="font-mono text-[13.5px] break-all text-muted">{name}</span>
-      </span>
-    </div>
+    <ThreadCard
+      label={label}
+      icon={<Sparkles />}
+      mono
+      link={
+        <Link to={SKILLS_SECTION} className="flex-none text-small font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
+          {t("skills.chatLink")}
+        </Link>
+      }
+    >
+      {name}
+    </ThreadCard>
   );
 }
 
@@ -1024,18 +966,19 @@ function OfferCard({ offer, conversationId, onShow }: { offer: Offer; conversati
   }
 
   return (
-    <div role="group" aria-label={name} className="flex w-[min(100%,360px)] items-center gap-3 rounded-2xl border border-line bg-surface py-2.5 pr-2.5 pl-3 shadow-soft">
-      <span className="grid size-10 flex-none place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
-        <FileText className="size-5" />
-      </span>
-      <button type="button" onClick={() => onShow(offer.path)} className="flex min-w-0 flex-1 flex-col text-left" title={t("files.show")}>
-        <span className="truncate font-semibold">{name}</span>
-        <span className={`text-[12.5px] ${gone ? "text-danger" : "text-muted"}`}>{gone ? t("files.gone") : offer.size === null ? "" : formatSize(offer.size)}</span>
-      </button>
-      <button type="button" onClick={() => void get()} className="flex h-9 flex-none items-center gap-1.5 rounded-xl bg-fg px-3 text-sm font-semibold text-bg">
-        <Download className="size-4" aria-hidden="true" />
-        {t("files.download")}
-      </button>
-    </div>
+    <FileCard
+      icon={<FileText />}
+      name={name}
+      detail={gone ? t("files.gone") : offer.size === null ? "" : formatSize(offer.size)}
+      gone={gone}
+      hint={t("files.show")}
+      onShow={() => onShow(offer.path)}
+      action={
+        <Button size="sm" onClick={() => void get()}>
+          <Download aria-hidden="true" />
+          {t("files.download")}
+        </Button>
+      }
+    />
   );
 }

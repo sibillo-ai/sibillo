@@ -62,7 +62,7 @@ function ActivityItem({ event, when }: { event: AuditEvent; when: string }) {
         title={
           <>
             {toolLabel(t, event.tool)}
-            <Badge tone={failed ? "warn" : "neutral"}>{outcomeLabel(t, event.outcome, event.scope)}</Badge>
+            <Badge tone={failed ? "danger" : "neutral"}>{outcomeLabel(t, event.outcome, event.scope)}</Badge>
             {event.repeated && <Badge tone="warn">{t("activity.page.repeated")}</Badge>}
           </>
         }

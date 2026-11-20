@@ -1,14 +1,12 @@
 // The assistant's questions to the user, and its task list (AGT-015, UX-009, ADR-0083).
-import { Check, ChevronLeft, ChevronRight, Circle, CircleDot, MessageCircleQuestion, X } from "lucide-react";
+import { Check, Circle, CircleDot, MessageCircleQuestion, X } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Interrupt, PlanStep, Question } from "../api/client";
 import type { ResumeEntry } from "../api/stream";
-
-const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
-const ARROW = "grid size-8 place-items-center rounded-lg hover:bg-hover hover:text-fg disabled:opacity-40";
-const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
+import { Button, TextInput } from "../ui";
+import { ChoiceList, ChoiceRow, RequestCard, Step, StepList } from "../ui/RequestCard";
 
 interface Choice {
   selected: string[];
@@ -29,34 +27,25 @@ function QuestionField({ question, choice, onChange }: { question: Question; cho
     onChange({ selected, ownWords: "" });
   }
   return (
-    <fieldset className="flex flex-col gap-1.5">
-      <legend className="mb-1.5 text-[15px] font-semibold text-pretty">{question.question}</legend>
-      {question.options.map((option) => (
-        <label key={option.label} className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-line px-3 py-1.5 hover:bg-hover has-checked:border-fg">
-          <input
-            type={question.multi_select ? "checkbox" : "radio"}
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="mb-2 text-body font-semibold text-pretty">{question.question}</legend>
+      <ChoiceList>
+        {question.options.map((option) => (
+          <ChoiceRow
+            key={option.label}
+            several={question.multi_select}
             name={name}
             checked={choice.selected.includes(option.label)}
-            onChange={(event) => toggle(option.label, event.target.checked)}
-            className="mt-1 accent-fg"
+            onChange={(on) => toggle(option.label, on)}
+            title={option.label}
+            description={option.description}
           />
-          <span className="flex flex-col">
-            <span className="text-sm font-semibold">{option.label}</span>
-            {option.description && <span className="text-[13px] text-muted">{option.description}</span>}
-          </span>
-        </label>
-      ))}
+        ))}
+      </ChoiceList>
       <label htmlFor={own} className="sr-only">
         {t("questions.ownWords")}
       </label>
-      <input
-        id={own}
-        value={choice.ownWords}
-        maxLength={2000}
-        placeholder={t("questions.ownWords")}
-        onChange={(event) => onChange({ selected: [], ownWords: event.target.value })}
-        className="h-10 rounded-[10px] border border-line-strong bg-bg px-3 text-sm outline-none focus:border-accent"
-      />
+      <TextInput id={own} value={choice.ownWords} maxLength={2000} placeholder={t("questions.ownWords")} onChange={(event) => onChange({ selected: [], ownWords: event.target.value })} />
     </fieldset>
   );
 }
@@ -64,7 +53,6 @@ function QuestionField({ question, choice, onChange }: { question: Question; cho
 /** The assistant's questions, in place of the message box until the user answers or skips them: one at a time. */
 export function QuestionCard({ interrupts, onAnswer }: { interrupts: Interrupt[]; onAnswer: (resume: ResumeEntry[]) => void }) {
   const { t } = useTranslation();
-  const heading = useId();
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [index, setIndex] = useState(0);
   const key = (interrupt: Interrupt, question: Question) => `${interrupt.id}\u0000${question.header}`;
@@ -99,50 +87,45 @@ export function QuestionCard({ interrupts, onAnswer }: { interrupts: Interrupt[]
   }
 
   return (
-    <section aria-labelledby={heading} className="flex max-h-[min(60dvh,34rem)] flex-col rounded-[20px] border border-line-strong bg-surface shadow-soft">
-      <div className="flex flex-none items-center gap-2 px-4 pt-3.5 pb-2">
-        <h2 id={heading} className="flex flex-1 items-center gap-2 text-sm font-bold text-muted">
-          <MessageCircleQuestion className="size-4" aria-hidden="true" />
-          {t("questions.title")}
-        </h2>
-        {all.length > 1 && (
-          <div className="flex items-center gap-1 text-[13px] text-muted tabular-nums">
-            <button type="button" className={ARROW} disabled={index === 0} onClick={() => setIndex(index - 1)} aria-label={t("questions.previous")}>
-              <ChevronLeft className="size-4" aria-hidden="true" />
-            </button>
-            <span aria-live="polite">{t("questions.counter", { number: index + 1, total: all.length })}</span>
-            <button type="button" className={ARROW} disabled={index >= all.length - 1} onClick={() => setIndex(index + 1)} aria-label={t("questions.next")}>
-              <ChevronRight className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-      </div>
+    <RequestCard
+      icon={<MessageCircleQuestion aria-hidden="true" />}
+      title={t("questions.title")}
+      step={
+        all.length > 1
+          ? {
+              text: t("questions.counter", { number: index + 1, total: all.length }),
+              previous: { label: t("questions.previous"), disabled: index === 0, onClick: () => setIndex(index - 1) },
+              next: { label: t("questions.next"), disabled: index >= all.length - 1, onClick: () => setIndex(index + 1) },
+            }
+          : undefined
+      }
+      footer={
+        <>
+          <Button size="sm" onClick={() => onAnswer(interrupts.map((interrupt) => ({ interruptId: interrupt.id, status: "cancelled" })))}>
+            {t("questions.skip")}
+          </Button>
+          {/* Next until the last question, then Answer (ADR-0083). */}
+          {last ? (
+            <Button variant="primary" size="sm" disabled={!answered} onClick={answer}>
+              {t("questions.answer")}
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" disabled={!current || !isAnswered(current.interrupt, current.question)} onClick={() => setIndex(index + 1)}>
+              {t("questions.nextButton")}
+            </Button>
+          )}
+        </>
+      }
+    >
       {current && (
-        <div className="min-h-0 overflow-y-auto px-4 pb-2">
-          <QuestionField
-            key={key(current.interrupt, current.question)}
-            question={current.question}
-            choice={choiceOf(current.interrupt, current.question)}
-            onChange={(choice) => choose(current.interrupt, current.question, choice)}
-          />
-        </div>
+        <QuestionField
+          key={key(current.interrupt, current.question)}
+          question={current.question}
+          choice={choiceOf(current.interrupt, current.question)}
+          onChange={(choice) => choose(current.interrupt, current.question, choice)}
+        />
       )}
-      <div className="flex flex-none justify-end gap-2 border-t border-line px-4 py-3">
-        <button type="button" className={BUTTON} onClick={() => onAnswer(interrupts.map((interrupt) => ({ interruptId: interrupt.id, status: "cancelled" })))}>
-          {t("questions.skip")}
-        </button>
-        {/* Next until the last question, then Answer (ADR-0083). */}
-        {last ? (
-          <button type="button" className={PRIMARY} disabled={!answered} onClick={answer}>
-            {t("questions.answer")}
-          </button>
-        ) : (
-          <button type="button" className={PRIMARY} disabled={!current || !isAnswered(current.interrupt, current.question)} onClick={() => setIndex(index + 1)}>
-            {t("questions.nextButton")}
-          </button>
-        )}
-      </div>
-    </section>
+    </RequestCard>
   );
 }
 
@@ -160,21 +143,21 @@ export function TaskList({ steps }: { steps: PlanStep[] }) {
   if (steps.length === 0) return null;
   const done = steps.filter((step) => step.status === "completed").length;
   return (
-    <div className="mb-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5">
-      <p className="mb-1.5 text-xs font-semibold text-muted">{t("tasks.progress", { done, total: steps.length })}</p>
-      <ul aria-label={t("tasks.title")} className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-        {steps.map((step) => {
-          const Icon = STATUS_ICONS[step.status];
-          const going = step.status === "in_progress";
-          return (
-            <li key={step.id} className={`flex items-start gap-2 text-sm ${step.status === "completed" || step.status === "cancelled" ? "text-muted" : ""}`}>
-              <Icon className={`mt-0.5 size-4 flex-none ${going ? "text-accent" : ""}`} aria-hidden="true" />
-              <span className="sr-only">{t(`tasks.status.${step.status}`)}: </span>
-              <span className={`${step.status === "cancelled" ? "line-through" : ""} ${going ? "live-text font-semibold" : ""}`}>{going ? (step.active_form ?? step.content) : step.content}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <StepList summary={t("tasks.progress", { done, total: steps.length })} label={t("tasks.title")}>
+      {steps.map((step) => {
+        const Icon = STATUS_ICONS[step.status];
+        const going = step.status === "in_progress";
+        return (
+          <Step
+            key={step.id}
+            icon={<Icon aria-hidden="true" />}
+            state={t(`tasks.status.${step.status}`)}
+            tone={going ? "going" : step.status === "cancelled" ? "dropped" : step.status === "completed" ? "past" : "pending"}
+          >
+            {going ? (step.active_form ?? step.content) : step.content}
+          </Step>
+        );
+      })}
+    </StepList>
   );
 }

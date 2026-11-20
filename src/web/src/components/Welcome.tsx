@@ -8,6 +8,7 @@ import { createConversation, useRefreshConversations } from "../conversations";
 import { useModels } from "../models";
 import { useNotify } from "../notices";
 import { messageOf, takeShare } from "../share";
+import { Button, IconButton } from "../ui";
 import { type AttachedFile, useAttachments } from "../workspace";
 import { Composer } from "./Composer";
 import { Sprite } from "./Sprite";
@@ -18,7 +19,6 @@ interface Quote {
   author: string;
   work: string;
 }
-
 
 /** A new chat: the sprite greets with a quote, and the conversation is created with its first message (UX-012). */
 export function Welcome({ me }: { me: User }) {
@@ -83,59 +83,67 @@ export function Welcome({ me }: { me: User }) {
   }
 
   return (
-    <div className="relative flex flex-1 overflow-y-auto">
-      <button
-        type="button"
-        onClick={() => setTemporary(!temporary)}
-        // Chosen before the chat exists: an attachment creates it.
-        disabled={attachments.items.length > 0}
-        aria-pressed={temporary}
-        className="absolute top-3 right-3 flex items-center gap-1.5 rounded-[10px] border border-line-strong px-3 py-1.5 text-sm font-semibold text-muted hover:bg-hover hover:text-fg disabled:opacity-50 aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
-      >
-        <Ghost className="size-4" aria-hidden="true" />
-        {t("temporary.toggle")}
-      </button>
-      <div className="m-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pt-14 pb-12">
-        <div className="flex flex-col items-center justify-center gap-3.5 sm:flex-row sm:gap-2">
-          <Sprite pose="greeting" className="h-[124px] w-[108px] flex-none sm:h-[152px] sm:w-[132px]" />
-          {quote && (
-            <figure className="relative m-0 max-w-[460px] rounded-[22px] border border-line bg-surface px-[22px] pt-[18px] pb-4 shadow-soft">
-              <p className="mb-2 text-xl font-bold tracking-tight text-balance">{greeting}</p>
-              {temporary && <p className="mb-2 text-sm text-muted">{t("temporary.hint")}</p>}
-              <blockquote className="m-0 font-serif text-[19px] leading-[1.45] italic text-pretty">“{quote.text}”</blockquote>
-              <figcaption className="mt-2 flex items-center gap-1.5 text-[13.5px] text-muted">
-                <span className="flex-1">
-                  {quote.author}
-                  {quote.work && (
-                    <>
-                      , <cite>{quote.work}</cite>
-                    </>
-                  )}
-                </span>
-                <button type="button" onClick={another} className="grid size-8 place-items-center rounded-lg hover:bg-hover hover:text-fg" aria-label={t("welcome.anotherQuote")} title={t("welcome.anotherQuote")}>
-                  <RefreshCw className="size-4" aria-hidden="true" />
-                </button>
-              </figcaption>
-            </figure>
-          )}
+    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-none justify-end px-3 pt-3">
+        <Button
+          // Ghost, as a toolbar's button is; with a border when it is on, which is what shows that it is.
+          variant={temporary ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setTemporary(!temporary)}
+          // Chosen before the chat exists: an attachment creates it.
+          disabled={attachments.items.length > 0}
+          aria-pressed={temporary}
+        >
+          <Ghost aria-hidden="true" />
+          {t("temporary.toggle")}
+        </Button>
+      </div>
+      {/* On a computer the greeting and the message box are centered together; on a phone the message box stays at the bottom. */}
+      <div className="mx-auto flex w-full max-w-read flex-1 flex-col gap-8 px-4 pt-6 pb-4 md:justify-center md:px-6 md:pb-12">
+        <div className="flex items-end gap-4 max-md:my-auto md:gap-6">
+          <Sprite pose="greeting" className="h-auto w-14 flex-none md:w-20" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-serif text-display text-balance">{greeting}</h1>
+            {temporary && <p className="mt-1 text-small text-ink-2">{t("temporary.hint")}</p>}
+            {quote && (
+              <figure className="mt-2">
+                <blockquote className="font-serif text-reading text-pretty text-ink-2 italic">“{quote.text}”</blockquote>
+                <figcaption className="flex items-center gap-1 text-caption font-medium text-ink-3">
+                  <span>
+                    {quote.author}
+                    {quote.work && (
+                      <>
+                        , <cite className="not-italic">{quote.work}</cite>
+                      </>
+                    )}
+                  </span>
+                  <IconButton label={t("welcome.anotherQuote")} onClick={another}>
+                    <RefreshCw aria-hidden="true" />
+                  </IconButton>
+                </figcaption>
+              </figure>
+            )}
+          </div>
         </div>
-        {draft !== null && (
-          <p className="-mb-4 flex items-center gap-2 px-2 text-sm text-muted">
-            <Share2 className="size-4 flex-none" aria-hidden="true" />
-            {t("share.fromAnotherApp")}
-          </p>
-        )}
-        <Composer
-          key={draft?.key ?? 0}
-          initialText={draft?.text ?? ""}
-          onSend={(text, files, voice) => void start(text, files, voice)}
-          attachments={attachments}
-          running={false}
-          model={model}
-          onModel={setChosen}
-          placeholder={t("welcome.placeholder")}
-          autoFocus
-        />
+        <div className="flex flex-col gap-2">
+          {draft !== null && (
+            <p className="flex items-center gap-2 px-2 text-small text-ink-2">
+              <Share2 className="size-4 flex-none" aria-hidden="true" />
+              {t("share.fromAnotherApp")}
+            </p>
+          )}
+          <Composer
+            key={draft?.key ?? 0}
+            initialText={draft?.text ?? ""}
+            onSend={(text, files, voice) => void start(text, files, voice)}
+            attachments={attachments}
+            running={false}
+            model={model}
+            onModel={setChosen}
+            placeholder={t("welcome.placeholder")}
+            autoFocus
+          />
+        </div>
       </div>
     </div>
   );

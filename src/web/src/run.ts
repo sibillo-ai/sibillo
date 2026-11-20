@@ -176,7 +176,7 @@ export function isPlanning(name: string): boolean {
   return PLANNING.has(name);
 }
 
-/** What a tool does, from its name: the sprite's pose and the words for it (UX-013, ADR-0070). */
+/** What a tool does, from its name: the sprite's pose and the words for it (UX-013, ADR-0111). */
 export function toolActivity(name: string): Exclude<Pose, "greeting" | "answering" | "waiting" | "error"> {
   // Planning and asking are the assistant thinking aloud, whatever their names say (ADR-0083).
   if (isPlanning(name) || name === ASK_USER) return "thinking";

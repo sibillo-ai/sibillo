@@ -1,4 +1,4 @@
-// The sprite: Sibillo, an original mazzamurello, drawn as SVG and animated with CSS (UX-012 to UX-014, ADR-0070).
+// The sprite: Sibillo, an original mazzamurello, drawn as SVG and animated with CSS (UX-012 to UX-014, ADR-0111).
 // It is decorative: hidden from assistive technologies, which get the same information as text.
 
 export type Pose = "greeting" | "thinking" | "searching" | "reading" | "writing" | "running" | "answering" | "listening" | "waiting" | "error";
@@ -18,7 +18,7 @@ const ARM_R = limb("M109,128 Q116,141 118,152", SK) + hand(118, 153);
 
 // Static markup: no user content ever reaches it.
 const FIGURE = `
-  <ellipse cx="100" cy="214" rx="34" ry="4.5" fill="var(--fg)" opacity=".1"/>
+  <ellipse cx="100" cy="214" rx="34" ry="4.5" fill="var(--ink)" opacity=".1"/>
   <g class="fig">
     ${limb("M95,158 Q91,182 89,203", RED, 4.4)}${limb("M105,158 Q109,182 111,203", RED, 4.4)}
     <path d="M93,200 Q88,212 73,207 Q64,203 66,196 Q73,204 87,200 Z" fill="var(--c-hat-shade)" stroke="${LN}" stroke-width="1.4" stroke-linejoin="round"/>
@@ -104,7 +104,7 @@ const FIGURE = `
 export function Sprite({ pose, className = "", head = false }: { pose: Pose; className?: string; head?: boolean }) {
   return (
     <svg
-      className={`sprite ${className}`}
+      className={`sprite ${head ? "sprite-head " : ""}${className}`}
       data-sprite-pose={pose}
       viewBox={head ? "52 12 96 118" : "0 0 200 230"}
       aria-hidden="true"

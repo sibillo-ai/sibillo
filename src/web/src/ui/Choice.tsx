@@ -131,7 +131,7 @@ export function Radio(props: Omit<ComponentProps<"input">, "className" | "type">
 }
 
 /** A short state beside a name. */
-export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "ok" | "warn" | "accent"; children: ReactNode }) {
-  const tones = { neutral: "bg-hover text-ink-2", ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", accent: "bg-accent-soft text-accent" };
+export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "ok" | "warn" | "danger" | "accent"; children: ReactNode }) {
+  const tones = { neutral: "bg-hover text-ink-2", ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", danger: "bg-danger-soft text-danger", accent: "bg-accent-soft text-accent" };
   return <span className={cx("inline-flex h-5 flex-none items-center gap-1 rounded-sm px-2 text-caption font-medium whitespace-nowrap [&_svg]:size-3", tones[tone])}>{children}</span>;
 }

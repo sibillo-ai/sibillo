@@ -1,4 +1,4 @@
-import { ArrowUp, FileText, Headphones, LoaderCircle, Mic, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Headphones, LoaderCircle, Mic, Paperclip, Square } from "lucide-react";
 import { type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,6 +11,8 @@ import { Recorder, transcribe } from "../speech";
 import { VoiceLevel } from "./VoiceLevel";
 import { useVoice, type VoiceMode } from "../voice";
 import { useNotify } from "../notices";
+import { Button, FileInput, IconButton } from "../ui";
+import { Attachment, Attachments, MessageBar, MessageBox, MessageInput, SendButton } from "../ui/MessageBox";
 
 /** The message box: Enter sends, Shift+Enter starts a new line; while a run goes on, Stop. Files attach by picking or dropping (CNV-017). */
 export function Composer(props: {
@@ -112,172 +114,147 @@ export function Composer(props: {
   // A model the user's data egress policy refuses, said before anything is sent (UX-024).
   const refused = refusedBy(models.data?.egress.effective, chosen);
   return (
-    <div className="w-full">
-      <form
-        onSubmit={send}
-        onDragOver={(event) => {
-          if (event.dataTransfer.types.includes("Files")) {
-            event.preventDefault();
-            setDragging(true);
-          }
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={drop}
-        className={`relative flex flex-col gap-2 rounded-3xl border bg-surface pt-3.5 pr-3 pb-2.5 pl-[18px] shadow-soft focus-within:border-accent/45 ${dragging ? "border-accent" : "border-line-strong"}`}
-      >
-        {files.items.length > 0 && (
-          <ul aria-label={t("files.attachments")} className="-ml-1.5 flex flex-wrap gap-1.5">
-            {files.items.map((item) => (
-              <li key={item.key} className="flex max-w-full items-center gap-2 rounded-xl border border-line bg-hover py-1.5 pr-1 pl-2.5 text-[13px]">
-                {item.preview ? (
-                  <img src={item.preview} alt={item.name} className="size-9 flex-none rounded-lg object-cover" />
-                ) : (
-                  <FileText className="size-4 flex-none text-muted" aria-hidden="true" />
-                )}
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-semibold">{item.name}</span>
-                  <span className={item.error ? "text-danger" : "text-muted"}>
-                    {item.error
-                      ? t(`files.errors.${errorKey(item.error)}`)
-                      : item.path === undefined
-                        ? item.progress >= 1
-                          ? t("files.saving")
-                          : t("files.uploading", { percent: Math.round(item.progress * 100) })
-                        : formatSize(item.size)}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => files.remove(item.key)}
-                  className="grid size-7 flex-none place-items-center rounded-lg text-muted hover:bg-surface hover:text-fg"
-                  aria-label={t("files.remove", { name: item.name })}
-                  title={t("files.remove", { name: item.name })}
-                >
-                  <X className="size-4" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <label className="sr-only" htmlFor="composer">
-          {t("composer.label")}
-        </label>
-        <textarea
-          id="composer"
-          ref={area}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            // Cleared, the box holds no dictated words anymore.
-            if (!event.target.value.trim()) setDictated(false);
-          }}
-          onKeyDown={keyDown}
-          onPaste={paste}
-          rows={1}
-          autoFocus={props.autoFocus === true && hasKeyboard()}
-          placeholder={props.placeholder}
-          className={`max-h-[220px] min-h-[26px] resize-none bg-transparent text-base leading-normal outline-none placeholder:text-faint ${dictation === "off" ? "" : "hidden"}`}
-        />
-        {/* Dictation in the box itself: the voice as it is captured, and how to end it; then the wait (UX-005). */}
-        {dictation === "recording" && recorder.current.stream && (
-          <div className="flex items-center gap-3">
-            <VoiceLevel stream={recorder.current.stream} label={t("voice.capturing")} className="min-w-0 flex-1 text-danger" />
-            <button
-              type="button"
-              onClick={() => void dictate()}
-              aria-label={t("voice.stopDictating")}
-              className="flex h-11 flex-none items-center gap-2 rounded-full bg-danger px-4 text-sm font-semibold text-on-danger"
-            >
-              <Square className="size-3.5" fill="currentColor" aria-hidden="true" />
-              {t("voice.stop")}
-            </button>
-          </div>
-        )}
-        {dictation === "preparing" && (
-          <p role="status" className="flex h-14 items-center gap-2.5 text-base text-muted">
-            <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-            <span className="live-text">{t("voice.preparing")}</span>
-          </p>
-        )}
-        <div className="flex items-center gap-1.5">
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            aria-label={t("files.attach")}
-            onChange={(event) => {
-              if (event.target.files) files.add([...event.target.files]);
-              event.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => picker.current?.click()}
-            title={t("files.attachOne")}
-            aria-label={t("files.attachOne")}
-            className="-ml-2 grid size-9 place-items-center rounded-xl text-muted hover:bg-hover hover:text-fg"
-          >
-            <Paperclip className="size-[18px]" aria-hidden="true" />
-          </button>
-          {voice?.transcription && dictation === "off" && (
-            <button
-              type="button"
-              onClick={() => void dictate()}
-              disabled={voice.transcriptionRefused}
-              // Unavailable, saying why, when only local models are allowed (UX-024).
-              title={voice.transcriptionRefused ? t("voice.refused") : t("voice.dictate")}
-              aria-label={t("voice.dictate")}
-              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <Mic className="size-[18px]" aria-hidden="true" />
-            </button>
-          )}
-          {voice?.transcription && voice.speech && (
-            <button
-              type="button"
-              onClick={voice.open}
-              disabled={voice.transcriptionRefused || voice.speechRefused}
-              title={voice.transcriptionRefused || voice.speechRefused ? t("voice.refused") : t("voice.handsFree")}
-              aria-label={t("voice.handsFree")}
-              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <Headphones className="size-[18px]" aria-hidden="true" />
-            </button>
-          )}
-          <span className="flex-1" />
-          <ModelSelect
-            compact
-            value={props.model}
-            onChange={props.onModel}
-            {...(models.data && models.data.items.length > 0 ? { placeholder: t("composer.chooseModel") } : {})}
-          />
-          {props.running && props.onStop ? (
-            <button type="button" onClick={props.onStop} className="grid size-9 flex-none place-items-center rounded-xl bg-fg text-bg" aria-label={t("composer.stop")}>
-              <Square className="size-3.5" fill="currentColor" aria-hidden="true" />
-            </button>
-          ) : (
-            <button type="submit" disabled={!text.trim() || files.uploading} className="grid size-9 flex-none place-items-center rounded-xl bg-accent text-on-accent transition-opacity disabled:opacity-35" aria-label={t("composer.send")}>
-              <ArrowUp className="size-[18px]" strokeWidth={2.4} aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </form>
-      {/* Where the conversation's data goes (MOD-010), and whether the model can use tools (MOD-014). */}
-      <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[12.5px] text-faint">
-        {models.data && models.data.items.length === 0
+    <MessageBox
+      onSubmit={send}
+      dropping={dragging}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={drop}
+      // Where the conversation's data goes (MOD-010), and whether the model can use tools (MOD-014).
+      caption={
+        models.data && models.data.items.length === 0
           ? t("composer.noModel")
           : refused
             ? t("composer.refused")
             : chosen?.tools === false
-            ? t("composer.chatOnly")
-            : chosen
-              ? local
-                ? t("composer.local")
-                : t("composer.remote", { connection: chosen.connection_name })
-              : null}
-      </p>
-    </div>
+              ? t("composer.chatOnly")
+              : chosen
+                ? local
+                  ? t("composer.local")
+                  : t("composer.remote", { connection: chosen.connection_name })
+                : null
+      }
+    >
+      {files.items.length > 0 && (
+        <Attachments label={t("files.attachments")}>
+          {files.items.map((item) => (
+            <Attachment
+              key={item.key}
+              name={item.name}
+              preview={item.preview}
+              failed={Boolean(item.error)}
+              detail={
+                item.error
+                  ? t(`files.errors.${errorKey(item.error)}`)
+                  : item.path === undefined
+                    ? item.progress >= 1
+                      ? t("files.saving")
+                      : t("files.uploading", { percent: Math.round(item.progress * 100) })
+                    : formatSize(item.size)
+              }
+              removeLabel={t("files.remove", { name: item.name })}
+              onRemove={() => files.remove(item.key)}
+            />
+          ))}
+        </Attachments>
+      )}
+      <MessageInput
+        id="composer"
+        label={t("composer.label")}
+        ref={area}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          // Cleared, the box holds no dictated words anymore.
+          if (!event.target.value.trim()) setDictated(false);
+        }}
+        onKeyDown={keyDown}
+        onPaste={paste}
+        autoFocus={props.autoFocus === true && hasKeyboard()}
+        placeholder={props.placeholder}
+        hidden={dictation !== "off"}
+      />
+      {/* Dictation in the box itself: the voice as it is captured, and how to end it; then the wait (UX-005). */}
+      {dictation === "recording" && recorder.current.stream && (
+        <div className="flex items-center gap-3 px-2">
+          <VoiceLevel stream={recorder.current.stream} label={t("voice.capturing")} className="min-w-0 flex-1 text-danger" />
+          <Button variant="danger-solid" onClick={() => void dictate()} aria-label={t("voice.stopDictating")}>
+            <Square fill="currentColor" aria-hidden="true" />
+            {t("voice.stop")}
+          </Button>
+        </div>
+      )}
+      {dictation === "preparing" && (
+        <p role="status" className="flex h-14 items-center gap-2 px-2 text-reading text-ink-2">
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          <span className="live-text">{t("voice.preparing")}</span>
+        </p>
+      )}
+      <MessageBar
+        start={
+          <>
+            <FileInput
+              ref={picker}
+              multiple
+              hidden
+              aria-label={t("files.attach")}
+              onChange={(event) => {
+                if (event.target.files) files.add([...event.target.files]);
+                event.target.value = "";
+              }}
+            />
+            <IconButton label={t("files.attachOne")} onClick={() => picker.current?.click()}>
+              <Paperclip aria-hidden="true" />
+            </IconButton>
+            {voice?.transcription && dictation === "off" && (
+              <IconButton
+                label={t("voice.dictate")}
+                onClick={() => void dictate()}
+                disabled={voice.transcriptionRefused}
+                // Unavailable, saying why, when only local models are allowed (UX-024).
+                title={voice.transcriptionRefused ? t("voice.refused") : t("voice.dictate")}
+              >
+                <Mic aria-hidden="true" />
+              </IconButton>
+            )}
+            {voice?.transcription && voice.speech && (
+              <IconButton
+                label={t("voice.handsFree")}
+                onClick={voice.open}
+                disabled={voice.transcriptionRefused || voice.speechRefused}
+                title={voice.transcriptionRefused || voice.speechRefused ? t("voice.refused") : t("voice.handsFree")}
+              >
+                <Headphones aria-hidden="true" />
+              </IconButton>
+            )}
+          </>
+        }
+        end={
+          <>
+            <ModelSelect
+              compact
+              value={props.model}
+              onChange={props.onModel}
+              {...(models.data && models.data.items.length > 0 ? { placeholder: t("composer.chooseModel") } : {})}
+            />
+            {props.running && props.onStop ? (
+              <SendButton type="button" label={t("composer.stop")} onClick={props.onStop}>
+                <Square fill="currentColor" aria-hidden="true" />
+              </SendButton>
+            ) : (
+              <SendButton label={t("composer.send")} disabled={!text.trim() || files.uploading}>
+                <ArrowUp aria-hidden="true" />
+              </SendButton>
+            )}
+          </>
+        }
+      />
+    </MessageBox>
   );
 }
 

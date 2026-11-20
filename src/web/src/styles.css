@@ -43,15 +43,6 @@
   --c-paper: #fbf6ea;
   --c-glass: rgb(150 200 235 / 0.45);
   color-scheme: light;
-  /* The names of ADR-0070, for the screens not yet rebuilt from the shared components; they go with the last one. */
-  --bg: var(--canvas);
-  --panel: var(--sunken);
-  --fg: var(--ink);
-  --muted: var(--ink-2);
-  --faint: var(--ink-3);
-  --bubble: var(--sunken);
-  --shadow: var(--elevation-float);
-  --on-danger: var(--on-accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -169,15 +160,6 @@
   --shadow-float: var(--elevation-float);
   --shadow-above: var(--elevation-above);
   --ease-soft: cubic-bezier(0.2, 0.8, 0.3, 1);
-  /* The names of ADR-0070, until the last screen is rebuilt. */
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-fg: var(--fg);
-  --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-bubble: var(--bubble);
-  --color-on-danger: var(--on-danger);
-  --shadow-soft: var(--shadow);
 }
 
 /* Room for a phone's notch and home bar, at the edges of the screen (UX-001). */
@@ -201,15 +183,20 @@ body,
 }
 
 body {
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--canvas);
+  color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 /* In the base layer, so that a field with its own focus style, such as the
-   message box, can drop the outline with a utility class (ADR-0070). */
+   message box, can drop the outline with a utility class (ADR-0111). */
 @layer base {
+  /* Three weights only: what is strong is 600. */
+  b,
+  strong {
+    font-weight: 600;
+  }
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -234,7 +221,7 @@ body {
 
 /* Activity text shimmers while the assistant works. */
 .live-text {
-  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 40%, var(--fg) 50%, var(--muted) 60%, var(--muted) 100%);
+  background: linear-gradient(90deg, var(--ink-2) 0%, var(--ink-2) 40%, var(--ink) 50%, var(--ink-2) 60%, var(--ink-2) 100%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -269,10 +256,14 @@ body {
   animation: slide 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
-/* The sprite (ADR-0070): one figure, a pose per moment. */
+/* The sprite (ADR-0111): one figure, a pose per moment. */
 .sprite {
   display: block;
   overflow: visible;
+}
+/* The head alone, as in the brand: what is below it is cut. */
+.sprite-head {
+  overflow: hidden;
 }
 .sprite .pose {
   display: none;
@@ -551,6 +542,6 @@ body {
   .live-text {
     animation: none;
     background: none;
-    color: var(--muted);
+    color: var(--ink-2);
   }
 }

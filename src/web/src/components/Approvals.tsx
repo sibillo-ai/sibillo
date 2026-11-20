@@ -1,13 +1,14 @@
 // Approval requests, in place of the message box until the user answers them (UX-022, AGT-007, ADR-0090).
-import { ShieldAlert } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { ShieldAlert, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ApprovalScope, Interrupt } from "../api/client";
 import type { ResumeEntry } from "../api/stream";
 import { toolLabel } from "../tools";
+import { Button, Notice } from "../ui";
+import { CodeBlock, Fact, Facts, RequestCard } from "../ui/RequestCard";
 
-const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
 const SCOPE_ORDER: ApprovalScope[] = ["once", "turn", "conversation"];
 
 /** The time left before a request is denied, in words. */
@@ -30,25 +31,29 @@ function Request({ interrupt }: { interrupt: Interrupt }) {
   const timeLeft = useTimeLeft(interrupt.expiresAt);
   if (!request) return null;
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <p className="text-[15px] font-semibold text-pretty">
-        {toolLabel(t, request.tool)} <code className="font-mono text-[13px] font-normal text-muted">{request.tool}</code>
+    <div className="flex flex-col gap-2 text-body">
+      <p className="font-semibold text-pretty">
+        {toolLabel(t, request.tool)} <code className="font-mono text-small font-normal text-ink-2">{request.tool}</code>
       </p>
       {/* What the call does, unless it only repeats the tool's name. */}
       {request.action !== toolLabel(t, request.tool) && <p className="text-pretty">{request.action}</p>}
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
-        <dt className="font-semibold text-muted">{t("approvals.data")}</dt>
-        <dd className="font-mono text-[13px] break-words whitespace-pre-wrap">{request.data}</dd>
-        <dt className="font-semibold text-muted">{t("approvals.destination")}</dt>
-        <dd className="break-words">{request.destination}</dd>
-      </dl>
-      <p className="rounded-[10px] bg-hover px-3 py-2 text-pretty">{t(`approvals.reasons.${request.reason}`)}</p>
+      <Facts>
+        <Fact term={t("approvals.data")} mono>
+          {request.data}
+        </Fact>
+        <Fact term={t("approvals.destination")}>{request.destination}</Fact>
+      </Facts>
+      <Notice role="note">{t(`approvals.reasons.${request.reason}`)}</Notice>
       {/* A proposed task from a chat with content from elsewhere may come from injected instructions (TSK-006). */}
-      {request.reason === "task_proposal" && request.untrusted_content && <p className="rounded-[10px] bg-danger/15 px-3 py-2 font-semibold text-danger">{t("approvals.proposalUntrusted")}</p>}
+      {request.reason === "task_proposal" && request.untrusted_content && (
+        <Notice tone="error" role="note" icon={<TriangleAlert aria-hidden="true" />}>
+          <span className="font-semibold">{t("approvals.proposalUntrusted")}</span>
+        </Notice>
+      )}
       {/* The arguments in full, as the model gave them (UX-003, AGT-007). */}
-      <p className="text-[13px] font-semibold text-muted">{t("approvals.arguments")}</p>
-      <pre className="max-h-40 overflow-auto rounded-lg bg-hover p-2 font-mono text-[12.5px] whitespace-pre-wrap">{JSON.stringify(request.arguments, null, 2)}</pre>
-      {timeLeft && <p className="text-[13px] text-muted">{timeLeft}</p>}
+      <p className="text-small font-semibold text-ink-2">{t("approvals.arguments")}</p>
+      <CodeBlock>{JSON.stringify(request.arguments, null, 2)}</CodeBlock>
+      {timeLeft && <p className="text-small text-ink-2">{timeLeft}</p>}
     </div>
   );
 }
@@ -56,7 +61,6 @@ function Request({ interrupt }: { interrupt: Interrupt }) {
 /** The pending approval requests, one at a time: Deny first, never chosen for the user (UX-022). */
 export function ApprovalCard({ interrupts, onDecided }: { interrupts: Interrupt[]; onDecided: (resume: ResumeEntry[]) => void }) {
   const { t } = useTranslation();
-  const heading = useId();
   const [decisions, setDecisions] = useState<ResumeEntry[]>([]);
   const current = interrupts[decisions.length];
   if (!current) return null;
@@ -68,32 +72,37 @@ export function ApprovalCard({ interrupts, onDecided }: { interrupts: Interrupt[
     else setDecisions(all);
   }
 
+  const decideWith = (scope: ApprovalScope) => decide({ interruptId: current.id, status: "resolved", payload: { approved: true, scope } });
+  // The narrowest answer the request offers is the action; the ones that last longer stand apart.
+  const [narrowest, ...longer] = scopes;
   return (
-    <section aria-labelledby={heading} className="flex max-h-[min(70dvh,38rem)] flex-col rounded-[20px] border border-line-strong bg-surface shadow-soft">
-      <div className="flex flex-none items-center gap-2 px-4 pt-3.5 pb-2">
-        <h2 id={heading} className="flex flex-1 items-center gap-2 text-sm font-bold text-muted">
-          <ShieldAlert className="size-4" aria-hidden="true" />
-          {t("approvals.title")}
-        </h2>
-        {interrupts.length > 1 && (
-          <span className="text-[13px] text-muted tabular-nums" aria-live="polite">
-            {t("questions.counter", { number: decisions.length + 1, total: interrupts.length })}
-          </span>
-        )}
-      </div>
-      <div className="min-h-0 overflow-y-auto px-4 pb-2">
-        <Request key={current.id} interrupt={current} />
-      </div>
-      <div className="flex flex-none flex-wrap justify-end gap-2 border-t border-line px-4 py-3">
-        <button type="button" className={BUTTON} onClick={() => decide({ interruptId: current.id, status: "resolved", payload: { approved: false } })}>
-          {t("approvals.deny")}
-        </button>
-        {scopes.map((scope) => (
-          <button key={scope} type="button" className={BUTTON} onClick={() => decide({ interruptId: current.id, status: "resolved", payload: { approved: true, scope } })}>
+    <RequestCard
+      tall
+      icon={<ShieldAlert aria-hidden="true" />}
+      title={t("approvals.title")}
+      step={interrupts.length > 1 ? { text: t("questions.counter", { number: decisions.length + 1, total: interrupts.length }) } : undefined}
+      footer={
+        <>
+          <Button size="sm" onClick={() => decide({ interruptId: current.id, status: "resolved", payload: { approved: false } })}>
+            {t("approvals.deny")}
+          </Button>
+          {narrowest && (
+            <Button variant="primary" size="sm" onClick={() => decideWith(narrowest)}>
+              {t(`approvals.allow.${narrowest}`)}
+            </Button>
+          )}
+        </>
+      }
+      footerStart={
+        longer.length > 0 &&
+        longer.map((scope) => (
+          <Button key={scope} variant="ghost" size="sm" onClick={() => decideWith(scope)}>
             {t(`approvals.allow.${scope}`)}
-          </button>
-        ))}
-      </div>
-    </section>
+          </Button>
+        ))
+      }
+    >
+      <Request key={current.id} interrupt={current} />
+    </RequestCard>
   );
 }

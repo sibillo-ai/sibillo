@@ -1,4 +1,4 @@
-// Light and dark themes: the device's choice unless the user picks one (UX-011, ADR-0070).
+// Light and dark themes: the device's choice unless the user picks one (UX-011, ADR-0111).
 import { useCallback, useState } from "react";
 
 export type Theme = "system" | "light" | "dark";

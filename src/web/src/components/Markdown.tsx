@@ -1,3 +1,4 @@
+import { Check, Copy } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -6,6 +7,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { highlight } from "../highlight";
+import { Checkbox, IconButton } from "../ui";
+import { CodeFrame } from "../ui/Panel";
 
 /**
  * A message in Markdown, with tables, highlighted code and math (UX-002).
@@ -14,7 +17,7 @@ import { highlight } from "../highlight";
  */
 export function Markdown({ text }: { text: string }) {
   return (
-    <div className="prose-message space-y-3 leading-relaxed break-words">
+    <div className="prose-message space-y-3 text-reading break-words">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={COMPONENTS} skipHtml>
         {text}
       </ReactMarkdown>
@@ -22,26 +25,35 @@ export function Markdown({ text }: { text: string }) {
   );
 }
 
+// Headings step down within the type roles (ADR-0111): a message's own headings sit below the page's.
+const HEADING = "mt-2 text-title";
+const SUBHEADING = "mt-2 text-reading font-semibold";
+
 const COMPONENTS: Components = {
+  // The accent is not for links: they are ink, underlined.
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-accent underline underline-offset-2">
+    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-ink underline underline-offset-2">
       {children}
     </a>
   ),
   // No remote resources: an image is shown as its description.
   img: ({ alt }) => <ImageText alt={alt} />,
   table: ({ children }) => (
-    <div className="my-1 overflow-x-auto rounded-xl border border-line">
-      <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-line [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:bg-hover [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:tracking-wide [&_th]:text-muted [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
+    <div className="overflow-x-auto rounded-md border border-line">
+      <table className="w-full border-collapse text-body [&_td]:border-b [&_td]:border-line [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:bg-sunken [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_tr:last-child_td]:border-b-0">
         {children}
       </table>
     </div>
   ),
-  ul: ({ children }) => <ul className="list-disc space-y-1 pl-6 marker:text-faint">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-6 marker:text-faint">{children}</ol>,
-  h1: ({ children }) => <h3 className="mt-2 text-xl font-bold tracking-tight">{children}</h3>,
-  h2: ({ children }) => <h3 className="mt-2 text-[17px] font-bold tracking-tight">{children}</h3>,
-  h3: ({ children }) => <h4 className="mt-1.5 font-bold">{children}</h4>,
+  blockquote: ({ children }) => <blockquote className="space-y-3 border-l-2 border-line-strong pl-4 font-serif text-ink-2 italic">{children}</blockquote>,
+  ul: ({ children }) => <ul className="list-disc space-y-1 pl-6 marker:text-ink-3">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-6 marker:text-ink-3">{children}</ol>,
+  h1: ({ children }) => <h3 className={HEADING}>{children}</h3>,
+  h2: ({ children }) => <h3 className={HEADING}>{children}</h3>,
+  h3: ({ children }) => <h4 className={SUBHEADING}>{children}</h4>,
+  h4: ({ children }) => <h5 className={SUBHEADING}>{children}</h5>,
+  h5: ({ children }) => <h6 className={SUBHEADING}>{children}</h6>,
+  h6: ({ children }) => <h6 className={SUBHEADING}>{children}</h6>,
   // A task list's box, shown and named rather than offered as a control nobody can use.
   input: ({ type, checked }) => (type === "checkbox" ? <TaskBox done={checked === true} /> : null),
   pre: ({ children }) => <>{children}</>,
@@ -49,13 +61,14 @@ const COMPONENTS: Components = {
     const language = /language-([\w-]+)/.exec(className ?? "")?.[1];
     const code = String(children ?? "").replace(/\n$/, "");
     if (language === undefined && !code.includes("\n")) {
-      return <code className="rounded-[5px] bg-hover px-[5px] py-px font-mono text-[0.86em]">{children}</code>;
+      return <code className="rounded-sm bg-hover px-1 py-px font-mono text-body">{children}</code>;
     }
     return <CodeBlock code={code} language={language ?? "text"} />;
   },
 };
 
-export function CodeBlock({ code, language }: { code: string; language: string }) {
+/** Code in its frame: the language and a button that copies it above, the highlighted code below. `flush` is for inside another frame. */
+export function CodeBlock({ code, language, flush = false }: { code: string; language: string; flush?: boolean }) {
   const { t } = useTranslation();
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -75,12 +88,12 @@ export function CodeBlock({ code, language }: { code: string; language: string }
   if (highlighted !== null) body = <div className="shiki-block" dangerouslySetInnerHTML={{ __html: highlighted }} />;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line">
-      <div className="flex items-center justify-between bg-hover px-3 py-1 font-mono text-xs text-muted">
-        <span>{language}</span>
-        <button
-          type="button"
-          className="rounded-md px-2 py-1 font-sans hover:bg-hover hover:text-fg"
+    <CodeFrame
+      flush={flush}
+      title={<span className="font-mono">{language}</span>}
+      actions={
+        <IconButton
+          label={copied ? t("message.copied") : t("message.copy")}
           onClick={() => {
             void navigator.clipboard.writeText(code).then(() => {
               setCopied(true);
@@ -88,11 +101,12 @@ export function CodeBlock({ code, language }: { code: string; language: string }
             });
           }}
         >
-          {copied ? t("message.copied") : t("message.copy")}
-        </button>
-      </div>
-      <pre className="overflow-x-auto bg-surface p-3 font-mono text-[13px]">{body}</pre>
-    </div>
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        </IconButton>
+      }
+    >
+      <pre className={flush ? "overflow-x-auto pt-3 font-mono text-small" : "overflow-x-auto p-3 font-mono text-small"}>{body}</pre>
+    </CodeFrame>
   );
 }
 
@@ -104,11 +118,8 @@ function ImageText({ alt }: { alt: string | undefined }) {
 function TaskBox({ done }: { done: boolean }) {
   const { t } = useTranslation();
   return (
-    <>
-      <span aria-hidden="true" className="mr-1.5 inline-block font-mono text-muted">
-        {done ? "☑" : "☐"}
-      </span>
-      <span className="sr-only">{t(done ? "tasks.status.completed" : "tasks.status.pending")}: </span>
-    </>
+    <span className="mr-2 inline-flex align-middle">
+      <Checkbox checked={done} disabled readOnly aria-label={t(done ? "tasks.status.completed" : "tasks.status.pending")} />
+    </span>
   );
 }

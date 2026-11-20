@@ -10,6 +10,8 @@ import { findModel, refusedBy, useModels } from "./models";
 import { useNotify } from "./notices";
 import { type Pose, Sprite } from "./components/Sprite";
 import { VoiceLevel } from "./components/VoiceLevel";
+import { Button, cx } from "./ui";
+import { VoiceButton } from "./ui/Voice";
 import { type Cue, playCue, Reader, type ReadingStep, Recorder, silenceUrl, speakable, type SpokenNames, transcribe } from "./speech";
 
 export type VoiceState = "idle" | "listening" | "transcribing" | "waiting" | "reading" | "failed";
@@ -374,59 +376,45 @@ function HandsFree(props: {
     return () => window.removeEventListener("keydown", key);
   }, [props]);
   return (
-    <section aria-label={t("voice.handsFree")} className="absolute inset-0 z-30 flex flex-col gap-3 bg-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <section aria-label={t("voice.handsFree")} className="absolute inset-0 z-30 flex flex-col gap-3 bg-canvas px-4 pt-4 pb-safe text-ink">
       <div className="flex items-center gap-2">
-        <h2 className="flex flex-1 items-center gap-2 font-semibold">
+        <h2 className="flex flex-1 items-center gap-2 text-body font-semibold">
           <Headphones className="size-5" aria-hidden="true" />
           {t("voice.handsFree")}
         </h2>
-        <button type="button" onClick={props.onClose} className="flex items-center gap-1.5 rounded-[10px] border border-line-strong px-3 py-1.5 text-sm font-semibold hover:bg-hover">
-          <X className="size-4" aria-hidden="true" />
+        <Button variant="ghost" onClick={props.onClose}>
+          <X aria-hidden="true" />
           {t("voice.leave")}
-        </button>
+        </Button>
       </div>
-      <div className="flex min-h-0 flex-[0.8] items-center justify-center">
-        <Sprite pose={pose} className="h-full max-h-[300px] w-auto" />
-      </div>
-      <div className="relative flex min-h-[200px] flex-1">
-      <button
-        type="button"
-        onClick={props.onPress}
-        disabled={busy}
-        data-voice-state={state}
-        data-voice-cue={props.cue ?? undefined}
-        aria-describedby="hands-free-hint"
-        className={`flex w-full flex-1 flex-col items-center justify-center gap-4 rounded-[32px] border-4 text-2xl font-bold transition-colors disabled:cursor-wait ${
-          state === "listening"
-            ? "border-danger bg-danger/10 text-danger"
-            : state === "reading"
-              ? "border-accent bg-accent-soft text-accent"
-              : state === "failed"
-                ? "border-danger/60 bg-surface text-fg"
-                : "border-line-strong bg-surface text-fg"
-        }`}
-      >
-        {state === "listening" ? (
-          // Room for the bars that show the microphone hears, laid over the button.
-          <span className="h-16" aria-hidden="true" />
-        ) : busy ? (
-          <LoaderCircle className="size-16 animate-spin" aria-hidden="true" />
-        ) : state === "reading" ? (
-          <Volume2 className="size-16" aria-hidden="true" />
-        ) : (
-          <Mic className="size-16" aria-hidden="true" />
-        )}
-        <span aria-live="polite">{t(`voice.states.${state}`)}</span>
-      </button>
-      {/* That the microphone hears, as when dictating; beside the button, so that it has a name of its own. */}
-      {state === "listening" && props.stream && (
-        <VoiceLevel stream={props.stream} label={t("voice.capturing")} className="pointer-events-none absolute left-[18%] top-1/2 h-16 w-[64%] -translate-y-[calc(100%-0.5rem)] text-danger" />
-      )}
+      {/* The upper half: the sprite, the step the turn is at, and what a press does. */}
+      <div className="flex min-h-0 flex-4 items-center justify-center">
+        <Sprite pose={pose} className="h-full max-h-72 w-auto" />
       </div>
       <StepLine state={state} step={props.step} failure={props.failure} />
-      <p id="hands-free-hint" className="text-center text-sm text-muted">
+      <p id="hands-free-hint" className="text-center text-small text-ink-2">
         {t("voice.hint")} {remote ? t("voice.remote", { connection: remote.connection_name }) : t("voice.local")}
       </p>
+      {/* The lower half: the large button. */}
+      <div className="relative flex min-h-52 flex-5">
+        <VoiceButton onClick={props.onPress} disabled={busy} active={state === "listening"} data-voice-state={state} data-voice-cue={props.cue ?? undefined} aria-describedby="hands-free-hint">
+          {state === "listening" ? (
+            // Room for the bars that show the microphone hears, laid over the button.
+            <span className="h-16" aria-hidden="true" />
+          ) : busy ? (
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+          ) : state === "reading" ? (
+            <Volume2 aria-hidden="true" />
+          ) : (
+            <Mic aria-hidden="true" />
+          )}
+          <span aria-live="polite">{t(`voice.states.${state}`)}</span>
+        </VoiceButton>
+        {/* That the microphone hears, as when dictating; beside the button, so that it has a name of its own. */}
+        {state === "listening" && props.stream && (
+          <VoiceLevel stream={props.stream} label={t("voice.capturing")} className="pointer-events-none absolute top-1/2 left-1/2 mt-2 h-16 w-3/5 -translate-x-1/2 -translate-y-full text-on-accent" />
+        )}
+      </div>
     </section>
   );
 }
@@ -444,7 +432,7 @@ function StepLine({ state, step, failure }: { state: VoiceState; step: Step | nu
   const name = step ? t(`voice.steps.${step.kind}`) : "";
   const part = step?.total !== undefined && step.total > 1 ? t("voice.part", { part: step.part, total: step.total }) : "";
   return (
-    <p role="status" className={`min-h-6 text-center text-[15px] font-semibold tabular-nums ${state === "failed" ? "text-danger" : "text-muted"}`}>
+    <p role="status" className={cx("min-h-8 text-center text-reading font-semibold tabular-nums", state === "failed" ? "text-danger" : "text-ink")}>
       {state === "failed"
         ? `${t("voice.failedStep", { step: name || t("voice.steps.listening") })} ${failure ?? ""}`
         : going

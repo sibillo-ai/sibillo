@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, ChevronLeft, Cloud, House, KeyRound, Minus, Palette, Plug, Plus, ShieldCheck, Sparkles, TriangleAlert, UserRound, Users, X } from "lucide-react";
-import { type FormEvent, Fragment, type ReactNode, useId, useState } from "react";
+import { type FormEvent, Fragment, type ReactNode, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
@@ -28,6 +28,14 @@ const CONNECTIONS = ["connections"] as const;
 const DEFAULT_CONTEXT_WINDOW = 8192;
 
 type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "tasks" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
+
+// Where the sections sit beside the open one: Tailwind's `md`.
+const WIDE = window.matchMedia("(min-width: 48rem)");
+
+function watchWidth(changed: () => void) {
+  WIDE.addEventListener("change", changed);
+  return () => WIDE.removeEventListener("change", changed);
+}
 
 interface TabItem {
   id: Tab;
@@ -68,14 +76,17 @@ export function Settings({ me }: { me: User }) {
   const entered = [...yours, ...household].find((item) => item.id === search.get("section"))?.id;
   const tab = entered ?? (admin ? "models" : "assistant");
   const setTab = (id: Tab) => setSearch({ section: id }, { replace: true });
+  // On a phone no section is open until the user enters one, so none is marked as the current one.
+  const beside = useSyncExternalStore(watchWidth, () => WIDE.matches);
+  const shown = entered ?? (beside ? tab : null);
   return (
     <div className="relative min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-12 md:flex-row md:justify-center md:gap-12 md:px-6 md:pt-8">
         {/* On a phone: the list of sections until one is entered, then the section alone. */}
         <nav aria-label={t("settings.sections")} className={cx("flex flex-none flex-col gap-px md:sticky md:top-8 md:w-52 md:self-start", entered && "max-md:hidden")}>
           <h1 className="px-2 pb-3 font-serif text-display md:sr-only">{t("settings.title")}</h1>
-          <TabGroup title={t("settings.yours")} items={yours} tab={tab} onChoose={setTab} />
-          {household.length > 0 && <TabGroup title={t("settings.household")} items={household} tab={tab} onChoose={setTab} />}
+          <TabGroup title={t("settings.yours")} items={yours} tab={shown} onChoose={setTab} />
+          {household.length > 0 && <TabGroup title={t("settings.household")} items={household} tab={shown} onChoose={setTab} />}
         </nav>
         <div className={cx("flex w-full min-w-0 max-w-form flex-col gap-8", !entered && "max-md:hidden")}>
           <div className="md:hidden">
@@ -121,7 +132,7 @@ export function Settings({ me }: { me: User }) {
 }
 
 /** The sections of one kind of settings: the user's own, or the household's (UX-015). */
-function TabGroup({ title, items, tab, onChoose }: { title: string; items: TabItem[]; tab: Tab; onChoose: (tab: Tab) => void }) {
+function TabGroup({ title, items, tab, onChoose }: { title: string; items: TabItem[]; tab: Tab | null; onChoose: (tab: Tab) => void }) {
   const heading = useId();
   return (
     <div role="group" aria-labelledby={heading} className="flex flex-col gap-px">

@@ -6,9 +6,8 @@ import { api, type User } from "../api/client";
 import { hasKeyboard } from "../focus";
 import { getPasskey } from "../passkeys";
 import { ME } from "../session";
+import { Button, FormField, Notice, TextInput } from "../ui";
 import { Sprite } from "./Sprite";
-
-const INPUT = "h-[42px] w-full rounded-[10px] border border-line-strong bg-surface px-3 text-base outline-none focus:border-accent";
 
 const DEVICE_NAME = () => navigator.userAgent.slice(0, 100) || "browser";
 
@@ -86,21 +85,24 @@ export function SignIn() {
     setError(result.response.status === 401 ? t("signIn.passkeyRefused") : failure(result.response.status));
   }
 
+  // The error is announced when it appears, and described by the form it is about.
+  const problem = error && (
+    <div id="sign-in-error">
+      <Notice tone="error">{error}</Notice>
+    </div>
+  );
+
   if (step !== null) {
     return (
       <Frame title={t("signIn.passkeyTitle")} subtitle={t("signIn.passkeySubtitle")}>
-        <div className="flex w-full flex-col gap-3.5" aria-describedby={error ? "sign-in-error" : undefined}>
-          {error && (
-            <p id="sign-in-error" role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          )}
-          <button type="button" disabled={busy} onClick={() => void usePasskey(step)} className="h-[42px] w-full rounded-[10px] bg-fg font-semibold text-bg disabled:opacity-60">
+        <div className="flex w-full flex-col gap-4" aria-describedby={error ? "sign-in-error" : undefined}>
+          {problem}
+          <Button variant="primary" block busy={busy} onClick={() => void usePasskey(step)}>
             {busy ? t("signIn.waitingForPasskey") : t("signIn.usePasskey")}
-          </button>
-          <button type="button" disabled={busy} onClick={() => (setStep(null), setError(null))} className="h-[42px] w-full rounded-[10px] border border-line-strong font-semibold disabled:opacity-60">
+          </Button>
+          <Button block disabled={busy} onClick={() => (setStep(null), setError(null))}>
             {t("signIn.back")}
-          </button>
+          </Button>
         </div>
       </Frame>
     );
@@ -108,35 +110,32 @@ export function SignIn() {
 
   return (
     <Frame title={t("signIn.title")} subtitle={t("signIn.subtitle")}>
-        <form onSubmit={submit} className="flex w-full flex-col gap-3.5" aria-describedby={error ? "sign-in-error" : undefined}>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13.5px] font-semibold">{t("signIn.username")}</span>
-            <input name="username" autoComplete="username" required autoCapitalize="none" autoFocus={hasKeyboard()} defaultValue={username} className={INPUT} />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13.5px] font-semibold">{t("signIn.password")}</span>
-            <input name="password" type="password" autoComplete="current-password" required className={INPUT} />
-          </label>
-          {error && (
-            <p id="sign-in-error" role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={busy} className="h-[42px] w-full rounded-[10px] bg-fg font-semibold text-bg disabled:opacity-60">
-            {busy ? t("signIn.submitting") : t("signIn.submit")}
-          </button>
-        </form>
+      <form onSubmit={submit} className="flex w-full flex-col gap-4" aria-describedby={error ? "sign-in-error" : undefined}>
+        <FormField label={t("signIn.username")}>
+          {(ties) => <TextInput {...ties} name="username" autoComplete="username" required autoCapitalize="none" autoFocus={hasKeyboard()} defaultValue={username} />}
+        </FormField>
+        <FormField label={t("signIn.password")}>
+          {(ties) => <TextInput {...ties} name="password" type="password" autoComplete="current-password" required />}
+        </FormField>
+        {problem}
+        <Button type="submit" variant="primary" block busy={busy}>
+          {busy ? t("signIn.submitting") : t("signIn.submit")}
+        </Button>
+      </form>
     </Frame>
   );
 }
 
+/** A screen that stands alone, before the app: one card on the page, with the sprite, a title and what it is for (ADR-0111). */
 export function Frame({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <main className="flex min-h-full overflow-y-auto bg-bg px-4 py-6 text-fg">
-      <div className="m-auto flex w-full max-w-[360px] flex-col items-center gap-1">
-        <Sprite pose="waiting" className="h-[106px] w-[92px]" />
-        <h1 className="mt-1.5 text-center text-2xl font-bold tracking-tight">{title}</h1>
-        <p className="mb-[18px] text-center text-muted">{subtitle}</p>
+    <main className="flex min-h-full overflow-y-auto bg-sunken px-4 py-6 text-ink">
+      <div className="m-auto flex w-full max-w-dialog-sm flex-col items-center gap-4 rounded-lg border border-line bg-surface p-6 shadow-float md:p-8">
+        <Sprite pose="waiting" className="h-20 w-16" />
+        <header className="text-center">
+          <h1 className="font-serif text-display">{title}</h1>
+          <p className="mt-1 text-body text-ink-2">{subtitle}</p>
+        </header>
         {children}
       </div>
     </main>

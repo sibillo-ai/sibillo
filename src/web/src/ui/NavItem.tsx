@@ -17,7 +17,7 @@ export function NavItem({
     <button type="button" aria-current={current || undefined} className={NAV_ITEM} {...rest}>
       {icon}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {end && <span className="flex-none text-caption text-ink-3">{end}</span>}
+      {end && <span className="flex-none text-caption text-ink-2">{end}</span>}
     </button>
   );
 }

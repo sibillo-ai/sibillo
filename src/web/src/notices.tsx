@@ -1,9 +1,10 @@
-// Notices: errors say what went wrong and what to do, with the sprite holding a sign (UX-014, ADR-0070).
-import { X } from "lucide-react";
+// Notices: errors say what went wrong and what to do, with the sprite holding a sign (UX-014, ADR-0111).
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Sprite } from "./components/Sprite";
+import { Button } from "./ui";
+import { Toast, Toasts } from "./ui/Toast";
 
 export interface Notice {
   kind: "error" | "info";
@@ -40,38 +41,33 @@ export function NoticeProvider({ children }: { children: ReactNode }) {
   return (
     <Notices.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed top-[calc(4rem+env(safe-area-inset-top))] left-1/2 z-[60] flex w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2">
+      <Toasts>
         {shown.map((notice) => (
-          <div
+          <Toast
             key={notice.id}
             role={notice.kind === "error" ? "alert" : "status"}
-            className={`rise pointer-events-auto flex items-center gap-3 rounded-2xl border bg-raised py-2.5 pr-2.5 shadow-soft ${
-              notice.kind === "error" ? "border-danger/45 pl-2" : "border-line pl-4"
-            }`}
-          >
-            {notice.kind === "error" && <Sprite pose="error" className="h-[67px] w-[58px] flex-none" />}
-            <div className="min-w-0 flex-1 text-sm">
-              <strong className="block">{notice.title}</strong>
-              {notice.text && <p className="mt-0.5 text-muted">{notice.text}</p>}
-              {notice.action && (
-                <button
-                  type="button"
-                  className="mt-2 rounded-lg border border-line-strong px-3 py-1 text-[13px] font-semibold hover:bg-hover"
+            leading={notice.kind === "error" ? <Sprite pose="error" className="h-16 w-14 flex-none" /> : undefined}
+            title={notice.title}
+            dismissLabel={t("errors.dismiss")}
+            onDismiss={() => dismiss(notice.id)}
+            action={
+              notice.action && (
+                <Button
+                  size="sm"
                   onClick={() => {
                     notice.action?.run();
                     dismiss(notice.id);
                   }}
                 >
                   {notice.action.label}
-                </button>
-              )}
-            </div>
-            <button type="button" className="grid size-8 flex-none place-items-center rounded-lg text-muted hover:bg-hover" aria-label={t("errors.dismiss")} onClick={() => dismiss(notice.id)}>
-              <X className="size-4" aria-hidden="true" />
-            </button>
-          </div>
+                </Button>
+              )
+            }
+          >
+            {notice.text}
+          </Toast>
         ))}
-      </div>
+      </Toasts>
     </Notices.Provider>
   );
 }

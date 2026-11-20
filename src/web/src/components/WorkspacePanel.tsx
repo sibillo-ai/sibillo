@@ -1,11 +1,12 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Download, File, Folder, FolderPlus, Link2, Maximize2, Pencil, RotateCcw, Trash2, Upload, X } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { Download, File, Folder, FolderPlus, Link2, Maximize2, Pencil, RotateCcw, Trash2, Upload, X } from "lucide-react";
+import { type CSSProperties, type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
 import { useNotify } from "../notices";
+import { Button, Checkbox, Dialog, FileInput, FormField, IconButton, TextInput } from "../ui";
+import { CodeFrame, Meter, PanelHeader, PanelSheet, TreeEntry, Viewer } from "../ui/Panel";
 import {
   archiveUrl,
   createFolder,
@@ -32,6 +33,12 @@ const WIDE = "(min-width: 768px)";
 // The API shows at most this much of a text (UX-020).
 const TEXT_PREVIEW_BYTES = 1024 * 1024;
 const CSV_ROWS = 200;
+// Beside the conversation, the panel takes at most half of the window.
+const PANEL_LIMIT = { "--panel-limit": "50vw" } as CSSProperties;
+// In the panel, a preview is at most this tall; the full view of a diagram fits the window.
+const PREVIEW_LIMIT = { "--preview-limit": "60vh" } as CSSProperties;
+const DIAGRAM_LIMIT = { "--preview-limit": "calc(100dvh - 10rem)" } as CSSProperties;
+const NOTE = "text-small text-ink-2";
 
 /** Whether the screen is wide enough for the panel beside the conversation. */
 export function useWide(): boolean {
@@ -77,37 +84,20 @@ export function WorkspacePanel(props: { conversationId: string; open: boolean; o
   const wide = useWide();
   const title = useId();
   const panel = usePanelWidth("sibillo.filesWidth", 400, 300, 760);
+  const close = () => props.onOpenChange(false);
   if (wide) {
     if (!props.open) return null;
     return (
-      <section aria-labelledby={title} style={{ width: panel.width }} className="relative flex max-w-[50vw] flex-none flex-col border-l border-line bg-panel">
+      <section aria-labelledby={title} style={{ width: panel.width, ...PANEL_LIMIT }} className="relative flex max-w-(--panel-limit) flex-none flex-col border-l border-line bg-canvas">
         <ResizeHandle label={t("files.resize")} side="left" panel={panel} />
-        <header className="flex h-[52px] flex-none items-center gap-2 px-4">
-          <h2 id={title} className="flex-1 font-semibold">
-            {t("files.title")}
-          </h2>
-          <button type="button" onClick={() => props.onOpenChange(false)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg" aria-label={t("files.close")} title={t("files.close")}>
-            <X className="size-5" aria-hidden="true" />
-          </button>
-        </header>
-        <PanelBody conversationId={props.conversationId} reveal={props.reveal} />
+        <PanelBody conversationId={props.conversationId} reveal={props.reveal} titleId={title} onClose={close} />
       </section>
     );
   }
   return (
-    <Dialog.Root open={props.open} onOpenChange={props.onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Content aria-describedby={undefined} className="fixed inset-0 z-50 flex flex-col bg-panel pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-fg">
-          <header className="flex h-[52px] flex-none items-center gap-2 px-4">
-            <Dialog.Title className="flex-1 font-semibold">{t("files.title")}</Dialog.Title>
-            <Dialog.Close className="grid size-9 place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg" aria-label={t("files.close")}>
-              <X className="size-5" aria-hidden="true" />
-            </Dialog.Close>
-          </header>
-          <PanelBody conversationId={props.conversationId} reveal={props.reveal} />
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <PanelSheet open={props.open} onOpenChange={props.onOpenChange}>
+      <PanelBody conversationId={props.conversationId} reveal={props.reveal} onClose={close} />
+    </PanelSheet>
   );
 }
 
@@ -119,7 +109,8 @@ interface Transfer {
   progress: number;
 }
 
-function PanelBody({ conversationId, reveal }: { conversationId: string; reveal: Reveal | null }) {
+/** The panel's header and what is under it. With a `titleId` it is beside the conversation; without, it is in the sheet its title names. */
+function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationId: string; reveal: Reveal | null; titleId?: string; onClose: () => void }) {
   const { t } = useTranslation();
   const queries = useQueryClient();
   const notify = useNotify();
@@ -195,126 +186,116 @@ function PanelBody({ conversationId, reveal }: { conversationId: string; reveal:
   }
 
   const quota = summary.data;
-  const percent = quota ? Math.min(100, Math.round((quota.size / Math.max(1, quota.quota)) * 100)) : 0;
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none flex-wrap items-center gap-1 border-b border-line px-3 pb-2">
-        <ToolButton label={t("files.upload")} onClick={() => picker.current?.click()}>
-          <Upload className="size-4" aria-hidden="true" />
-        </ToolButton>
-        <input
+    <>
+      <PanelHeader title={t("files.title")} titleId={titleId} sheet={titleId === undefined}>
+        <IconButton label={t("files.upload")} onClick={() => picker.current?.click()}>
+          <Upload aria-hidden="true" />
+        </IconButton>
+        <FileInput
           ref={picker}
-          type="file"
           multiple
-          hidden
           aria-label={t("files.upload")}
           onChange={(event) => {
             if (event.target.files) uploadHere([...event.target.files]);
             event.target.value = "";
           }}
         />
-        <ToolButton label={t("files.newFolder")} onClick={() => setAsking({ kind: "folder", in: target })}>
-          <FolderPlus className="size-4" aria-hidden="true" />
-        </ToolButton>
-        <ToolButton label={t("files.reset")} onClick={() => setAsking({ kind: "reset" })}>
-          <RotateCcw className="size-4" aria-hidden="true" />
-        </ToolButton>
-        <span className="flex-1" />
-        <label className="flex items-center gap-1.5 text-[13px] text-muted">
-          <input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} className="accent-accent" />
-          {t("files.showHidden")}
-        </label>
-      </div>
-      {transfers.length > 0 && (
-        <ul aria-label={t("files.uploads")} className="flex-none border-b border-line px-4 py-1.5 text-[13px] text-muted">
-          {transfers.map((item) => (
-            <li key={item.key} className="truncate">
-              {t("files.uploadingName", { name: item.name, percent: Math.round(item.progress * 100) })}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <Tree conversationId={conversationId} hidden={hidden} expanded={expanded} selected={selected} onToggle={toggle} onSelect={setSelected} />
-        {entry !== null && (
-          <section aria-label={t("files.preview")} className="border-t border-line px-4 py-3">
-            <div className="mb-2 flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{entry.name}</p>
-                <p className="text-[12.5px] text-muted">
-                  {entry.type === "file" ? `${formatSize(entry.size)} · ` : ""}
-                  {new Date(entry.modified).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                </p>
-              </div>
-              {entry.type !== "link" && (
-                <ToolButton label={t("files.download")} onClick={() => download(entry.type === "folder" ? archiveUrl(conversationId, entry.path) : downloadUrl(conversationId, entry.path))}>
-                  <Download className="size-4" aria-hidden="true" />
-                </ToolButton>
-              )}
-              <ToolButton label={t("files.rename")} onClick={() => setAsking({ kind: "rename", entry })}>
-                <Pencil className="size-4" aria-hidden="true" />
-              </ToolButton>
-              <ToolButton label={t("files.delete")} onClick={() => setAsking({ kind: "delete", entry })}>
-                <Trash2 className="size-4" aria-hidden="true" />
-              </ToolButton>
-              {entry.type === "file" && previewKind(entry.name) !== "none" && (
-                <ToolButton label={t("files.fullView")} onClick={() => setLarge(entry)}>
-                  <Maximize2 className="size-4" aria-hidden="true" />
-                </ToolButton>
-              )}
-            </div>
-            {/* Each file opens as its preview, not as the last file's source. */}
-            {entry.type === "file" && <FilePreview key={entry.path} conversationId={conversationId} entry={entry} />}
-            {entry.type === "link" && <p className="text-sm text-muted">{t("files.linkPreview")}</p>}
-          </section>
+        <IconButton label={t("files.newFolder")} onClick={() => setAsking({ kind: "folder", in: target })}>
+          <FolderPlus aria-hidden="true" />
+        </IconButton>
+        <IconButton label={t("files.reset")} onClick={() => setAsking({ kind: "reset" })}>
+          <RotateCcw aria-hidden="true" />
+        </IconButton>
+        <IconButton label={t("files.close")} onClick={onClose}>
+          <X aria-hidden="true" />
+        </IconButton>
+      </PanelHeader>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {transfers.length > 0 && (
+          <ul aria-label={t("files.uploads")} className={`flex-none border-b border-line px-4 py-2 ${NOTE}`}>
+            {transfers.map((item) => (
+              <li key={item.key} className="truncate">
+                {t("files.uploadingName", { name: item.name, percent: Math.round(item.progress * 100) })}
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
-      {quota && (
-        <div className="flex flex-none items-center gap-2 border-t border-line px-4 py-2.5 text-xs text-muted tabular-nums">
-          <span className="flex-1">{t("files.quota", { used: formatSize(quota.size), quota: formatSize(quota.quota) })}</span>
-          <span
-            role="meter"
-            aria-label={t("files.quotaLabel")}
-            aria-valuemin={0}
-            aria-valuemax={quota.quota}
-            aria-valuenow={quota.size}
-            aria-valuetext={t("files.quota", { used: formatSize(quota.size), quota: formatSize(quota.quota) })}
-            className="h-1.5 w-20 overflow-hidden rounded-full bg-hover"
-          >
-            <span className={`block h-full rounded-full ${percent >= 90 ? "bg-danger" : "bg-accent"}`} style={{ width: `${Math.max(3, percent)}%` }} />
-          </span>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex justify-end px-4 pt-2">
+            <label className={`flex cursor-pointer items-center gap-2 ${NOTE}`}>
+              <Checkbox checked={hidden} onChange={(event) => setHidden(event.target.checked)} />
+              {t("files.showHidden")}
+            </label>
+          </div>
+          <Tree conversationId={conversationId} hidden={hidden} expanded={expanded} selected={selected} onToggle={toggle} onSelect={setSelected} />
+          {entry !== null && (
+            <section aria-label={t("files.preview")} className="px-2 pb-2">
+              <CodeFrame
+                title={
+                  <div className="py-1">
+                    <p className="truncate text-small font-semibold text-ink">{entry.name}</p>
+                    <p className="truncate font-normal tabular-nums">
+                      {entry.type === "file" ? `${formatSize(entry.size)} · ` : ""}
+                      {new Date(entry.modified).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                    </p>
+                  </div>
+                }
+                actions={
+                  <>
+                    {entry.type !== "link" && (
+                      <IconButton label={t("files.download")} onClick={() => download(entry.type === "folder" ? archiveUrl(conversationId, entry.path) : downloadUrl(conversationId, entry.path))}>
+                        <Download aria-hidden="true" />
+                      </IconButton>
+                    )}
+                    <IconButton label={t("files.rename")} onClick={() => setAsking({ kind: "rename", entry })}>
+                      <Pencil aria-hidden="true" />
+                    </IconButton>
+                    <IconButton label={t("files.delete")} onClick={() => setAsking({ kind: "delete", entry })}>
+                      <Trash2 aria-hidden="true" />
+                    </IconButton>
+                    {entry.type === "file" && previewKind(entry.name) !== "none" && (
+                      <IconButton label={t("files.fullView")} onClick={() => setLarge(entry)}>
+                        <Maximize2 aria-hidden="true" />
+                      </IconButton>
+                    )}
+                  </>
+                }
+              >
+                {/* Each file opens as its preview, not as the last file's source. */}
+                {entry.type === "file" ? (
+                  <div className="p-3">
+                    <FilePreview key={entry.path} conversationId={conversationId} entry={entry} />
+                  </div>
+                ) : entry.type === "link" ? (
+                  <p className={`p-3 ${NOTE}`}>{t("files.linkPreview")}</p>
+                ) : undefined}
+              </CodeFrame>
+            </section>
+          )}
         </div>
-      )}
-      {/* A file larger, as a document or an app of its own (ART-001, ADR-0086). */}
-      <Dialog.Root open={large !== null} onOpenChange={(open) => !open && setLarge(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="fixed inset-2 z-[70] flex flex-col rounded-[20px] bg-raised text-fg shadow-soft sm:inset-6">
-            <div className="flex flex-none items-center gap-2 border-b border-line px-4 py-2.5">
-              <Dialog.Title className="min-w-0 flex-1 truncate font-semibold">{large?.name}</Dialog.Title>
-              <Dialog.Description className="sr-only">{t("files.fullViewHint")}</Dialog.Description>
-              <Dialog.Close className="grid size-9 flex-none place-items-center rounded-[10px] text-muted hover:bg-hover hover:text-fg" aria-label={t("files.close")}>
-                <X className="size-5" aria-hidden="true" />
-              </Dialog.Close>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto p-4">{large !== null && <FilePreview conversationId={conversationId} entry={large} large />}</div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-      <Dialog.Root open={asking !== null} onOpenChange={(open) => !open && setAsking(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-scrim" />
-          {asking?.kind === "delete" || asking?.kind === "reset" ? (
-            <Dialog.Content role="alertdialog" className="rise fixed top-1/2 left-1/2 z-[70] w-[min(92vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] text-fg shadow-soft">
-              <Dialog.Title className="mb-2 text-lg font-bold tracking-tight">{asking.kind === "reset" ? t("files.resetTitle") : t("files.deleteTitle", { name: asking.entry.name })}</Dialog.Title>
-              <Dialog.Description className="text-muted">
-                {asking.kind === "reset" ? t("files.resetBody") : asking.entry.type === "folder" ? t("files.deleteFolderBody", { name: asking.entry.name }) : t("files.deleteBody", { name: asking.entry.name })}
-              </Dialog.Description>
-              <div className="mt-[18px] flex flex-wrap justify-end gap-2">
-                <Dialog.Close className="h-[38px] rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover">{t("files.cancel")}</Dialog.Close>
-                <button
-                  type="button"
-                  className="h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold text-on-danger"
+        {quota && (
+          <div className="flex flex-none flex-col gap-2 border-t border-line px-4 py-3">
+            <p className="text-caption text-ink-3 tabular-nums">{t("files.quota", { used: formatSize(quota.size), quota: formatSize(quota.quota) })}</p>
+            <Meter label={t("files.quotaLabel")} value={quota.size} max={quota.quota} text={t("files.quota", { used: formatSize(quota.size), quota: formatSize(quota.quota) })} />
+          </div>
+        )}
+        {/* A file larger, as a document or an app of its own (ART-001, ADR-0086). */}
+        <Viewer open={large !== null} onClose={() => setLarge(null)} title={large?.name} description={t("files.fullViewHint")} closeLabel={t("files.close")}>
+          {large !== null && <FilePreview conversationId={conversationId} entry={large} large />}
+        </Viewer>
+        {(asking?.kind === "delete" || asking?.kind === "reset") && (
+          <Dialog
+            asks
+            size="sm"
+            onClose={() => setAsking(null)}
+            title={asking.kind === "reset" ? t("files.resetTitle") : t("files.deleteTitle", { name: asking.entry.name })}
+            description={asking.kind === "reset" ? t("files.resetBody") : asking.entry.type === "folder" ? t("files.deleteFolderBody", { name: asking.entry.name }) : t("files.deleteBody", { name: asking.entry.name })}
+            footer={
+              <>
+                <Button onClick={() => setAsking(null)}>{t("files.cancel")}</Button>
+                <Button
+                  variant="danger-solid"
                   onClick={() =>
                     asking.kind === "reset"
                       ? void run(() => resetWorkspace(conversationId), () => setSelected(null))
@@ -322,35 +303,37 @@ function PanelBody({ conversationId, reveal }: { conversationId: string; reveal:
                   }
                 >
                   {asking.kind === "reset" ? t("files.resetConfirm") : t("files.delete")}
-                </button>
-              </div>
-            </Dialog.Content>
-          ) : asking !== null ? (
-            <Dialog.Content aria-describedby={undefined} className="rise fixed top-1/2 left-1/2 z-[70] w-[min(92vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] text-fg shadow-soft">
-              <PathForm
-                title={asking.kind === "rename" ? t("files.renameTitle") : t("files.newFolder")}
-                label={t("files.pathLabel")}
-                initial={asking.kind === "rename" ? asking.entry.path : asking.kind === "folder" && asking.in ? `${asking.in}/` : ""}
-                confirm={asking.kind === "rename" ? t("files.renameConfirm") : t("files.create")}
-                onSubmit={(path) =>
-                  asking.kind === "rename"
-                    ? void run(() => moveEntry(conversationId, asking.entry.path, path), () => setSelected(path))
-                    : void run(() => createFolder(conversationId, path), () => setExpanded((all) => new Set(all).add(parentOf(path))))
-                }
-              />
-            </Dialog.Content>
-          ) : null}
-        </Dialog.Portal>
-      </Dialog.Root>
-    </div>
+                </Button>
+              </>
+            }
+          />
+        )}
+        {(asking?.kind === "rename" || asking?.kind === "folder") && (
+          <PathForm
+            title={asking.kind === "rename" ? t("files.renameTitle") : t("files.newFolder")}
+            label={t("files.pathLabel")}
+            initial={asking.kind === "rename" ? asking.entry.path : asking.kind === "folder" && asking.in ? `${asking.in}/` : ""}
+            confirm={asking.kind === "rename" ? t("files.renameConfirm") : t("files.create")}
+            onClose={() => setAsking(null)}
+            onSubmit={(path) =>
+              asking.kind === "rename"
+                ? void run(() => moveEntry(conversationId, asking.entry.path, path), () => setSelected(path))
+                : void run(() => createFolder(conversationId, path), () => setExpanded((all) => new Set(all).add(parentOf(path))))
+            }
+          />
+        )}
+      </div>
+    </>
   );
 }
 
-function PathForm(props: { title: string; label: string; initial: string; confirm: string; onSubmit: (path: string) => void }) {
+function PathForm(props: { title: string; label: string; initial: string; confirm: string; onClose: () => void; onSubmit: (path: string) => void }) {
   const { t } = useTranslation();
-  const field = useId();
   return (
-    <form
+    <Dialog
+      size="sm"
+      onClose={props.onClose}
+      title={props.title}
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const path = String(new FormData(event.currentTarget).get("path") ?? "")
@@ -358,29 +341,19 @@ function PathForm(props: { title: string; label: string; initial: string; confir
           .replace(/^\/+|\/+$/g, "");
         if (path) props.onSubmit(path);
       }}
+      footer={
+        <>
+          <Button size="sm" onClick={props.onClose}>
+            {t("files.cancel")}
+          </Button>
+          <Button size="sm" type="submit" variant="primary">
+            {props.confirm}
+          </Button>
+        </>
+      }
     >
-      <Dialog.Title className="mb-3 text-lg font-bold tracking-tight">{props.title}</Dialog.Title>
-      <label htmlFor={field} className="mb-1 block text-sm text-muted">
-        {props.label}
-      </label>
-      <input id={field} name="path" defaultValue={props.initial} autoFocus className="h-10 w-full rounded-[10px] border border-line-strong bg-surface px-3 font-mono text-sm outline-none focus:border-accent" />
-      <div className="mt-[18px] flex flex-wrap justify-end gap-2">
-        <Dialog.Close type="button" className="h-[38px] rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover">
-          {t("files.cancel")}
-        </Dialog.Close>
-        <button type="submit" className="h-[38px] rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg">
-          {props.confirm}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ToolButton(props: { label: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" onClick={props.onClick} className="grid size-8 flex-none place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg" aria-label={props.label} title={props.label}>
-      {props.children}
-    </button>
+      <FormField label={props.label}>{(ties) => <TextInput {...ties} name="path" defaultValue={props.initial} autoFocus mono />}</FormField>
+    </Dialog>
   );
 }
 
@@ -449,13 +422,13 @@ function Tree(props: TreeProps) {
 
   return (
     <>
-      <ul ref={tree} role="tree" aria-label={t("files.workspace")} onKeyDown={keyDown} className="min-h-16 px-2 py-2">
+      <ul ref={tree} role="tree" aria-label={t("files.workspace")} onKeyDown={keyDown} className="flex min-h-16 flex-col gap-px p-2">
         {entries.map((entry) => (
           <TreeItem key={entry.path} {...props} entry={entry} level={1} focusable={focusable} />
         ))}
       </ul>
-      {root.isSuccess && entries.length === 0 && <p className="-mt-12 px-4 pb-6 text-sm text-muted">{t("files.empty")}</p>}
-      {root.isError && <p className="-mt-12 px-4 pb-6 text-sm text-danger">{t("files.errors.sandbox_unavailable")}</p>}
+      {root.isSuccess && entries.length === 0 && <p className={`-mt-12 px-4 pb-6 ${NOTE}`}>{t("files.empty")}</p>}
+      {root.isError && <p className="-mt-12 px-4 pb-6 text-small text-danger">{t("files.errors.sandbox_unavailable")}</p>}
     </>
   );
 }
@@ -466,32 +439,32 @@ function TreeItem(props: TreeProps & { entry: WorkspaceEntry; level: number; foc
   const open = folder && props.expanded.has(entry.path);
   const children = useFolder(props.conversationId, entry.path, open);
   const shown = (children.data ?? []).filter((child) => props.hidden || !child.name.startsWith("."));
-  const chosen = props.selected === entry.path;
   const Icon = folder ? Folder : entry.type === "link" ? Link2 : File;
   // The row is the treeitem, named by its own content; the folder's group sits beside it.
   return (
-    <li role="none">
-      <div
-        role="treeitem"
-        aria-level={level}
-        aria-selected={chosen}
-        aria-expanded={folder ? open : undefined}
-        data-path={entry.path}
-        tabIndex={props.focusable === entry.path ? 0 : -1}
+    <li role="none" className="flex flex-col gap-px">
+      <TreeEntry
+        level={level}
+        path={entry.path}
+        selected={props.selected === entry.path}
+        expanded={folder ? open : undefined}
+        focusable={props.focusable === entry.path}
+        icon={<Icon aria-hidden="true" />}
+        end={
+          <>
+            {entry.type === "file" && <span>{formatSize(entry.size)}</span>}
+            <span>{new Date(entry.modified).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+          </>
+        }
         onClick={() => {
           props.onSelect(entry.path);
           if (folder) props.onToggle(entry.path);
         }}
-        className={`flex cursor-pointer items-center gap-1.5 rounded-lg py-1.5 pr-2 text-sm outline-none focus-visible:outline-2 focus-visible:outline-accent ${chosen ? "bg-accent-soft" : "hover:bg-hover"}`}
-        style={{ paddingLeft: `${(level - 1) * 16 + 6}px` }}
       >
-        <ChevronRight className={`size-3.5 flex-none text-muted transition-transform ${folder ? "" : "invisible"} ${open ? "rotate-90" : ""}`} aria-hidden="true" />
-        <Icon className="size-4 flex-none text-muted" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-        {entry.type === "file" && <span className="flex-none text-xs text-muted tabular-nums">{formatSize(entry.size)}</span>}
-      </div>
+        {entry.name}
+      </TreeEntry>
       {open && (
-        <ul role="group">
+        <ul role="group" className="flex flex-col gap-px">
           {shown.map((child) => (
             <TreeItem key={child.path} {...props} entry={child} level={level + 1} />
           ))}
@@ -522,20 +495,20 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
   const source = previewUrl(conversationId, entry.path);
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [entry.path, entry.modified]);
-  const height = large ? "h-full" : "h-[60vh]";
-  const tall = large ? "max-h-none" : "max-h-[60vh]";
+  const height = large ? "h-full" : "h-(--preview-limit)";
+  const tall = large ? "max-h-none" : "max-h-(--preview-limit)";
 
-  if (kind === "none" || broken || content.isError) return <p className="text-sm text-muted">{t("files.noPreview")}</p>;
-  if (kind === "image") return <img src={source} alt={entry.name} onError={() => setBroken(true)} className={`${tall} max-w-full rounded-lg border border-line bg-surface object-contain`} />;
-  if (kind === "pdf") return <iframe src={source} title={entry.name} className={`${height} w-full rounded-lg border border-line bg-surface`} />;
+  if (kind === "none" || broken || content.isError) return <p className={NOTE}>{t("files.noPreview")}</p>;
+  if (kind === "image") return <img src={source} alt={entry.name} onError={() => setBroken(true)} style={PREVIEW_LIMIT} className={`${tall} max-w-full rounded-sm border border-line bg-surface object-contain`} />;
+  if (kind === "pdf") return <iframe src={source} title={entry.name} style={PREVIEW_LIMIT} className={`${height} w-full rounded-sm border border-line bg-surface`} />;
   if (kind === "audio") return <audio src={source} controls className="w-full" aria-label={entry.name} onError={() => setBroken(true)} />;
-  if (kind === "video") return <video src={source} controls className={`${tall} w-full rounded-lg`} aria-label={entry.name} onError={() => setBroken(true)} />;
+  if (kind === "video") return <video src={source} controls style={PREVIEW_LIMIT} className={`${tall} w-full rounded-sm`} aria-label={entry.name} onError={() => setBroken(true)} />;
 
   const toggle = WITH_SOURCE.has(kind) && (
     <div className="mb-2 flex justify-end">
-      <button type="button" onClick={() => setShowSource(!showSource)} className="rounded-lg border border-line-strong px-2.5 py-1 text-[12.5px] font-semibold text-muted hover:bg-hover hover:text-fg">
+      <Button size="sm" onClick={() => setShowSource(!showSource)}>
         {showSource ? t("files.showPreview") : t("files.showSource")}
-      </button>
+      </Button>
     </div>
   );
   // A web page runs in a sandboxed frame, a stranger to the app with no network (ART-003, ADR-0086).
@@ -543,26 +516,27 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
     return (
       <div className={large ? "flex h-full flex-col" : ""}>
         {toggle}
-        <iframe src={pageUrl(conversationId, entry.path)} sandbox="allow-scripts" title={entry.name} className={`${height} w-full rounded-lg border border-line bg-white`} />
+        <iframe src={pageUrl(conversationId, entry.path)} sandbox="allow-scripts" title={entry.name} style={PREVIEW_LIMIT} className={`${height} w-full rounded-sm border border-line bg-white`} />
       </div>
     );
   }
-  if (content.data === undefined) return <p className="text-sm text-muted">{t("files.loading")}</p>;
+  if (content.data === undefined) return <p className={NOTE}>{t("files.loading")}</p>;
   const truncated = TEXT_PREVIEW_BYTES < entry.size;
-  const cut = truncated ? <p className="mt-2 text-xs text-muted">{t("files.cut")}</p> : null;
+  const cut = truncated ? <p className="mt-2 text-caption text-ink-2">{t("files.cut")}</p> : null;
   if (showSource || kind === "code") {
     const language = kind === "markdown" ? "markdown" : kind === "page" ? "html" : kind === "diagram" ? "text" : languageOf(entry.name);
     return (
-      <div className="text-[13px]">
+      <div>
         {toggle}
-        <CodeBlock code={content.data} language={language} />
+        {/* In the panel the code is already inside the preview's frame. */}
+        <CodeBlock code={content.data} language={language} flush={!large} />
         {cut}
       </div>
     );
   }
   if (kind === "markdown") {
     return (
-      <div className="text-[14.5px]">
+      <div>
         {toggle}
         <Markdown text={content.data} />
         {cut}
@@ -582,7 +556,7 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
     const [head, ...body] = rows;
     return (
       <div className="overflow-x-auto">
-        <table className="text-[12.5px]">
+        <table className="text-small">
           {head && (
             <thead>
               <tr>
@@ -612,7 +586,7 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
   }
   return (
     <>
-      <pre tabIndex={0} className="max-h-[60vh] overflow-auto rounded-lg bg-hover p-2.5 font-mono text-[12.5px] whitespace-pre-wrap break-words">
+      <pre tabIndex={0} style={PREVIEW_LIMIT} className="max-h-(--preview-limit) overflow-auto rounded-sm bg-hover p-3 font-mono text-small whitespace-pre-wrap break-words">
         {content.data}
       </pre>
       {cut}
@@ -641,11 +615,11 @@ function Diagram({ text, name, large }: { text: string; name: string; large: boo
       current = false;
     };
   }, [text, id]);
-  if (failed) return <p className="text-sm text-muted">{t("files.diagramFailed")}</p>;
-  if (drawn === null) return <p className="text-sm text-muted">{t("files.loading")}</p>;
+  if (failed) return <p className={NOTE}>{t("files.diagramFailed")}</p>;
+  if (drawn === null) return <p className={NOTE}>{t("files.loading")}</p>;
   // Mermaid sizes its drawing to its container: as an image it takes the panel's width, or fits the full view.
-  const size = large ? "h-[calc(100dvh-10rem)] w-full" : "h-auto max-h-[60vh] w-full";
-  return <img src={drawn} alt={name} className={`${size} rounded-lg border border-line bg-surface object-contain p-2`} />;
+  const size = large ? "h-(--preview-limit) w-full" : "h-auto max-h-(--preview-limit) w-full";
+  return <img src={drawn} alt={name} style={large ? DIAGRAM_LIMIT : PREVIEW_LIMIT} className={`${size} rounded-sm border border-line bg-surface object-contain p-2`} />;
 }
 
 /** The first rows of a CSV text, with quoted fields. */

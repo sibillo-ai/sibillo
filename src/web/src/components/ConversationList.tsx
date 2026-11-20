@@ -1,13 +1,13 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Folder as FolderIcon, FolderPlus, Search } from "lucide-react";
+import { ChevronRight, Folder as FolderIcon, FolderPlus, MessageSquare } from "lucide-react";
 import { createContext, type DragEvent, type FormEvent, useContext, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink } from "react-router";
 
 import { api, unwrap, type Conversation, type Folder, type ListEntry } from "../api/client";
 import { useRunning } from "../changes";
 import { CONVERSATIONS, createFolder, updateConversation, updateFolder, useConversationList } from "../conversations";
+import { Badge, Button, cx, Dialog, EmptyState, FormField, IconButton, NavItem, NavLabel, SearchInput, TextInput } from "../ui";
+import { DROP_TARGET, NavEntry } from "../ui/Sidebar";
 import { ConversationMenu } from "./ConversationMenu";
 
 type Move = Pick<Conversation, "folder_id" | "pinned">;
@@ -46,8 +46,6 @@ function useDropTarget(move: Partial<Move>) {
   };
 }
 
-const DROP = "rounded-[9px] outline-2 -outline-offset-2 outline-accent";
-
 /** Folders and conversations, pinned first, then newest; a search over them all (CNV-007 to CNV-009). */
 export function ConversationList() {
   const { t } = useTranslation();
@@ -75,28 +73,21 @@ export function ConversationList() {
 
   return (
     <>
-      <div className="mt-1 flex items-center gap-1 px-1">
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] bg-hover px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-accent">
-          <Search className="size-4 flex-none text-muted" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label={t("shell.search")}
-            placeholder={t("shell.searchPlaceholder")}
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
-          />
-        </label>
-        <button type="button" onClick={() => setNaming(true)} className="grid size-9 flex-none place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg" aria-label={t("shell.newFolder")} title={t("shell.newFolder")}>
-          <FolderPlus className="size-[18px]" aria-hidden="true" />
-        </button>
+      <div className="flex flex-none items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <SearchInput label={t("shell.search")} placeholder={t("shell.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} />
+        </div>
+        <IconButton label={t("shell.newFolder")} onClick={() => setNaming(true)}>
+          <FolderPlus aria-hidden="true" />
+        </IconButton>
       </div>
-      <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
+      {/* Wider than the sidebar's padding by a step, so that the outline of a focused entry is not cut. */}
+      <div className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
         {query.trim() ? (
           <SearchResults query={query.trim()} />
         ) : (
           <Dragging.Provider value={{ dragged, start: setDragged, drop: (move) => void drop(move) }}>
-            {entries.length === 0 && list.isSuccess && <p className="px-2.5 py-2 text-sm text-muted">{t("shell.empty")}</p>}
+            {entries.length === 0 && list.isSuccess && <EmptyState icon={<MessageSquare aria-hidden="true" />} title={t("shell.empty")} />}
             {pinned.length > 0 && <Group title={t("shell.pinned")} entries={pinned} folders={folders} move={{ pinned: true, folder_id: null }} />}
             {pinned.length === 0 && dragged !== null && <PinHere />}
             {others.length > 0 && <Group title={pinned.length > 0 ? t("shell.recent") : null} entries={others} folders={folders} move={{ pinned: false, folder_id: null }} />}
@@ -113,7 +104,7 @@ function PinHere() {
   const { t } = useTranslation();
   const target = useDropTarget({ pinned: true, folder_id: null });
   return (
-    <div {...target.props} className={`mx-1 mt-2 rounded-[9px] border border-dashed border-line-strong px-2.5 py-2 text-center text-[13px] text-muted ${target.over ? DROP : ""}`}>
+    <div {...target.props} className={cx("flex-none rounded-sm border border-dashed border-line-strong p-2 text-center text-small text-ink-2", target.over && DROP_TARGET)}>
       {t("shell.dropToPin")}
     </div>
   );
@@ -123,13 +114,9 @@ function Group({ title, entries, folders, move }: { title: string | null; entrie
   const heading = useId();
   const target = useDropTarget(move);
   return (
-    <section aria-labelledby={title ? heading : undefined} {...target.props} className={target.over ? DROP : ""}>
-      {title && (
-        <h2 id={heading} className="mx-2.5 mt-3.5 mb-1 text-xs font-semibold text-faint">
-          {title}
-        </h2>
-      )}
-      <ul className={title ? "" : "mt-2"}>
+    <section aria-labelledby={title ? heading : undefined} {...target.props} className={cx("flex-none rounded-sm", target.over && DROP_TARGET)}>
+      {title && <NavLabel id={heading}>{title}</NavLabel>}
+      <ul className="flex flex-col gap-px">
         {entries.map((entry) =>
           entry.kind === "folder" ? (
             <FolderItem key={entry.folder.id} folder={entry.folder} conversations={entry.conversations} folders={folders} />
@@ -142,31 +129,26 @@ function Group({ title, entries, folders, move }: { title: string | null; entrie
   );
 }
 
-function ConversationItem({ conversation, folders, nested = false }: { conversation: Conversation; folders: Folder[]; nested?: boolean }) {
+function ConversationItem({ conversation, folders }: { conversation: Conversation; folders: Folder[] }) {
   const { t } = useTranslation();
   const running = useRunning();
   const { dragged, start } = useContext(Dragging);
   return (
-    <li
+    <NavEntry
+      to={`/c/${conversation.id}`}
+      title={conversation.title || t("shell.untitled")}
+      // A conversation a task started says which (UX-031).
+      detail={conversation.task ? t("shell.byTask", { name: conversation.task.name }) : undefined}
+      end={running.has(conversation.id) ? <Badge tone="accent">{t("shell.running")}</Badge> : undefined}
+      menu={<ConversationMenu conversation={conversation} folders={folders} />}
+      dimmed={dragged?.id === conversation.id}
       draggable
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
         start(conversation);
       }}
       onDragEnd={() => start(null)}
-      className={`group flex items-center rounded-[9px] hover:bg-hover ${dragged?.id === conversation.id ? "opacity-50" : ""}`}
-    >
-      <NavLink
-        to={`/c/${conversation.id}`}
-        className={({ isActive }) => `min-w-0 flex-1 truncate rounded-[9px] py-[7px] pr-2.5 text-sm ${nested ? "pl-8" : "pl-2.5"} ${isActive ? "bg-hover font-semibold" : ""}`}
-      >
-        {conversation.title || t("shell.untitled")}
-        {/* A conversation a task started says which (UX-031). */}
-        {conversation.task && <span className="block truncate text-[12px] font-normal text-muted">{t("shell.byTask", { name: conversation.task.name })}</span>}
-        {running.has(conversation.id) && <span className="block text-[12px] font-semibold text-accent">{t("shell.running")}</span>}
-      </NavLink>
-      <ConversationMenu conversation={conversation} folders={folders} />
-    </li>
+    />
   );
 }
 
@@ -180,16 +162,24 @@ function FolderItem({ folder, conversations, folders }: { folder: Folder; conver
     await queries.invalidateQueries({ queryKey: CONVERSATIONS });
   }
   return (
-    <li {...target.props}>
-      <button type="button" onClick={() => void toggle()} aria-expanded={expanded} className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-[7px] text-left text-sm font-medium hover:bg-hover ${target.over ? DROP : ""}`}>
-        <ChevronRight className={`size-4 flex-none text-muted transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden="true" />
-        <FolderIcon className="size-4 flex-none text-muted" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-      </button>
+    <li {...target.props} className={cx("rounded-sm", target.over && DROP_TARGET)}>
+      <NavItem
+        onClick={() => void toggle()}
+        aria-expanded={expanded}
+        icon={
+          <>
+            <ChevronRight className={cx("transition-transform duration-120", expanded && "rotate-90")} aria-hidden="true" />
+            <FolderIcon aria-hidden="true" />
+          </>
+        }
+        end={conversations.length > 0 ? conversations.length : undefined}
+      >
+        {folder.name}
+      </NavItem>
       {expanded && (
-        <ul aria-label={folder.name}>
+        <ul aria-label={folder.name} className="mt-px flex flex-col gap-px pl-6">
           {conversations.map((conversation) => (
-            <ConversationItem key={conversation.id} conversation={conversation} folders={folders} nested />
+            <ConversationItem key={conversation.id} conversation={conversation} folders={folders} />
           ))}
         </ul>
       )}
@@ -203,16 +193,11 @@ function SearchResults({ query }: { query: string }) {
     queryKey: ["search", query],
     queryFn: async () => unwrap(await api.GET("/search", { params: { query: { q: query } } })).items,
   });
-  if (results.data?.length === 0) return <p className="px-2.5 py-2 text-sm text-muted">{t("shell.noResults")}</p>;
+  if (results.data?.length === 0) return <p className="p-2 text-small text-ink-2">{t("shell.noResults")}</p>;
   return (
-    <ul aria-label={t("shell.results")} className="mt-1 flex flex-col gap-0.5">
+    <ul aria-label={t("shell.results")} className="flex flex-col gap-px">
       {results.data?.map((result) => (
-        <li key={result.conversation_id}>
-          <NavLink to={`/c/${result.conversation_id}`} className="block rounded-[9px] px-2.5 py-2 hover:bg-hover">
-            <span className="block truncate text-sm font-semibold">{result.title || t("shell.untitled")}</span>
-            <span className="line-clamp-2 text-[12.5px] text-muted">{result.snippet}</span>
-          </NavLink>
-        </li>
+        <NavEntry key={result.conversation_id} to={`/c/${result.conversation_id}`} title={result.title || t("shell.untitled")} detail={result.snippet} detailLines={2} />
       ))}
     </ul>
   );
@@ -230,26 +215,24 @@ function NewFolder({ open, onClose }: { open: boolean; onClose: () => void }) {
     onClose();
   }
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className="rise fixed top-1/2 left-1/2 z-50 w-[min(92vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] text-fg shadow-soft">
-          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-            <Dialog.Title className="text-lg font-bold">{t("shell.newFolder")}</Dialog.Title>
-            <Dialog.Description className="sr-only">{t("shell.folderName")}</Dialog.Description>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[13.5px] font-semibold">{t("shell.folderName")}</span>
-              <input name="name" required maxLength={100} autoFocus className="h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent" />
-            </label>
-            <div className="flex justify-end gap-2">
-              <Dialog.Close className="h-[38px] rounded-[10px] border border-line-strong px-4 text-sm font-semibold hover:bg-hover">{t("conversationMenu.cancel")}</Dialog.Close>
-              <button type="submit" className="h-[38px] rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg">
-                {t("shell.createFolder")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      open={open}
+      size="sm"
+      onClose={onClose}
+      title={t("shell.newFolder")}
+      description={t("shell.folderName")}
+      descriptionHidden
+      onSubmit={(event) => void submit(event)}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("conversationMenu.cancel")}</Button>
+          <Button type="submit" variant="primary">
+            {t("shell.createFolder")}
+          </Button>
+        </>
+      }
+    >
+      <FormField label={t("shell.folderName")}>{(ties) => <TextInput {...ties} name="name" required maxLength={100} autoFocus />}</FormField>
+    </Dialog>
   );
 }
