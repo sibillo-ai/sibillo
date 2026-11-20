@@ -119,7 +119,7 @@ untrusted content. Daily use showed where this still falls short:
    one rule more drops everything from a bridge that is not in a set of the
    table, the bridges whose conversation has internet access. Giving
    internet access adds the bridge's name to the set, withdrawing it removes
-   it. Which bridge a packet enters from is decided by the host, so nothing
+   it. Which bridge a packet enters from is decided outside the sandbox, so nothing
    a sandbox does to its own network configuration changes it. The driver
    removes a sandbox's bridge with the sandbox.
 
@@ -144,7 +144,9 @@ untrusted content. Daily use showed where this still falls short:
    table starts with an empty set, so every sandbox is without network until
    the driver says again; a driver that cannot reach the guard treats the
    egress table as missing (SBX-015). This channel was not part of the
-   spike. This amends ADR-0021 points 1 and 3.
+   spike. This amends ADR-0021 points 1 and 3. ADR-0114 moves the bridges
+   and the table from the host into the sandbox engine; the design is the
+   same there, and its spike tried it again.
 
 7. **Tasks.** A task grant of internet access is a third kind of grant,
    beside fixed and open grants: it gives internet access to the runs of the

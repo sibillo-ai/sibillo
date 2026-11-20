@@ -23,7 +23,8 @@ conversation MUST run only in that conversation's sandbox (ADR-0078).
 
 Sandboxes MUST run under the gVisor isolation runtime (`runsc`), which is
 stronger than a plain container and does not require hardware virtualization
-(ADR-0023).
+(ADR-0023). gVisor MUST come with the sandbox engine (SBX-025), not be
+installed on the host (ADR-0114).
 
 ## SBX-003: Fail closed without isolation
 
@@ -109,8 +110,8 @@ explicitly placed in their own workspace.
 - **Verification:** design
 
 The sandbox driver MUST be the only component with access to the container
-runtime. The control plane MUST NOT mount the container runtime socket and MUST interact
-with sandboxes only through the sandbox driver's authenticated API.
+runtime, which is the sandbox engine's (SBX-025). The control plane MUST NOT mount the container runtime socket and MUST interact
+with sandboxes only through the sandbox driver's authenticated API (ADR-0114).
 
 ## SBX-010: Persistent workspace
 
@@ -209,10 +210,11 @@ existed before these limits MUST keep their files (ADR-0098).
 - **Phase:** 0
 - **Verification:** integration
 
-The sandbox driver MUST refuse to start sandboxes when the installed gVisor
-release is older than the minimum release documented by the project, and MUST
-tell the instance admin how to install a supported release from gVisor's
-official repository.
+The sandbox engine's image (SBX-025) MUST include one gVisor release from
+gVisor's official repository, pinned and verified by checksum when the image
+is built. The sandbox driver MUST refuse to start sandboxes when the gVisor
+release it finds is older than the minimum release documented by the
+project, and MUST tell the instance admin so (ADR-0114).
 
 ## SBX-018: Ephemeral sandboxes
 
@@ -339,3 +341,32 @@ administration privileges attached like a sandbox (ADR-0113).
 
 Rationale: with a sandbox that always reaches the internet, a prompt is the
 only thing between injected instructions and the user's files (T-08, T-46).
+
+## SBX-025: The sandbox engine
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** design, integration, security
+
+Sandboxes, their sandbox bridges, their workspaces and the disk helper MUST
+be containers, networks and volumes of the sandbox engine: a container that
+runs a container runtime of its own with gVisor in it, so that nothing is
+installed or configured on the host (OPS-001). The engine's container
+runtime MUST listen only on a Unix socket shared with the sandbox driver
+alone, never on a network address, and no component MUST mount the host's
+container runtime socket (SBX-009). The sandbox engine MUST be the only
+privileged container of the instance, MUST run no project code beyond
+starting its container runtime, and MUST NOT start a sandbox by itself. The
+egress table MUST be installed in the sandbox engine's network namespace, by
+a network guard that shares that namespace with `NET_ADMIN` and no other
+privilege, and MUST NOT add anything to the host's firewall. A sandbox MUST
+NOT be able to reach the sandbox engine, its container runtime or the
+network guard over the network (SBX-005). After a restart of the sandbox
+engine, no sandbox MUST run before the egress table is verified (SBX-015).
+Security tests MUST verify from inside a running sandbox that the engine and
+its container runtime are unreachable (ADR-0114).
+
+Rationale: an instance that needs gVisor installed on its host, and writes
+into the host's firewall, is harder to install, to keep the same on every
+host and to remove (T-47).

@@ -23,7 +23,8 @@ We will build the sandbox driver as a separate service, `sandboxd`:
 
 1. **Sole holder of container runtime access.** It is the only container
    with access to the Docker API. The control plane never mounts the Docker
-   socket (SBX-009).
+   socket (SBX-009). Amended by ADR-0114: the Docker API is the sandbox
+   engine's, and nothing mounts the host's Docker socket.
 2. **Internal only.** It listens only on an internal network shared with the
    control plane, is never published on a host port (OPS-003), and
    authenticates every request with a secret shared with the control plane

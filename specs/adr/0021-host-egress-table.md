@@ -40,7 +40,10 @@ We will enforce sandbox egress **in the host kernel**, with a dedicated
    of its own, and the table matches them all by a prefix of their names.
 2. A **network guard** container installs the table `inet sibillo` on the
    host. It runs only project code, with host networking and the
-   `NET_ADMIN` capability, and no other privileges or mounts.
+   `NET_ADMIN` capability, and no other privileges or mounts. Amended by
+   ADR-0114: the table is installed in the sandbox engine's network
+   namespace, which the network guard shares, and not in the host's
+   firewall.
 3. The table matches **only traffic entering from the sandbox bridge**:
    - forwarded traffic to every range of SBX-005 is dropped;
    - all IPv6 traffic from the bridge is dropped (SBX-013);

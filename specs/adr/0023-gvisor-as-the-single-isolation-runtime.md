@@ -40,6 +40,8 @@ We will use **gVisor (`runsc`) as the only isolation runtime** for sandboxes.
 - gVisor must come from the **project's official repository**: distribution
   packages may be years old (Debian 12 ships a 2022 snapshot). The sandbox
   driver refuses to start below a documented minimum release (SBX-017).
+  Amended by ADR-0114: gVisor comes in the sandbox engine's image, and is
+  not installed on the host.
 - The provider interface of ADR-0022 remains an internal design boundary, with
   a single implementation.
 - Egress enforcement follows ADR-0021, because gVisor's networking bypasses

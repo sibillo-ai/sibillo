@@ -10,11 +10,13 @@ whenever a requirement in the security-relevant areas changes.
   admin, in containers, with Docker Engine.
 - **The instance admin is trusted** (ADR-0011). They can read all data on
   the server; protecting users from the admin is out of scope.
-- The host kernel and the isolation runtime (gVisor) are kept up to date by
-  the instance admin.
-- Sandbox egress is enforced in the host kernel by a dedicated `nftables`
-  table maintained by the network guard (ADR-0021). The host may be a cloud VM
-  without hardware virtualization (OPS-009).
+- The host kernel is kept up to date by the instance admin; the isolation
+  runtime (gVisor) comes with the sandbox engine and is updated with Sibillo
+  (ADR-0114).
+- Sandbox egress is enforced in the host kernel, outside the sandboxes, by a
+  dedicated `nftables` table in the sandbox engine's network namespace,
+  maintained by the network guard (ADR-0021, ADR-0114). The host may be a
+  cloud VM without hardware virtualization (OPS-009).
 - Runs are checkpointed by the durable execution engine in its own schema,
   outside row-level security (ADR-0034); access to it is confined by TEN-009.
 - Models — local or remote — are **not trusted to behave**: any model can be
@@ -113,6 +115,7 @@ beyond keeping them configurable and updatable.
 | T-44 | Injected instructions make the assistant propose a task, so that they run again later, unattended, with standing grants | X1 | TSK-005, TSK-006 |
 | T-45 | Injected instructions read in one conversation reach another, unseen, when the assistant searches or reads the user's earlier conversations | X1 | AGT-003, AGT-004, AGT-032, AGT-033 |
 | T-46 | Injected instructions make the assistant ask for internet access, again and again or at a moment the user expects it, so that what the conversation holds can then be sent out | X1 | AGT-034, SBX-024, UX-022, UX-041 |
+| T-47 | Code in a sandbox reaches the sandbox engine's container runtime or the network guard over the network, and takes over the engine, which is privileged | X3 | SBX-005, SBX-015, SBX-025 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |
@@ -192,3 +195,8 @@ Prompts are never relied upon as a security boundary.
   (microVMs) would isolate more strongly, but requires hardware virtualization,
   which cloud VMs often lack; this trade-off is accepted (ADR-0023). Egress
   enforcement does not depend on gVisor's integrity (ADR-0021).
+- **A privileged sandbox engine.** The container that runs the sandboxes is
+  privileged, which is root on the host in effect: an escape from gVisor, or
+  a compromised sandbox driver, reaches the host as it did when sandboxes
+  were containers of the host's Docker. Only the driver can ask the engine
+  anything, and no sandbox can reach it (SBX-009, SBX-025, ADR-0114).

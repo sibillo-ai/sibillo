@@ -12,6 +12,9 @@ ADR-0007, ADR-0018.
 
 The system MUST be deployable on a single host with Docker Compose, with
 every component running in a container, from a documented configuration file.
+The host MUST need Docker Engine with Compose and nothing else: no other
+software installed, and no change to its Docker configuration or to its
+firewall (SBX-025, ADR-0114).
 
 ## OPS-002: Supported platforms are checked
 
@@ -20,10 +23,11 @@ every component running in a container, from a documented configuration file.
 - **Phase:** 0
 - **Verification:** integration
 
-The supported platforms are Linux on x86_64 and arm64 with Docker Engine and
-gVisor. At startup the system MUST check the platform, the availability of the
+The supported platforms are Linux on x86_64 and arm64 with Docker Engine,
+cgroup v2 and privileged containers allowed. At startup the system MUST
+check the platform, the availability of the
 isolation runtime and the egress rules, and MUST report unsupported
-configurations clearly.
+configurations clearly, such as rootless Docker (ADR-0114).
 
 ## OPS-003: Minimal exposed surface
 
