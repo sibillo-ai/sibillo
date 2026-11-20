@@ -820,8 +820,9 @@ The triggers of a task (TSK-003, TSK-007, TSK-008, ADR-0106).
 | `tenant_id`, `owner_id` | uuid | not null |
 | `task_id` | uuid | not null; (`tenant_id`, `owner_id`, `task_id`) references `tasks` on delete cascade |
 | `kind` | text | not null; `schedule`, `webhook` or `mcp_event` |
-| `schedule` | text | for `schedule`, a cron expression of five fields; else null |
-| `next_fire_at` | timestamptz | for `schedule`, its next firing time; indexed; else null |
+| `schedule_start` | timestamp | for `schedule`, its start, a date and time without time zone, read in the task's time zone (ADR-0109); else null |
+| `recurrence` | text[] | for `schedule`, its lines of RFC 5545 recurrence, at most 5; empty for once; else null |
+| `next_fire_at` | timestamptz | for `schedule`, its next firing time, null once its last occurrence passed; indexed; else null |
 | `token_hash` | bytea | for `webhook`, the SHA-256 of its token; unique; else null |
 | `server_id` | uuid | for `mcp_event`, the server; (`tenant_id`, `server_id`) references `mcp_servers` on delete cascade; else null |
 | `server_generation` | uuid | for `mcp_event`, the server's `generation` when the subscription was made; a subscription of another generation is made again, with the owner's credential of the new one |

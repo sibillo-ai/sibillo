@@ -2515,9 +2515,10 @@ paths:
         TSK-005: a grant of a tool that cannot be granted answers
         `task.grant_not_allowed`, and grants that complete the lethal
         trifecta answer `task.lethal_trifecta`, with the check in
-        `grant_check`. A schedule that would fire more often than once every
-        15 minutes, an unknown time zone or event type, or a model, tool or
-        server the user cannot use answer `request.validation_failed`. Each
+        `grant_check`. A schedule that does not parse, would never fire, or
+        would fire more often than once every 15 minutes, an unknown time
+        zone or event type, or a model, tool or server the user cannot use
+        answer `request.validation_failed`. Each
         webhook trigger's `webhook_path` is in this answer only. A user has
         at most 50 tasks (ADR-0106).
       x-requirements: [TSK-001, TSK-003, TSK-004, TSK-005, TSK-007, TSK-008, UX-031]
@@ -5217,18 +5218,29 @@ components:
 
     TaskTriggerInput:
       description: |
-        A trigger to add (ADR-0106): a schedule, a cron expression of five
-        fields evaluated in the task's time zone, firing at most once every
-        15 minutes (TSK-003); a webhook trigger (TSK-007); or an accepted
+        A trigger to add (ADR-0106): a schedule, a `start` in the task's time
+        zone and up to 5 lines of iCalendar `recurrence` (RFC 5545), each
+        beginning `RRULE:`, `RDATE` or `EXDATE`, as an event of Google
+        Calendar's API holds them, firing at most once every 15 minutes, and
+        once at its start without recurrence (TSK-003, ADR-0109); a webhook
+        trigger (TSK-007); or an accepted
         event type of a remote MCP server the user may use, with the
         subscription's arguments, valid against its input schema (TSK-008).
       oneOf:
         - type: object
-          required: [kind, schedule]
+          required: [kind, start]
           additionalProperties: false
           properties:
             kind: { const: schedule }
-            schedule: { type: string, minLength: 9, maxLength: 100 }
+            start:
+              type: string
+              description: A date and time without offset, in the task's time zone, such as `2026-12-07T07:00:00`.
+              pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?$"
+            recurrence:
+              type: array
+              description: Lines of RFC 5545, such as `RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2`; none for once.
+              maxItems: 5
+              items: { type: string, minLength: 6, maxLength: 500 }
         - type: object
           required: [kind]
           additionalProperties: false
@@ -5252,12 +5264,16 @@ components:
         everywhere else. `delivery` is how the worker receives an MCP
         event trigger's events: by webhook when the instance has a
         `SIBILLO_PUBLIC_ORIGIN` and the server offers it, else by polling.
-        `problem` says why an event trigger receives no events.
-      required: [id, kind, schedule, next_fire_at, webhook_path, server_id, event, arguments, delivery, problem, created_at]
+        `problem` says why an event trigger receives no events. A schedule's
+        `next_fire_at` is `null` once its last occurrence passed (ADR-0109).
+      required: [id, kind, start, recurrence, next_fire_at, webhook_path, server_id, event, arguments, delivery, problem, created_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         kind: { type: string, enum: [schedule, webhook, mcp_event] }
-        schedule: { type: [string, "null"] }
+        start: { type: [string, "null"], description: "A schedule's start, in the task's time zone." }
+        recurrence:
+          description: A schedule's lines of recurrence; `null` for other triggers.
+          oneOf: [{ type: array, items: { type: string } }, { type: "null" }]
         next_fire_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
         webhook_path: { type: [string, "null"] }
         server_id: { oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }] }
