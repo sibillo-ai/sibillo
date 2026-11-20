@@ -673,7 +673,7 @@ hold (UX-017).
 
 ## UX-038: Nothing is blank
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
