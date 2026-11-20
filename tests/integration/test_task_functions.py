@@ -33,8 +33,10 @@ def _task(conn: psycopg.Connection, user: User, *, paused: bool = False) -> uuid
 def _schedule(conn: psycopg.Connection, user: User, task_id: uuid.UUID, *, due: bool) -> uuid.UUID:
     trigger_id = uuid7()
     conn.execute(
-        "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule, next_fire_at, created_at)"
-        " VALUES (%s, %s, %s, %s, 'schedule', '0 7 * * *', now() + CASE WHEN %s THEN interval '-1 minute'"
+        "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule_start, recurrence, next_fire_at,"
+        " created_at)"
+        " VALUES (%s, %s, %s, %s, 'schedule', '2026-01-01 07:00', '{RRULE:FREQ=DAILY}',"
+        " now() + CASE WHEN %s THEN interval '-1 minute'"
         " ELSE interval '1 day' END, now())",
         (trigger_id, user.tenant_id, user.id, task_id, due),
     )

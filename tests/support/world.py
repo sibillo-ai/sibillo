@@ -240,8 +240,10 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         (grant_id, tenant_id, user_id, task_id),
     )
     conn.execute(
-        "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule, next_fire_at, created_at)"
-        " VALUES (%s, %s, %s, %s, 'schedule', '0 7 * * *', now() + interval '1 day', now())",
+        "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule_start, recurrence, next_fire_at,"
+        " created_at)"
+        " VALUES (%s, %s, %s, %s, 'schedule', '2026-01-01 07:00', '{RRULE:FREQ=DAILY}',"
+        " now() + interval '1 day', now())",
         (trigger_id, tenant_id, user_id, task_id),
     )
     conn.execute(
