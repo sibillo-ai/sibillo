@@ -284,6 +284,8 @@ TABLES = [
       speech_voice text CHECK (speech_voice <> ''),
       -- The context window of a server's models; OpenRouter lists each model's (ADR-0073).
       context_window integer CHECK (context_window >= 512),
+      -- The models of a server that a tenant admin says accept images (MOD-020, ADR-0110).
+      image_models text[] NOT NULL DEFAULT '{}' CHECK (cardinality(image_models) <= 200),
       models_refreshed_at timestamptz,
       -- The server behind a connection of kind `openai`, when recognized (MOD-019, ADR-0093).
       server_product text CHECK (server_product IN ('ollama')),
@@ -313,6 +315,8 @@ TABLES = [
       context_window integer CHECK (context_window >= 1),
       tools boolean,
       reasoning boolean,
+      -- Whether the model accepts images, when its provider says (MOD-020, ADR-0110).
+      images boolean,
       -- What the model does, and a speech model's voices (ADR-0088).
       kind text NOT NULL DEFAULT 'chat' CHECK (kind IN ('chat', 'transcription', 'speech')),
       voices text[],

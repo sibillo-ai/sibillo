@@ -98,6 +98,7 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "find_files": _READS,
     "search_files": _READS,
     "file_info": _READS,
+    "view_image": _READS,
     "offer_download": _WRITES,
     "ask_user_question": _OWN,
     "write_plan": _OWN,

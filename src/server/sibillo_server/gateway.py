@@ -51,6 +51,14 @@ from sibillo_server.tool_policy import Allowances, Permissions
 logger = logging.getLogger(__name__)
 
 MODEL_PREFIX = "sibillo"
+# Whether a model `m` of a connection `c` accepts images: as its provider says, or, for a server Sibillo does
+# not recognize, true for the models a tenant admin named (MOD-020, ADR-0110).
+IMAGES = (
+    "CASE WHEN c.kind = 'openai' AND c.server_product IS NULL AND m.model = ANY(c.image_models) THEN true"
+    " ELSE m.images END"
+)
+# The tool that looks at an image, offered only to a model that accepts images (CNV-020, ADR-0110).
+VIEW_IMAGE = "view_image"
 DEFAULT_CONTEXT_WINDOW = 8192
 # The largest window a server may report (specs/contracts/database.md).
 MAX_CONTEXT_WINDOW = 10_000_000
@@ -101,6 +109,8 @@ class RunDeps:
     # Whether the model can reason, `None` when unknown, and how much it should (CNV-013, ADR-0081).
     reasons: bool | None = None
     reasoning: str = "on"
+    # Whether the model is known to accept images: only then is it sent any (MOD-020, ADR-0110).
+    images: bool = False
     # The tools the user switched off, by the names the model knows them by (CNV-013, ADR-0087).
     disabled_tools: frozenset[str] = frozenset()
     # The instructions of the run: null base instructions are the built-in ones (CNV-014).
@@ -168,14 +178,30 @@ def _ledger_id(run_id: uuid.UUID, request_number: int) -> uuid.UUID:
     return uuid.uuid5(run_id, f"model-request-{request_number}")
 
 
+async def accepts_images(deps: RunDeps, connection_id: uuid.UUID, model: str) -> bool:
+    """Whether a model of a connection is known to accept images (MOD-020, ADR-0110)."""
+    async with transaction(deps.engine, deps.identity) as connection:
+        found = (
+            await connection.execute(
+                text(
+                    f"SELECT {IMAGES} FROM connections c JOIN connection_models m ON m.connection_id = c.id"  # noqa: S608
+                    " WHERE c.id = :id AND m.model = :model"
+                ),
+                {"id": connection_id, "model": model},
+            )
+        ).scalar_one_or_none()
+    return found is True
+
+
 async def connection_model(deps: RunDeps, connection_id: uuid.UUID, model: str) -> Model:
     """The model a connection offers, ready to request, with the run's facts about it in `deps`."""
     async with transaction(deps.engine, deps.identity) as connection:
         row = (
             await connection.execute(
                 text(
-                    "SELECT c.id, c.kind, c.base_url, c.location, c.api_key_ciphertext, c.private_network, m.tools,"
-                    " m.reasoning, c.server_product,"
+                    "SELECT c.id, c.kind, c.base_url, c.location, c.api_key_ciphertext,"  # noqa: S608
+                    " c.private_network, m.tools,"
+                    f" m.reasoning, c.server_product, {IMAGES} AS images,"
                     " coalesce(c.context_window, m.context_window) AS context_window,"
                     " s.context_window AS served_context_window"
                     " FROM connections c JOIN connection_models m ON m.connection_id = c.id"
@@ -195,6 +221,7 @@ async def connection_model(deps: RunDeps, connection_id: uuid.UUID, model: str) 
     # A model known not to call tools runs without them; an unknown one is given them (MOD-014).
     deps.tools = row.tools is not False
     deps.reasons = row.reasoning
+    deps.images = row.images is True
     deps.location = row.location
     # Never a request the user's data egress policy refuses (MOD-003, ADR-0091).
     await check(deps.engine, deps.identity, row.location)
@@ -268,6 +295,9 @@ def _turn_start(messages: list[ModelMessage], limit: int) -> int:
 
 @dataclass
 class Gateway(AbstractCapability[RunDeps]):
+    # Puts each image in the place of its reference; set by the worker, since the images depend on this module.
+    show_images: Callable[[RunDeps, list[ModelMessage]], Awaitable[list[ModelMessage]]] | None = None
+
     async def resolve_model_id(self, ctx: ModelResolutionContext[RunDeps], *, model_id: str) -> Model | None:
         prefix, _, rest = model_id.partition(":")
         if prefix != MODEL_PREFIX:
@@ -281,7 +311,8 @@ class Gateway(AbstractCapability[RunDeps]):
     async def prepare_tools(self, ctx: RunContext[RunDeps], tool_defs: list[ToolDefinition]) -> list[ToolDefinition]:
         if not ctx.deps.tools:
             return []
-        return [tool for tool in tool_defs if tool.name not in ctx.deps.disabled_tools]
+        off = ctx.deps.disabled_tools if ctx.deps.images else ctx.deps.disabled_tools | {VIEW_IMAGE}
+        return [tool for tool in tool_defs if tool.name not in off]
 
     async def before_model_request(
         self, ctx: RunContext[RunDeps], request_context: ModelRequestContext
@@ -291,6 +322,9 @@ class Gateway(AbstractCapability[RunDeps]):
         # Checked before every request, so that a policy changed during the run applies (MOD-003, ADR-0091).
         await check(ctx.deps.engine, ctx.deps.identity, ctx.deps.location)
         request_context.messages = await _compacted(ctx, list(request_context.messages))
+        if self.show_images is not None:
+            # After compaction: the images of the turns it kept, read from the workspace (CNV-020, ADR-0110).
+            request_context.messages = await self.show_images(ctx.deps, list(request_context.messages))
         return request_context
 
     async def after_model_request(

@@ -218,12 +218,25 @@ type ApiKey = Annotated[str, Field(min_length=1, max_length=1000)]
 type ContextWindow = Annotated[int, Field(ge=512, le=10_000_000)]
 
 
+def _no_repeats(names: list[str]) -> list[str]:
+    if len(set(names)) != len(names):
+        raise ValueError("a model is named twice")
+    return names
+
+
+# The models of a server that a tenant admin says accept images (MOD-020, ADR-0110).
+type ImageModels = Annotated[
+    list[Annotated[str, Field(min_length=1, max_length=200)]], Field(max_length=200), AfterValidator(_no_repeats)
+]
+
+
 class CreateConnectionRequest(Request):
     name: Annotated[str, Field(min_length=1, max_length=100)]
     kind: ConnectionKind
     base_url: Address | None = None
     location: Location | None = None
     context_window: ContextWindow | None = None
+    image_models: ImageModels | None = None
     api_key: ApiKey | None = None
 
 
@@ -234,6 +247,7 @@ class UpdateConnectionRequest(Request):
     base_url: Address | None = None
     location: Location | None = None
     context_window: ContextWindow | None = None
+    image_models: ImageModels | None = None
     api_key: ApiKey | None = None
 
 
@@ -254,6 +268,7 @@ class Connection(Response):
     has_api_key: bool
     private_network: bool
     context_window: int | None
+    image_models: list[str]
     model_count: int
     models_refreshed_at: Timestamp | None
     created_at: Timestamp
@@ -319,6 +334,8 @@ class ModelOption(Response):
     served_context_window: int | None
     tools: bool | None
     reasoning: bool | None
+    # Whether the model accepts images; only a model with true is sent any (MOD-020, ADR-0110).
+    images: bool | None
     kind: ModelKind
     voices: list[str] | None
 
@@ -387,6 +404,7 @@ type ToolName = Literal[
     "find_files",
     "search_files",
     "file_info",
+    "view_image",
     "offer_download",
     "ask_user_question",
     "write_plan",

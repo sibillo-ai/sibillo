@@ -33,6 +33,7 @@ from sibillo_server.credentials import uuid7
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
 from sibillo_server.encryption import decrypt, encrypt
 from sibillo_server.endpoints import Address, is_public, resolve, tenant_http_client
+from sibillo_server.gateway import IMAGES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,7 +41,7 @@ router = APIRouter()
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 COLUMNS = (
     "c.id, c.name, c.kind, c.base_url, c.location, c.api_key_ciphertext IS NOT NULL AS has_api_key,"
-    " c.private_network, c.context_window, c.models_refreshed_at, c.server_product, c.server_version,"
+    " c.private_network, c.context_window, c.image_models, c.models_refreshed_at, c.server_product, c.server_version,"
     " c.created_at, c.updated_at,"
     " (SELECT count(*) FROM connection_models m WHERE m.connection_id = c.id) AS model_count"
 )
@@ -90,6 +91,8 @@ class ListedModel:
     context_window: int | None = None
     tools: bool | None = None
     reasoning: bool | None = None
+    # Whether the model accepts images, when its provider says (MOD-020, ADR-0110).
+    images: bool | None = None
     input_price: Decimal | None = None
     cached_input_price: Decimal | None = None
     output_price: Decimal | None = None
@@ -221,6 +224,7 @@ def _openrouter_models(payload: list[Any]) -> list[ListedModel]:
                 context_window=entry.get("context_length") if isinstance(entry.get("context_length"), int) else None,
                 tools="tools" in (entry.get("supported_parameters") or []),
                 reasoning="reasoning" in (entry.get("supported_parameters") or []),
+                images="image" in (cast(dict[str, Any], entry.get("architecture") or {}).get("input_modalities") or []),
                 # OpenRouter prices one token; the contract prices a million.
                 input_price=prompt * TOKENS_PER_PRICE if priced and prompt is not None else None,
                 cached_input_price=cached * TOKENS_PER_PRICE if priced and cached is not None else None,
@@ -407,6 +411,7 @@ def _connection(row: Any) -> schemas.Connection:
         has_api_key=row.has_api_key,
         private_network=row.private_network,
         context_window=row.context_window,
+        image_models=list(row.image_models),
         server=None
         if row.server_product is None
         else schemas.Server(product=row.server_product, version=row.server_version),
@@ -437,6 +442,8 @@ def _new_target(body: schemas.CreateConnectionRequest, identity: Identity) -> tu
             raise errors.invalid("/api_key", "required")
         if body.context_window is not None:
             raise errors.invalid("/context_window", "listed_by_openrouter")
+        if body.image_models is not None:
+            raise errors.invalid("/image_models", "listed_by_openrouter")
         base_url, location = str(body.base_url or OPENROUTER_URL), "remote"
     else:
         if body.base_url is None:
@@ -485,7 +492,12 @@ async def recognize(target: Target, models: list[ListedModel]) -> tuple[schemas.
                 if not isinstance(found, list):
                     return listed
                 capabilities = {str(item) for item in cast(list[Any], found)}
-                return replace(listed, tools="tools" in capabilities, reasoning="thinking" in capabilities)
+                return replace(
+                    listed,
+                    tools="tools" in capabilities,
+                    reasoning="thinking" in capabilities,
+                    images="vision" in capabilities,
+                )
 
             shown_models = list(await asyncio.gather(*(show(listed) for listed in models)))
     except (httpx.HTTPError, ValueError):
@@ -515,8 +527,9 @@ async def store_models(
         await connection.execute(
             text(
                 "INSERT INTO connection_models (tenant_id, connection_id, model, name, position, context_window, tools,"
-                " reasoning, kind, voices, input_price, cached_input_price, output_price, currency) VALUES (:tenant_id,"
-                " :connection_id, :model, :name, :position, :context_window, :tools, :reasoning, :kind, :voices,"
+                " reasoning, images, kind, voices, input_price, cached_input_price, output_price, currency)"
+                " VALUES (:tenant_id, :connection_id, :model, :name, :position, :context_window, :tools,"
+                " :reasoning, :images, :kind, :voices,"
                 " :input_price, :cached_input_price, :output_price, :currency)"
                 " ON CONFLICT (connection_id, model) DO NOTHING"
             ),
@@ -529,6 +542,7 @@ async def store_models(
                 "context_window": listed.context_window,
                 "tools": listed.tools,
                 "reasoning": listed.reasoning,
+                "images": listed.images,
                 "kind": listed.kind,
                 "voices": None if listed.voices is None else list(listed.voices),
                 "input_price": listed.input_price,
@@ -598,8 +612,9 @@ async def create_connection(
             await connection.execute(
                 text(
                     "INSERT INTO connections (id, tenant_id, name, kind, base_url, location, context_window,"
-                    " api_key_ciphertext, private_network, created_at, updated_at) VALUES (:id, :tenant_id, :name,"
-                    " :kind, :base_url, :location, :context_window, :key, :private_network, now(), now())"
+                    " image_models, api_key_ciphertext, private_network, created_at, updated_at) VALUES (:id,"
+                    " :tenant_id, :name, :kind, :base_url, :location, :context_window, :image_models, :key,"
+                    " :private_network, now(), now())"
                 ),
                 {
                     "id": connection_id,
@@ -612,6 +627,7 @@ async def create_connection(
                     "context_window": None
                     if body.kind == "openrouter"
                     else body.context_window or DEFAULT_CONTEXT_WINDOW,
+                    "image_models": body.image_models or [],
                     "key": None if body.api_key is None else encrypt(secret, connection_id, body.api_key),
                     "private_network": target.private_network,
                 },
@@ -661,7 +677,7 @@ async def update_connection(
     present = body.model_fields_set
     if not present:
         raise errors.invalid("/", "empty")
-    for name in ("name", "base_url", "location", "context_window"):
+    for name in ("name", "base_url", "location", "context_window", "image_models"):
         if name in present and getattr(body, name) is None:
             raise errors.invalid(f"/{name}", "null")
     async with transaction(engine, identity) as connection:
@@ -670,6 +686,8 @@ async def update_connection(
         raise errors.invalid("/location", "openrouter_is_remote")
     if row.kind == "openrouter" and "context_window" in present:
         raise errors.invalid("/context_window", "listed_by_openrouter")
+    if row.kind == "openrouter" and "image_models" in present:
+        raise errors.invalid("/image_models", "listed_by_openrouter")
     if "base_url" in present:
         # A new address is private only when the instance admin sets it (MOD-009).
         target = Target(target.kind, str(body.base_url).rstrip("/"), target.api_key, identity.instance_admin)
@@ -688,6 +706,8 @@ async def update_connection(
         changes["location"] = body.location
     if "context_window" in present:
         changes["context_window"] = body.context_window
+    if "image_models" in present:
+        changes["image_models"] = body.image_models
     if "base_url" in present:
         changes["base_url"] = target.base_url
         changes["private_network"] = target.private_network
@@ -910,12 +930,12 @@ async def list_models(identity: Authenticated, engine: Engine, secret: SecretKey
         rows = (
             await connection.execute(
                 text(
-                    "SELECT m.connection_id, c.name AS connection_name, c.location, m.model, m.name,"
+                    "SELECT m.connection_id, c.name AS connection_name, c.location, m.model, m.name,"  # noqa: S608
                     # The smaller of the connection's window and the one its server runs the model with (MOD-019).
                     " least(coalesce(c.context_window, m.context_window), s.context_window) AS context_window,"
                     " s.context_window AS served_context_window,"
                     " m.tools, m.reasoning, m.kind, m.voices, m.input_price, m.cached_input_price, m.output_price,"
-                    " m.currency,"
+                    f" m.currency, {IMAGES} AS images,"
                     " c.models_refreshed_at < now() - make_interval(secs => :age) AS stale"
                     " FROM connection_models m JOIN connections c ON c.id = m.connection_id"
                     " LEFT JOIN served_context_windows s ON s.connection_id = m.connection_id AND s.model = m.model"
@@ -944,6 +964,7 @@ async def list_models(identity: Authenticated, engine: Engine, secret: SecretKey
             served_context_window=row.served_context_window,
             tools=row.tools,
             reasoning=row.reasoning,
+            images=row.images,
             kind=row.kind,
             voices=None if row.voices is None else list(row.voices),
         )

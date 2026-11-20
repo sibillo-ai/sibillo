@@ -80,12 +80,16 @@ from sibillo_server.gateway import (
     ModelUnavailableError,
     PromptCutError,
     RunDeps,
+    accepts_images,
     connection_model,
     model_reference,
     readable_text,
     record_usage,
     store_messages,
 )
+from sibillo_server.images import CANNOT_SEE, with_images
+from sibillo_server.images import TOOLS as IMAGE_TOOLS
+from sibillo_server.images import references as image_references
 from sibillo_server.mcp_runs import CHANGED, McpServers, offered_names
 from sibillo_server.mcp_runs import prepare as prepare_servers
 from sibillo_server.memory import MEMORY_INSTRUCTIONS, MEMORY_TOOLS, memory_section, run_memory
@@ -348,9 +352,10 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
     # And the user's memory, kept through tools of its own (MEM-007, ADR-0095).
     # And saving a skill (AGT-026, ADR-0096).
     # And proposing a task (TSK-006, ADR-0106).
-    tools=(*WEB_TOOLS, *OFFER_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS, *TASK_TOOLS, *CONVERSATION_TOOLS),
+    # And looking at an image of the workspace (CNV-020, ADR-0110).
+    tools=(*WEB_TOOLS, *OFFER_TOOLS, *IMAGE_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS, *TASK_TOOLS, *CONVERSATION_TOOLS),
     capabilities=[
-        Gateway(),
+        Gateway(show_images=with_images),
         # The user's sandbox, and the harness's tools that work in it (AGT-011, ADR-0035).
         SandboxWorkspace(),
         # Each sandbox command says what it is for (UX-003, ADR-0085).
@@ -606,8 +611,22 @@ async def _task_turn(
 ATTACHMENTS_ORIGIN = POLICY_ATTACHMENTS_ORIGIN
 
 
-def _user_prompt(run: RunWorkflowInput) -> str | list[UserContent] | None:
-    """The user's message, with the files attached to it, which the model reads with their paths and sizes."""
+@DBOS.step()
+async def _attached_images(run: RunWorkflowInput, deps: RunDeps) -> list[dict[str, str]] | None:
+    """Where the images among the message's attachments are; None for a model that does not accept images.
+
+    A step, so that a run that starts again keeps the images it started with (CNV-020, ADR-0110).
+    """
+    if not await accepts_images(deps, uuid.UUID(run.connection_id), run.model):
+        return None
+    return await image_references(deps, run.attachments)
+
+
+def _user_prompt(run: RunWorkflowInput, images: list[dict[str, str]] | None) -> str | list[UserContent] | None:
+    """The user's message, with the files attached to it, which the model reads with their paths and sizes.
+
+    `images` are those among them that the model is shown; None when it does not accept images.
+    """
     if run.answers is not None or run.approvals:
         # The answers to the questions and approvals are the user's input (ADR-0083, ADR-0090).
         return None
@@ -622,9 +641,10 @@ def _user_prompt(run: RunWorkflowInput) -> str | list[UserContent] | None:
     if not run.attachments:
         return run.user_text
     lines = "\n".join(f"- /workspace/{item['path']} ({item['size']} bytes)" for item in run.attachments)
+    note = f"\n{CANNOT_SEE}" if images is None else ""
     listing = TextContent(
-        f"Files the user attached to this message, in the conversation's workspace:\n{lines}",
-        metadata={"origin": ATTACHMENTS_ORIGIN, "attachments": run.attachments},
+        f"Files the user attached to this message, in the conversation's workspace:\n{lines}{note}",
+        metadata={"origin": ATTACHMENTS_ORIGIN, "attachments": run.attachments, "images": images or []},
     )
     return [run.user_text, listing]
 
@@ -650,9 +670,11 @@ async def _execute(
         # The title is asked for alongside the answer, from the first message (CNV-006, ADR-0073);
         # the step's place in the workflow is taken here, before the agent's.
         _TITLES[run.run_id] = asyncio.create_task(_title(run, replace(deps, emit=None)))
+    plain = run.answers is None and not run.approvals and run.event is None
+    images = await _attached_images(run, deps) if run.attachments and plain else []
     try:
         result = await agent.run(
-            _user_prompt(run),
+            _user_prompt(run, images),
             message_history=history,
             model=model_reference(run.connection_id, run.model),
             deps=deps,
