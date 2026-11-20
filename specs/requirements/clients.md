@@ -717,3 +717,22 @@ Rationale: the model belongs to the conversation rather than to the next
 message; on a phone, a list that covers half the screen cuts the titles
 short, and a Back that leaves the settings at once, under a bar that does
 not say where the user is, gets the user lost.
+
+## UX-040: A new version of the app takes over
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e, integration
+
+After a new version of the web client is deployed, an installed app SHOULD
+run it without the user clearing any cache (ADR-0112): the app SHOULD look
+for a new version when it comes back into view and at least every hour while
+it stays open. When it finds one, it SHOULD load the new version as soon as
+that loses nothing the user typed, and until then SHOULD say that a new
+version is ready, with an action that loads it. The server SHOULD let
+browsers keep for long only the files whose names carry a hash of their
+content.
+
+Rationale: an installed app on a phone is resumed rather than loaded, and
+kept showing old screens for days after each deployment.
