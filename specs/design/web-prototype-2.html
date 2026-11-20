@@ -172,6 +172,7 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
 .nav-item > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item:hover { background: var(--hover); color: var(--ink); }
 .nav-item.on { background: var(--pressed); color: var(--ink); font-weight: 600; }
+.nav-item.lead { color: var(--ink); font-weight: 600; } .nav-item.lead > .mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin-left: -4px; border-radius: var(--r-sm); background: var(--ink); color: var(--canvas); } .nav-item.lead .mark .i { width: 14px; height: 14px; }
 .account { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) 0 0 var(--s2); }
 .account .who { flex: 1; min-width: 0; } .account .who div:first-child { font-weight: 600; }
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
@@ -585,7 +586,7 @@ kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid va
   <div class="frame phone">
     <div class="topbar"><div class="grow title"><span class="sp" data-sprite="idle" style="display:inline-block;width:20px;vertical-align:middle"></span> Sibillo</div><button class="btn icon ghost" aria-label="Close the conversation list"><svg class="i" data-i="x"></svg></button></div>
     <div class="scroll"><div class="col" style="display:flex;flex-direction:column;gap:4px">
-      <button class="btn block"><svg class="i" data-i="plus"></svg>New chat</button>
+      <button class="nav-item lead"><span class="mark"><svg class="i" data-i="edit"></svg></span><span>New chat</span></button>
       <div class="label" style="padding-top:12px">Today</div>
       <button class="nav-item on"><span>Sourdough that will not rise, and what to do about it</span></button>
       <button class="nav-item"><span>Gift ideas for Nonna's eightieth birthday</span></button>
@@ -650,7 +651,7 @@ function sprite(pose) {
 const CHATS = [["Pinned", [["c0", "House manual"]]], ["Today", [["c1", "Sourdough that will not rise"], ["c2", "Gift ideas for Nonna"]]], ["This week", [["c3", "Electricity bill, explained"], ["c4", "Trip to Ascoli in March"], ["c5", "Fix the garden tap"]]]];
 document.querySelectorAll("[data-side]").forEach((el) => {
   el.innerHTML = `<div class="brand"><span class="sp" data-sprite="idle"></span><span class="grow">Sibillo</span><button class="btn icon ghost sm" aria-label="Hide the sidebar">${I("panel")}</button></div>
-  <button class="btn block">${I("plus")}New chat</button>
+  <button class="nav-item lead"><span class="mark">${I("edit")}</span><span>New chat</span></button>
   <div class="field quiet sm">${I("search")}<input placeholder="Search" aria-label="Search conversations"><kbd>/</kbd></div>
   <div class="list">${CHATS.map(([label, items]) => `<div class="label">${label}</div>` + items.map(([id, title]) => `<button class="nav-item${id === el.dataset.side ? " on" : ""}"><span>${title}</span></button>`).join("")).join("")}
   <div class="label">Folders</div><button class="nav-item">${I("folder")}<span>Recipes</span><span class="faint t-caption" style="flex:none">12</span></button><button class="nav-item">${I("folder")}<span>School</span><span class="faint t-caption" style="flex:none">4</span></button></div>

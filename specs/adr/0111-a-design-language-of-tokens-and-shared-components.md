@@ -95,7 +95,7 @@ sprite and the quotes, and replaces the rest.
    | Empty state | What a list is for and the action that adds its first entry (UX-038) |
    | Dialog | A title, a body and a footer whose rightmost button is the action; three widths; a sheet from the bottom on a phone |
    | Menu | Actions or options that float; the model picker is a menu with a search (UX-015) |
-   | Navigation item | An entry of the conversation list, of the settings' sections, or of a tree of files (UX-019) |
+   | Navigation item | An entry of the conversation list, of the settings' sections, or of a tree of files (UX-019); the lead entry, which starts something new, in ink with its icon on a small square of ink |
    | Top bar | The bar at the top of a page: on a phone, the button that opens the conversation list or the one that goes back, then where the user is; then the page's own actions, at its right end (UX-039) |
    | Message box, Message, Activity, Request card | The parts of a conversation: the composer; a user's message and an answer; what a run did, as compact lines that each expand (UX-003); an approval or a question waiting above the message box |
 
@@ -104,8 +104,9 @@ sprite and the quotes, and replaces the rest.
    test fails when it does. A new kind of control is added to the shared
    components, and to the prototype, before a screen uses it.
 7. **The screens.**
-   - *The shell.* The sidebar holds the name and the sprite, the button for a
-     new conversation, the search, the conversations in their groups (the
+   - *The shell.* The sidebar holds the name and the sprite, the new chat as
+     the lead entry of the list (as tall as the conversations, not a button
+     across the sidebar), the search, the conversations in their groups (the
      pinned ones, the folders, the rest), and at its foot the settings and
      the user, with their spend over the last 24 hours and the last 30 days
      (UX-008) and the button that signs out. A notice that notifications are
