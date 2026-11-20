@@ -288,7 +288,7 @@ later evolution, not planned (ROADMAP, Later).
 
 ## MOD-020: Which models see images
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration

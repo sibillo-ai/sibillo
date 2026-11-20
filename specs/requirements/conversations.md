@@ -324,7 +324,7 @@ Rationale: journey J3; moving and pinning from a menu takes three clicks.
 
 ## CNV-020: The model sees attached images
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration

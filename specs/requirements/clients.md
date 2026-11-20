@@ -633,7 +633,7 @@ the part of the answer the user was reading.
 
 ## UX-036: Pasting an image attaches it, with a preview
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
