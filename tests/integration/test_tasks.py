@@ -270,11 +270,12 @@ def test_the_first_monday_of_the_month_twice_fires_on_those_mondays(server: Serv
 def test_a_schedule_without_recurrence_fires_once_and_then_ends(
     database: Database, server: Server, member: Member
 ) -> None:
-    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=2))
+    # A start a few seconds away, which comes while the test waits: moving the next firing would not move the
+    # occurrence itself.
+    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=4))
     task = create_task(server, member.token, triggers=[once(start)])
     trigger = trigger_of(task, "schedule")
     assert (trigger["start"], trigger["recurrence"]) == (start, [])
-    fire_schedule(database, trigger["id"])
     wait_for_conversations(server, member.token, task["id"])
     stays_quiet(server, member.token, task["id"], 1)
     assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is None
@@ -284,14 +285,12 @@ def test_a_schedule_without_recurrence_fires_once_and_then_ends(
 def test_a_recurrence_with_a_count_ends_after_its_last_firing(
     database: Database, server: Server, member: Member
 ) -> None:
-    start = local(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
+    # Two daily occurrences: the first a day ago, the second a few seconds away, which comes while the test waits.
+    start = local(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1) + datetime.timedelta(seconds=4))
     task = create_task(server, member.token, triggers=[schedule("RRULE:FREQ=DAILY;COUNT=2", start=start)])
-    trigger_id = trigger_of(task, "schedule")["id"]
-    fire_schedule(database, trigger_id)
+    assert trigger_of(task, "schedule")["next_fire_at"] is not None
     wait_for_conversations(server, member.token, task["id"], 1)
-    assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is not None
-    fire_schedule(database, trigger_id)
-    wait_for_conversations(server, member.token, task["id"], 2)
+    stays_quiet(server, member.token, task["id"], 1)
     assert trigger_of(get_task(server, member.token, task["id"]), "schedule")["next_fire_at"] is None
 
 

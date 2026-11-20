@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
 
 import psycopg
 import pytest
@@ -81,26 +83,40 @@ def _event_trigger(
     return trigger_id
 
 
-def _due(database: Database) -> set[tuple[uuid.UUID, str]]:
-    with database.app() as conn:
-        rows = conn.execute("SELECT trigger_id, task_id, tenant_id, owner_id, work FROM due_task_triggers()").fetchall()
+def _due(conn: psycopg.Connection) -> set[tuple[uuid.UUID, str]]:
+    rows = conn.execute("SELECT trigger_id, task_id, tenant_id, owner_id, work FROM due_task_triggers()").fetchall()
     return {(row[0], row[4]) for row in rows}
+
+
+@contextmanager
+def _unseen_by_the_worker(database: Database) -> Generator[psycopg.Connection]:
+    """A transaction that arranges rows as superuser, then reads as `sibillo_app`, before anyone else sees them.
+
+    The session's worker sweeps for due triggers and waiting firings every second, and would do their work
+    while the test reads them; rows not yet committed are the test's alone.
+    """
+    with database.superuser() as conn, conn.transaction(force_rollback=True):
+        yield conn
+
+
+def _as_app(conn: psycopg.Connection) -> None:
+    conn.execute("SET LOCAL ROLE sibillo_app")
 
 
 @pytest.mark.spec("TSK-003", "TSK-008")
 def test_due_triggers_are_found_with_their_work(database: Database, world: World) -> None:
     alice = world.alice
-    with database.superuser() as conn:
+    with _unseen_by_the_worker(database) as conn:
         task_id = _task(conn, alice)
         due = _schedule(conn, alice, task_id, due=True)
         later = _schedule(conn, alice, task_id, due=False)
         polled = _event_trigger(conn, alice, task_id, "poll", poll_due=True)
         not_yet = _event_trigger(conn, alice, task_id, "poll", poll_due=False)
         renewed = _event_trigger(conn, alice, task_id, "webhook")
-    found = _due(database)
-    assert {(due, "fire"), (polled, "poll"), (renewed, "renew")} <= found
-    assert not {trigger for trigger, _ in found} & {later, not_yet}
-    with database.app() as conn:
+        _as_app(conn)
+        found = _due(conn)
+        assert {(due, "fire"), (polled, "poll"), (renewed, "renew")} <= found
+        assert not {trigger for trigger, _ in found} & {later, not_yet}
         (row,) = conn.execute(
             "SELECT trigger_id, task_id, tenant_id, owner_id FROM due_task_triggers() WHERE trigger_id = %s", (due,)
         ).fetchall()
@@ -109,17 +125,18 @@ def test_due_triggers_are_found_with_their_work(database: Database, world: World
 
 @pytest.mark.spec("TSK-001", "TSK-010")
 def test_triggers_of_paused_tasks_and_disabled_accounts_are_not_due(database: Database, world: World) -> None:
-    with database.superuser() as conn:
+    disable_user(database, world.bob)
+    with _unseen_by_the_worker(database) as conn:
         paused = _schedule(conn, world.alice, _task(conn, world.alice, paused=True), due=True)
         disabled = _schedule(conn, world.bob, _task(conn, world.bob), due=True)
-    disable_user(database, world.bob)
-    assert not {trigger for trigger, _ in _due(database)} & {paused, disabled}
+        _as_app(conn)
+        assert not {trigger for trigger, _ in _due(conn)} & {paused, disabled}
 
 
 @pytest.mark.spec("TSK-009")
 def test_the_oldest_waiting_firing_of_a_task_with_none_running_is_found(database: Database, world: World) -> None:
     alice = world.alice
-    with database.superuser() as conn:
+    with _unseen_by_the_worker(database) as conn:
         idle, busy = _task(conn, alice), _task(conn, alice)
         firings: dict[str, uuid.UUID] = {}
         for name, task_id, status, age in (
@@ -134,7 +151,7 @@ def test_the_oldest_waiting_firing_of_a_task_with_none_running_is_found(database
                 " created_at) VALUES (%s, %s, %s, %s, 'webhook', %s, %s, now() - %s::interval)",
                 (firings[name], alice.tenant_id, alice.id, task_id, f"key:{uuid7()}", status, age),
             )
-    with database.app() as conn:
+        _as_app(conn)
         rows = conn.execute("SELECT firing_id, task_id, tenant_id, owner_id FROM waiting_task_firings()").fetchall()
     found = {row[0] for row in rows}
     assert firings["oldest"] in found
