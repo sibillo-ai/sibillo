@@ -61,7 +61,7 @@ beyond keeping them configurable and updatable.
                               │
                             (B3)
                               │
-                 sandbox A │ sandbox B │ …  ──(B6)──► internet only
+                 sandbox A │ sandbox B │ …  ──(B6)──► internet only, when allowed
 ```
 
 - **B1** — clients to API: authentication, TLS termination, rate limits.
@@ -83,7 +83,7 @@ beyond keeping them configurable and updatable.
 | T-05 | Code in one sandbox reaches another user's or another conversation's sandbox | X3 | SBX-001, SBX-006 |
 | T-06 | Secrets are stolen from inside a sandbox | X3 | SBX-008, MOD-002 |
 | T-07 | Compromise of the control plane yields control of the container runtime (root on the host) | X4, X5 | SBX-009 |
-| T-08 | **Lethal trifecta:** injected instructions make the agent send private data to an attacker (e.g. "forward the last invoices to …") | X1 | AGT-001, AGT-003, AGT-004, AGT-005, EVL-003 |
+| T-08 | **Lethal trifecta:** injected instructions make the agent send private data to an attacker (e.g. "forward the last invoices to …") | X1 | AGT-001, AGT-003, AGT-004, AGT-005, AGT-034, SBX-024, EVL-003 |
 | T-09 | Injected instructions trigger irreversible or physical actions (delete files, buy, open the gate) | X1 | AGT-005, AGT-006, AGT-007, AGT-002 |
 | T-10 | A user's actions on their behalf are not visible, so abuse goes unnoticed | X1, X2 | AGT-008 |
 | T-11 | Private data is sent to a remote model against the household's wishes | X1, X2 | MOD-003, MOD-005, MOD-010 |
@@ -112,6 +112,7 @@ beyond keeping them configurable and updatable.
 | T-43 | Forged, replayed or flooded webhook requests or MCP event deliveries start conversations, plant content in them, or spend the household's model budget | X1, X4 | TSK-007, TSK-008, TSK-009 |
 | T-44 | Injected instructions make the assistant propose a task, so that they run again later, unattended, with standing grants | X1 | TSK-005, TSK-006 |
 | T-45 | Injected instructions read in one conversation reach another, unseen, when the assistant searches or reads the user's earlier conversations | X1 | AGT-003, AGT-004, AGT-032, AGT-033 |
+| T-46 | Injected instructions make the assistant ask for internet access, again and again or at a moment the user expects it, so that what the conversation holds can then be sent out | X1 | AGT-034, SBX-024, UX-022, UX-041 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |
@@ -130,34 +131,40 @@ to break the trifecta **within each run**:
 
 1. Every tool declares its capability classes (AGT-005).
 2. Content entering a run is labeled with its provenance (AGT-003).
-3. Once untrusted content is part of a run, tools in the
+3. The web tools and the sandbox's network need internet access, which the
+   user gives for a turn or a conversation, never beyond it; without it a
+   sandbox has no network, so commands cannot send anything out (AGT-034,
+   SBX-024, ADR-0113).
+4. Once untrusted content is part of a run, the other tools in the
    `external_communication` class require explicit user approval (AGT-004).
-   Untrusted content counts in every later turn of the conversation, and the
-   user may allow the web and commands for a turn or a conversation, never
-   beyond it (ADR-0090).
-4. Approvals fail closed (AGT-007) and every tool call is auditable
+   Untrusted content counts in every later turn of the conversation
+   (ADR-0090).
+5. Approvals fail closed (AGT-007) and every tool call is auditable
    (AGT-008).
-5. A task, which runs while nobody watches, carries grants instead of
+6. A task, which runs while nobody watches, carries grants instead of
    asking; its grants together never reach private data, untrusted content
    and an open way out at once, and a fixed grant carries nothing the model
    chose (TSK-004, TSK-005, ADR-0106).
-6. Evals include injection scenarios that must not exfiltrate (EVL-003).
+7. Evals include injection scenarios that must not exfiltrate (EVL-003).
 
 Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
-- **Exfiltration from a compromised sandbox.** Internet egress is allowed by
-  design; a compromised sandbox can send out the data it contains. This is
-  bounded to that conversation's workspace and the answer it runs in, which
-  never contain secrets (SBX-001, SBX-008, ADR-0078).
+- **Exfiltration from a compromised sandbox.** A sandbox whose conversation
+  has internet access can send out the data it contains. This is bounded to
+  the conversations whose user gave them internet access, to that
+  conversation's workspace and the answer it runs in, which never contain
+  secrets (SBX-001, SBX-008, SBX-024, ADR-0078, ADR-0113).
 - **Approval fatigue.** Users may approve requests without reading them.
   Approval prompts must show what will be sent and where, and are kept rare:
-  one approval covers the web and command tools (ADR-0090).
-- **Allowances in a conversation.** A user who allows the web and commands
-  in a conversation accepts that injected instructions could send that
-  conversation's workspace out, until they withdraw the allowance
-  (AGT-006, ADR-0090).
+  a conversation asks for internet access at most once (ADR-0090, ADR-0113).
+- **Internet access in a conversation.** A user who gives a conversation
+  internet access accepts that injected instructions could send out what it
+  holds and its workspace, until they withdraw it. It is often given before
+  any untrusted content exists, and stays as that content arrives; its
+  request says so, and does not show the later calls it covers (AGT-034,
+  ADR-0113).
 - **A web page leaving its frame.** A page the assistant made runs with an
   opaque origin and no network access, but it can still navigate its own
   frame to another address, carrying data it holds, and it relies on the

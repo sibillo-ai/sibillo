@@ -109,7 +109,10 @@ Three forces shape it:
    conversation", and ADR-0063 point 5 and AGT-018, which ask every call to a
    device or an MCP server: a fixed grant is the user's approval, given in
    advance for one exact call. Open grants never cover a tool of a device or
-   of a remote MCP server.
+   of a remote MCP server. Amended by ADR-0113: a grant of internet access
+   is a third kind of grant, in place of open grants of `web_search` and
+   `read_page`, and counts in point 5 as untrusted content and as external
+   communication.
 
 5. **Grants never complete the lethal trifecta.** When a task is saved, and
    again at every firing, the server checks three things together:

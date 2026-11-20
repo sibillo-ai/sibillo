@@ -30,7 +30,9 @@ it MUST be refused, and the user MUST NOT be able to switch it on
 (CNV-013). An asked tool MUST require approval for every call. An allowed
 tool MUST NOT require approval by default, but MUST still follow AGT-004,
 AGT-006 for the `irreversible` and `physical` classes, and AGT-018
-(ADR-0090).
+(ADR-0090). A user for whom the `external_communication` class is denied
+MUST NOT be given internet access (AGT-034), and no tool permission MUST
+give it (ADR-0113).
 
 ## AGT-003: Content provenance
 
@@ -61,12 +63,13 @@ a fork (ADR-0090, ADR-0107).
 
 In a run with untrusted content (AGT-003), every invocation of a tool in the
 `external_communication` class MUST require explicit user approval, unless
-the user allowed it earlier for that turn or that conversation, or a task
-grant covers it (TSK-004, TSK-005). One approval
-MUST cover the web and command tools `web_search`, `read_page`,
-`run_command` and `start_command` together, and MAY cover them for the rest
-of the turn or for the conversation, as the user chooses; other tools are
-approved one by one (ADR-0090, ADR-0106).
+the user allowed it earlier for that conversation, or a task
+grant covers it (TSK-004, TSK-005). The web tools `web_search` and
+`read_page`, and the network of the sandbox, follow internet access instead
+(AGT-034): without it they MUST NOT reach anything, with or without
+untrusted content, and with it they need no further approval. Commands in a
+sandbox without network do not communicate externally. Other tools are
+approved one by one (ADR-0090, ADR-0106, ADR-0113).
 
 ## AGT-005: Capability classes
 
@@ -79,7 +82,7 @@ Every tool MUST declare its capability classes among `reads_private_data`,
 `ingests_untrusted`, `external_communication`, `irreversible` and `physical`,
 possibly none, and its approval default, allowed or asked. A design test
 MUST fail when a registered tool has no declaration, and MUST check the
-declarations of the tools listed in ADR-0090.
+declarations of the tools listed in ADR-0090 as ADR-0113 amends them.
 
 ## AGT-006: Approval for consequential actions
 
@@ -319,7 +322,8 @@ ADR-0100).
 - **Verification:** integration, security
 
 The agent MUST be able to search the web with a `web_search` tool, for every
-model that can call tools. The tool MUST send only the query, to the
+model that can call tools, while the conversation has internet access
+(AGT-034). The tool MUST send only the query, to the
 instance's search service, and return at most ten results, each with its
 title, address and excerpt, as untrusted content (AGT-003) bounded like other
 tool output (AGT-014). It MUST NOT fetch any address itself, and MUST NOT use
@@ -334,7 +338,8 @@ logged (OBS-001) (ADR-0075).
 - **Phase:** 1
 - **Verification:** integration
 
-The agent MUST be able to read a web page with a `read_page` tool, which
+The agent MUST be able to read a web page with a `read_page` tool, while
+the conversation has internet access (AGT-034). It
 fetches one `http` or `https` address from the conversation's sandbox, under its
 egress rules, and returns the page's title, final address and main text as
 Markdown, as untrusted content (AGT-003) bounded like other tool output
@@ -555,3 +560,45 @@ temporary conversation, what a rewind removed, or another user's
 conversation. It MUST be in the `reads_private_data` class, and its result
 MUST be untrusted content exactly when the conversation it reads holds
 untrusted content on its active path (AGT-003) (ADR-0107).
+
+## AGT-034: Internet access
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** integration, security, eval
+
+Internet access MUST be one permission of a conversation, given by its user.
+Without it, `web_search` and `read_page` MUST NOT run and the conversation's
+sandbox MUST have no network (SBX-024); with it, they run without further
+approval and the sandbox reaches public addresses (SBX-004). Commands MUST
+NOT need approval for the network they might use.
+
+A call to `web_search` or `read_page` without internet access MUST ask for
+it, and the agent MUST have a tool, `request_internet_access`, without
+arguments, that asks for it; the request MUST be made whether or not the run
+has untrusted content. All the calls of one run that need internet access
+MUST make one approval request, which MUST say what internet access lets the
+assistant do, that what the conversation holds and its files could then be
+sent out, whether the run has untrusted content (AGT-003), and the web calls
+that wait for it with their arguments, all from the stored calls (AGT-012).
+The request MUST offer only to deny it, to allow it for the turn, or to allow
+it in the conversation.
+
+When it is allowed, the waiting calls MUST run. When it is denied or expires
+(AGT-007), every waiting call MUST be denied, the model MUST be told, and
+any later call that needs internet access in the same turn MUST be denied
+without asking. Internet access MUST be an allowance as AGT-006 defines
+them: created only by answering an approval request, shown with the
+conversation, withdrawable by its user, and never copied into a fork;
+withdrawing it MUST take the network from a running sandbox at once. There
+MUST NOT be internet access that outlasts its conversation, other than a
+task grant (TSK-004), nor a setting that gives it to new conversations. The
+agent's instructions MUST say that the sandbox has no network and the web
+tools do not run without internet access, and that the assistant asks for
+it once, when the work needs it, rather than trying commands that fail
+(ADR-0113).
+
+Rationale: one question the user can predict and understand, in place of a
+prompt for each call; and a sandbox without network cannot complete the
+lethal trifecta, whatever the run has read (T-08).

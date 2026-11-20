@@ -62,7 +62,10 @@ ADR-0109).
 
 A task's user MUST be able to give it grants: fixed grants, of one tool with
 all its arguments, which cover a call only when its arguments equal the
-grant's; and open grants, of one tool with any arguments. Grants MUST cover
+grant's; open grants, of one tool with any arguments; and a grant of
+internet access (AGT-034), without which a call that needs internet access
+MUST be denied at once in those runs, as below, and their sandbox has no
+network. Grants MUST cover
 only the runs of the task's first turn, and MUST NOT cover a tool in the
 `irreversible` or `physical` classes, a tool that a tool permission sets to
 `ask` or `deny` for the user (AGT-002), a tool not offered to the run, or the
@@ -71,7 +74,7 @@ MUST run without approval, but a call to a device or a remote MCP server
 only when a fixed grant covers it (AGT-018); a call that is not covered and would need approval MUST be denied
 at once, without asking, with the reason `not_granted`, and the model MUST be
 told so. The conversation MUST show the calls denied this way. Grants MUST
-be checked when the task is saved and at every call (ADR-0106).
+be checked when the task is saved and at every call (ADR-0106, ADR-0113).
 
 ## TSK-005: Task grants never complete the lethal trifecta
 
@@ -84,11 +87,13 @@ A task MUST NOT be saved when it has all three of: a source of private data
 (a grant of a tool in the `reads_private_data` class, use of memory while
 memory is on for its user, or an event trigger, which is a webhook trigger or
 a trigger on an event); a source of untrusted content (a grant of a tool in
-the `ingests_untrusted` class, or an event trigger); and an open grant of a
-tool in the `external_communication` class. Fixed grants MUST NOT count as
+the `ingests_untrusted` class, a grant of internet access, or an event
+trigger); and a way out: an open grant of a
+tool in the `external_communication` class, or a grant of internet access
+(AGT-034). Fixed grants MUST NOT count as
 external communication. The check MUST be repeated at every firing, and a
 task that fails it then MUST fire without grants, its conversation saying
-why (ADR-0106).
+why (ADR-0106, ADR-0113).
 
 ## TSK-006: The assistant proposes a task
 

@@ -380,7 +380,12 @@ and where, and why it needs approval in plain words; when the reason is
 untrusted content, it MUST say that what the assistant read could be trying
 to steer it. The prompt MUST offer exactly the answers the request offers
 (ADR-0090), with Deny first and never preselected, and approvals and
-questions pending together MUST be answered together.
+questions pending together MUST be answered together. A request for internet
+access (AGT-034) MUST be shown once for all the calls that wait for it: it
+MUST ask whether the assistant may access the internet, say in plain words
+what that lets it do and that what the conversation holds could be sent out,
+say when what the assistant already read could be trying to steer it, and
+list the web calls that wait, with their arguments (ADR-0113).
 
 Rationale: journey J7; approval fatigue is a residual risk of the threat
 model, so a prompt must be rare and say what is at stake.
@@ -736,3 +741,30 @@ content.
 
 Rationale: an installed app on a phone is resumed rather than loaded, and
 kept showing old screens for days after each deployment.
+
+## UX-041: Approval requests in hands-free mode
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** e2e
+
+When a run ends with an approval request in hands-free mode (UX-005), clients
+MUST play a sound that belongs to requests alone, say the request aloud, and
+show it in the lower half of the screen in place of the large button, with
+one large button for each answer the request offers (UX-022), Deny first,
+none preselected and none reachable by a stray touch meant for another. What
+is said aloud MUST be a sentence of the client, translated like its other
+strings (I18N-001) and chosen by the request's reason: for internet access
+(AGT-034), that the assistant asks to access the internet; for any other
+request, that a request waits on the screen, with the tool's label. Text
+written by the model MUST NOT be spoken as part of a request. A request MUST
+be answered only by its buttons: never by voice, and never by the media
+buttons of a headset or a car, which MUST say the request again instead.
+While a request is pending the microphone MUST stay closed and the user's
+turn MUST NOT start. Once the request is answered, the turn MUST go on as
+any other, with its sounds, and its answer MUST be read aloud (ADR-0113).
+
+Rationale: journey J9; a request that nobody hears stops the conversation
+of someone who is driving, and a request answered by a sound the microphone
+caught would be no approval at all.

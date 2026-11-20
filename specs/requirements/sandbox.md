@@ -46,8 +46,10 @@ accepting any request.
 - **Phase:** 0
 - **Verification:** integration
 
-A sandbox MUST be able to reach public internet addresses, so that the agent
-can browse, download and install software.
+A sandbox whose conversation has internet access (AGT-034) MUST be able to
+reach public internet addresses, so that the agent can browse, download and
+install software. Without internet access it has no network (SBX-024,
+ADR-0113).
 
 ## SBX-005: No access to local networks
 
@@ -311,3 +313,28 @@ Rationale: an internal error sends the user, or the household's admin,
 looking for a fault of Sibillo, when the sandbox only needs a moment, or its
 host needs attention.
 
+## SBX-024: No network without internet access
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** integration, security
+
+A sandbox MUST NOT be able to open a connection to any address, nor to
+resolve a name, the instance's resolver included (SBX-007), unless its
+conversation has internet access (AGT-034). A sandbox MUST start without
+network; the sandbox driver MUST give it network only when the control plane
+says that its conversation has internet access, and MUST take it away, from
+a running sandbox and at once, when the control plane says that it no longer
+has. Giving it MUST NOT restart the sandbox, so that a run that waited for
+the user's answer finds its scratch folder and its background commands
+(SBX-018). This MUST be enforced outside the sandbox's kernel, as SBX-005
+is, so that it holds for code with full control of the sandbox's network
+configuration, which MUST NOT gain network by posing as another sandbox. It
+MUST be applied and verified before any code runs (SBX-015); a sandbox whose
+state cannot be verified MUST have no network. Security tests MUST verify
+this from inside a running sandbox, and from a test container with network
+administration privileges attached like a sandbox (ADR-0113).
+
+Rationale: with a sandbox that always reaches the internet, a prompt is the
+only thing between injected instructions and the user's files (T-08, T-46).

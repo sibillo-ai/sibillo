@@ -45,8 +45,9 @@ We will enforce sandbox egress **in the host kernel**, with a dedicated
    - all IPv6 traffic from the bridge is dropped (SBX-013);
    - all traffic from the bridge addressed to the host itself is dropped,
      whatever the host address;
-   - everything else is left to the host's normal processing, so any
-     protocol to public addresses works (SBX-004).
+   - everything else is left to the host's normal processing (amended by
+     ADR-0113: only for sandboxes whose conversation has internet access),
+     so any protocol to public addresses works (SBX-004).
 4. The table is separate from Docker's rules and from firewall managers such
    as firewalld or ufw, and never modifies them. In `nftables` a drop in any
    table is final, so other tables cannot override it.

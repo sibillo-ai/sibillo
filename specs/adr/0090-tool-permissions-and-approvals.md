@@ -55,7 +55,10 @@ mostly quiet.
    (point 3) already guards them where it matters. Nothing today is
    `irreversible` or `physical`: changes to the workspace are the
    assistant's ordinary work and the workspace is backed up (OPS-006). Those
-   classes wait for tools such as sending mail or switching a light. Tools
+   classes wait for tools such as sending mail or switching a light.
+   Amended by ADR-0113: the web tools need internet access, and commands no
+   longer communicate externally, since a sandbox has no network without
+   it. Tools
    of connected devices and remote MCP servers are always asked, for every
    call (AGT-018).
 
@@ -73,7 +76,9 @@ mostly quiet.
    tool in the `external_communication` class needs approval, unless an
    allowance covers it (point 4). For the four web and command tools,
    `web_search`, `read_page`, `run_command` and `start_command`, one
-   approval covers all four, so a run asks at most once.
+   approval covers all four, so a run asks at most once. Amended by
+   ADR-0113: internet access takes the place of this rule for the four
+   tools, and is asked whether or not the run has untrusted content.
 
 4. **What an approval covers.** The user answers an approval request with
    one of:
@@ -95,7 +100,9 @@ mostly quiet.
    conversation are listed with it and its user can withdraw them; they
    are created only by answering a stored approval request (AGT-012), never
    by a settings change, and a fork does not copy them. There is no
-   standing allowance beyond one conversation. Amended by ADR-0106: a task
+   standing allowance beyond one conversation. Amended by ADR-0113: the
+   allowance of the web and command tools is internet access, which is
+   never allowed once. Amended by ADR-0106: a task
    carries grants, approved when it is saved, for the runs of its first
    turn.
 

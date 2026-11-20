@@ -74,7 +74,8 @@ new entry here first (ADR-0005).
 | Untrusted content | Any content not authored by the user or the system: web pages, received emails, external files, sandbox output; in particular the results of tools in the `ingests_untrusted` class and attachments (AGT-003, ADR-0090). |
 | Lethal trifecta | The combination of access to private data, exposure to untrusted content and the ability to communicate externally, which enables data exfiltration through prompt injection. |
 | Approval | An explicit confirmation by the user before a tool call is executed, asked for by an approval request that ends the run with an interrupt (ADR-0033). |
-| Allowance | An approval that also covers later calls: of the web and command tools for the rest of a turn, or of a tool in one conversation (AGT-006, ADR-0090). |
+| Allowance | An approval that also covers later calls: internet access for the rest of a turn or in one conversation, or a tool in one conversation (AGT-006, AGT-034, ADR-0090, ADR-0113). |
+| Internet access | A conversation's permission, given by its user, for the assistant to reach the internet: to search the web, to read pages, and to run commands that use the network in its sandbox. An allowance for a turn or a conversation, or a task grant (AGT-034, ADR-0113). |
 | Audit event | A content-free record of a tool call and its approval outcome, visible to the user it acted for (AGT-008, ADR-0090). |
 | Activity | The page of a user's settings that lists their audit events (UX-023). |
 | Task | A user's standing instructions, with conversation settings, triggers and task grants, that start a new conversation each time a trigger fires, without a message from the user (TSK-001, ADR-0106). |
@@ -85,7 +86,7 @@ new entry here first (ADR-0005).
 | Accepted event type | A type of event of a remote MCP server that a tenant admin accepted as the server listed it; offered only while the server lists it unchanged (TSK-008, ADR-0106). |
 | Firing | One time a trigger fires a task, which starts one conversation (TSK-002, TSK-009). |
 | Change event | A content-free announcement, on the user's stream of changes, that a conversation was created, a run started or finished, or a task fired, with their identifiers (API-008, ADR-0108). |
-| Task grant | A call a task's runs may make without approval, given by its user when the task is saved: a fixed grant, of one tool with all its arguments, or an open grant, of one tool with any arguments (TSK-004, TSK-005, ADR-0106). Not to be confused with an allowance, which lasts one turn or one conversation. |
+| Task grant | A call a task's runs may make without approval, given by its user when the task is saved: a fixed grant, of one tool with all its arguments, an open grant, of one tool with any arguments; or a grant of internet access (TSK-004, TSK-005, ADR-0106, ADR-0113). Not to be confused with an allowance, which lasts one turn or one conversation. |
 | Memory item | A short text the assistant retains about a user across conversations, given to every run while memory is on; written by the user or by the assistant's memory tools, and untrusted when the assistant wrote it from untrusted content. Visible, editable and deletable by the user (MEM-001 to MEM-008, ADR-0095). |
 | Connector | An integration with an external system (calendar, mail, files, home automation), exposed to the agent as mediated tools. Not to be confused with a connection. |
 
@@ -116,7 +117,7 @@ new entry here first (ADR-0005).
 |---|---|
 | Control plane | The server components that hold state and secrets: API, agent, memory, model gateway. Never executes user code. |
 | Execution plane | Where user code runs: the sandboxes. |
-| Sandbox | A per-user isolated execution environment with internet access and no access to local networks. |
+| Sandbox | A per-user isolated execution environment, without network until its conversation has internet access, and never with access to local networks (ADR-0113). |
 | Workspace | The persistent folder of a conversation's sandbox, `/workspace`, which keeps what the user wants to keep; everything else in the sandbox is discarded when it stops (ADR-0076, ADR-0078). |
 | Scratch folder | The folder where a sandbox's commands start, `/scratch`, discarded with the sandbox (ADR-0076). |
 | Workspace disk | A sparse file holding the ext4 filesystem of one workspace, of the size of the workspace quota, attached to a loop device and mounted at `/workspace`; never mounted where user content runs (SBX-016, ADR-0098). |

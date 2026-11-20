@@ -93,7 +93,8 @@ the page that plays audio through the Media Session API.
    starts, played before the microphone opens, since a phone may quiet its
    speaker while it opens it, falling when it ends, a soft tick every few seconds while the
    assistant works, a chime before the answer is read, and a low tone when
-   something fails.
+   something fails. Amended by ADR-0113: an approval request has a sound of
+   its own, is said aloud and is answered by large buttons on the screen.
 9. **Languages.** The transcription model detects the language of the turn;
    the reading uses the household's voice, whose languages depend on its
    model.
