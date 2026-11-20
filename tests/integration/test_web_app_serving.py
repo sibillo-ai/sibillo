@@ -25,6 +25,9 @@ def web(server: Server, tmp_path_factory: pytest.TempPathFactory) -> Iterator[st
     (root / "assets").mkdir()
     (root / "assets" / "app.js").write_text("console.log('app')")
     (root / "manifest.webmanifest").write_text('{"name": "Sibillo"}')
+    (root / "sw.js").write_text("// the service worker")
+    (root / "registerSW.js").write_text("// registers the service worker")
+    (root / "icon-192.png").write_bytes(b"\x89PNG")
     api, origin = server.start_twin_api(SIBILLO_WEB_ROOT=str(root))
     yield origin
     api.close()
@@ -92,3 +95,14 @@ def test_a_share_that_reaches_the_api_opens_the_app_which_says_nothing_arrived(w
 def test_without_a_built_app_only_the_api_is_served(server: Server) -> None:
     origin = server.base_url.removesuffix("/v1")
     assert httpx.get(f"{origin}/", timeout=10).status_code == 404
+
+
+@pytest.mark.spec("UX-040")
+def test_only_files_named_by_their_content_are_kept_for_long(web: str) -> None:
+    # Under /assets/ a file's name carries a hash of its content: a new version has new names (ADR-0112).
+    assert "immutable" in httpx.get(f"{web}/assets/app.js", timeout=10).headers["cache-control"]
+    # Every other file of the app is asked for again, so that a new version reaches the browser.
+    for path in ("/", "/index.html", "/sw.js", "/registerSW.js", "/manifest.webmanifest", "/icon-192.png", "/settings"):
+        response = httpx.get(f"{web}{path}", timeout=10)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-cache", path
