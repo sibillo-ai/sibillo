@@ -36,7 +36,7 @@ first (ADR-0106).
 
 ## TSK-003: Schedules
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
