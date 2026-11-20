@@ -795,3 +795,55 @@ def test_the_thread_follows_the_answer_only_from_its_end(
     page.wait_for_timeout(300)
     assert page.evaluate(FROM_END) <= 2
     expect(new_text).to_have_count(0)
+
+
+@pytest.mark.spec("UX-034")
+def test_escape_stops_the_answer(page: Page, member: Account, default_model: HarnessModel) -> None:
+    sign_in(page, member)
+    _send(page, "slow:40")
+    _answer(page, "piece 1 ")
+    page.keyboard.press("Escape")
+    expect(page.get_by_role("status")).to_contain_text("Stopped.", timeout=30_000)
+    expect(page.get_by_role("button", name="Send")).to_be_visible()
+
+
+@pytest.mark.spec("UX-034")
+def test_escape_closes_an_open_dialog_before_it_stops_the_answer(
+    page: Page, member: Account, default_model: HarnessModel
+) -> None:
+    sign_in(page, member)
+    _send(page, "slow:40")
+    _answer(page, "piece 1 ")
+    page.get_by_role("button", name="Chat settings").click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
+    # The first Escape closes the dialog and the run goes on; the second one stops it.
+    page.keyboard.press("Escape")
+    expect(dialog).to_have_count(0)
+    page.wait_for_timeout(1_000)
+    expect(page.get_by_role("button", name="Stop")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.get_by_role("status")).to_contain_text("Stopped.", timeout=30_000)
+
+
+@pytest.mark.spec("UX-035")
+def test_the_end_of_an_answer_leaves_the_thread_where_it_is(
+    page: Page, member: Account, default_model: HarnessModel
+) -> None:
+    page.set_viewport_size({"width": 390, "height": 600})
+    sign_in(page, member)
+    # A long message and its echo are taller than the window.
+    _send(page, "long " + "word " * 300)
+    _answer(page, "Echo: long")
+    expect(page.get_by_role("button", name="Send")).to_be_visible(timeout=30_000)
+    _send(page, "slow:6")
+    _answer(page, "piece 1 ")
+    # The user scrolls up to read while the answer streams; the run then ends and the history is reloaded.
+    page.locator("[aria-busy]").hover()
+    page.mouse.wheel(0, -1_000)
+    page.wait_for_timeout(300)
+    top = page.evaluate("document.querySelector('[aria-busy]').scrollTop")
+    with page.expect_response(lambda response: "/messages?" in response.url and response.ok):
+        expect(page.get_by_role("button", name="Send")).to_be_visible(timeout=30_000)
+    page.wait_for_timeout(500)
+    assert page.evaluate("document.querySelector('[aria-busy]').scrollTop") == top
