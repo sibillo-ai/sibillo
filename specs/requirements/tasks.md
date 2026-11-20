@@ -36,17 +36,22 @@ first (ADR-0106).
 
 ## TSK-003: Schedules
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
 
-A schedule MUST be a cron expression evaluated in the task's time zone, and
-MUST be refused when it would fire more often than once every 15 minutes.
-Each firing MUST start exactly one conversation, also across a restart or a
-crash of the worker. When the instance was down at one or more firing times,
-the task MUST fire once when the worker returns, for the latest of them, and
-not once per missed time (ADR-0106).
+A schedule MUST be a start, a date and time in the task's time zone, and up
+to 5 lines of iCalendar recurrence (RFC 5545): `RRULE`, `RDATE` and
+`EXDATE`, as an event of Google Calendar's API holds them; without
+recurrence it MUST fire once, at its start. A schedule MUST be refused when
+it does not parse, when it would fire more often than once every 15
+minutes, or when it would never fire. Each firing MUST start exactly one
+conversation, also across a restart or a crash of the worker. When the
+instance was down at one or more firing times, the task MUST fire once when
+the worker returns, for the latest of them, and not once per missed time.
+After its last occurrence, a schedule MUST have no next firing (ADR-0106,
+ADR-0109).
 
 ## TSK-004: Task grants
 

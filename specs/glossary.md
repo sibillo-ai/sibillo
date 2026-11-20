@@ -79,7 +79,7 @@ new entry here first (ADR-0005).
 | Activity | The page of a user's settings that lists their audit events (UX-023). |
 | Task | A user's standing instructions, with conversation settings, triggers and task grants, that start a new conversation each time a trigger fires, without a message from the user (TSK-001, ADR-0106). |
 | Trigger | What fires a task: a schedule, a webhook trigger, or an event of a remote MCP server or a connected device (TSK-003, TSK-007, TSK-008, ADR-0106). |
-| Schedule | A trigger that fires at the times of a cron expression, in the task's time zone (TSK-003). |
+| Schedule | A trigger that fires at a start and at the times of its iCalendar recurrence (RFC 5545), in the task's time zone; once, without recurrence (TSK-003, ADR-0109). |
 | Webhook trigger | A trigger that fires when a request reaches its secret address of the instance, whose body is the event (TSK-007). |
 | Event | Something that happened outside Sibillo, delivered by a remote MCP server or a connected device with the MCP Events extension, or by a request to a webhook trigger; its data is untrusted content (TSK-008, ADR-0106). |
 | Accepted event type | A type of event of a remote MCP server that a tenant admin accepted as the server listed it; offered only while the server lists it unchanged (TSK-008, ADR-0106). |

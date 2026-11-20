@@ -548,15 +548,16 @@ their place if every new piece of text pulls them back down.
 
 ## UX-031: Tasks in the app
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e
 
 Clients MUST let a user create, change, pause, resume, fire at once
 (TSK-011) and delete their tasks among their settings, with the task's
-instructions, settings, time zone, triggers and grants. For a schedule they MUST say in words when it fires and
-show the next firing; for a webhook trigger, show its address once and let
+instructions, settings, time zone, triggers and grants. For a schedule they MUST say in words when it fires,
+from its start and recurrence, and show the next firing, or that it ended
+(ADR-0109); for a webhook trigger, show its address once and let
 the user replace it; for an event trigger, offer the accepted event types of
 the servers the user may use and a form for the subscription's arguments
 from its schema. Grants MUST be chosen from the tools the task may be given,

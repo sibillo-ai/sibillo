@@ -62,7 +62,8 @@ Three forces shape it:
 
 3. **Triggers.** Three kinds, one mechanism behind them: a firing, with or
    without an event, starts a conversation (point 2).
-   - A **schedule**: a cron expression evaluated in the task's time zone,
+   - A **schedule** (superseded by ADR-0109, which makes it an iCalendar
+     recurrence): a cron expression evaluated in the task's time zone,
      firing at most once every 15 minutes. The worker owns schedules as
      durable workflows (ADR-0034), so a firing is never lost or doubled: one
      firing, one conversation. Firings missed while the instance was down
