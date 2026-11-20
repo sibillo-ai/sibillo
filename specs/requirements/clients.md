@@ -605,7 +605,7 @@ learns of it.
 
 ## UX-034: Escape stops the answer
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
@@ -619,7 +619,7 @@ focus to it.
 
 ## UX-035: The end of an answer leaves the thread where it is
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
