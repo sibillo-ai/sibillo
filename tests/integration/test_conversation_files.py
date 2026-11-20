@@ -521,6 +521,10 @@ def test_an_image_follows_its_file_in_later_turns(database: Database, server: Se
     assert answer == saw([photo])
     # Changed, the image is no longer the one the user sent: the model is told, and gets no image.
     with server.client(seeing.token) as client:
+        # The API never replaces a file: another takes its place once it is deleted.
+        assert (
+            client.delete(f"/conversations/{conversation}/workspace/entries", params={"path": path}).status_code == 204
+        )
         changed = client.put(
             f"/conversations/{conversation}/workspace/file", params={"path": path}, content=_png(), headers=BINARY
         )
