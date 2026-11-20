@@ -1,6 +1,6 @@
 # ADR-0111: A design language of tokens and shared components
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 - **Deciders:** @tapionx
 - **Related:** UX-017, UX-037, UX-038, UX-039, UX-003, UX-005, UX-007, UX-008, UX-011, UX-012, UX-013, UX-014, UX-015, UX-019, UX-033, OBS-001, I18N-001, ADR-0067, ADR-0070, ADR-0088
