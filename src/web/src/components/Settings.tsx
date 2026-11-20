@@ -1,7 +1,6 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, Sparkles, Cloud, House, KeyRound, Palette, Plug, Plus, ShieldCheck, TriangleAlert, UserRound, Users, X } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, ChevronLeft, Cloud, House, KeyRound, Minus, Palette, Plug, Plus, ShieldCheck, Sparkles, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { type FormEvent, Fragment, type ReactNode, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
@@ -9,6 +8,7 @@ import { ApiError, api, unwrap, type Connection, type ConnectionTest, type Model
 import { findModel, MODELS, useModels } from "../models";
 import { useNotify } from "../notices";
 import { type Theme, useTheme } from "../theme";
+import { Badge, Button, Card, Checkbox, cx, Dialog, EmptyState, FormField, Group, NavItem, NavLabel, Notice, Page, Radio, Row, Select, TextArea, TextInput, Tile, ToggleGroup } from "../ui";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
@@ -26,58 +26,64 @@ type SpeechSettings = Schemas["SpeechSettings"];
 const CONNECTIONS = ["connections"] as const;
 // The window of a connection to your own server unless set (ADR-0073).
 const DEFAULT_CONTEXT_WINDOW = 8192;
-const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
-const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
-const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 
 type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "tasks" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
 
 interface TabItem {
   id: Tab;
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }
 
 /**
  * The settings: for everyone their assistant (CNV-013, CNV-014), their tasks (UX-031), their memory (UX-027), notifications on this device
  * (UX-004), their passkeys (UX-026) and the theme (UX-011), and, set apart for its admins, the household's models (UX-015, UX-016) and members.
+ * One column of the form width beside the sections; on a phone the sections are a list the user enters, one page at a time (ADR-0111).
  */
 export function Settings({ me }: { me: User }) {
   const { t } = useTranslation();
   const admin = me.role === "tenant_admin";
   const yours: TabItem[] = [
-    { id: "assistant", label: t("assistant.title"), icon: <Bot className="size-[18px]" aria-hidden="true" /> },
-    { id: "tasks", label: t("settings.tasks"), icon: <CalendarClock className="size-[18px]" aria-hidden="true" /> },
-    { id: "memory", label: t("settings.memory"), icon: <Brain className="size-[18px]" aria-hidden="true" /> },
-    { id: "skills", label: t("settings.skills"), icon: <Sparkles className="size-[18px]" aria-hidden="true" /> },
-    { id: "services", label: t("mcp.services.title"), icon: <Cable className="size-[18px]" aria-hidden="true" /> },
-    { id: "activity", label: t("activity.page.title"), icon: <Activity className="size-[18px]" aria-hidden="true" /> },
-    { id: "notifications", label: t("notifications.title"), icon: <Bell className="size-[18px]" aria-hidden="true" /> },
-    { id: "security", label: t("settings.security"), icon: <KeyRound className="size-[18px]" aria-hidden="true" /> },
-    { id: "appearance", label: t("settings.appearance"), icon: <Palette className="size-[18px]" aria-hidden="true" /> },
+    { id: "assistant", label: t("assistant.title"), icon: <Bot aria-hidden="true" /> },
+    { id: "tasks", label: t("settings.tasks"), icon: <CalendarClock aria-hidden="true" /> },
+    { id: "memory", label: t("settings.memory"), icon: <Brain aria-hidden="true" /> },
+    { id: "skills", label: t("settings.skills"), icon: <Sparkles aria-hidden="true" /> },
+    { id: "services", label: t("mcp.services.title"), icon: <Cable aria-hidden="true" /> },
+    { id: "activity", label: t("activity.page.title"), icon: <Activity aria-hidden="true" /> },
+    { id: "notifications", label: t("notifications.title"), icon: <Bell aria-hidden="true" /> },
+    { id: "security", label: t("settings.security"), icon: <KeyRound aria-hidden="true" /> },
+    { id: "appearance", label: t("settings.appearance"), icon: <Palette aria-hidden="true" /> },
   ];
   const household: TabItem[] = admin
     ? [
-        { id: "models", label: t("settings.models"), icon: <Plug className="size-[18px]" aria-hidden="true" /> },
-        { id: "mcp-servers", label: t("mcp.admin.title"), icon: <Blocks className="size-[18px]" aria-hidden="true" /> },
-        { id: "permissions", label: t("permissions.title"), icon: <ShieldCheck className="size-[18px]" aria-hidden="true" /> },
-        { id: "members", label: t("settings.members"), icon: <UserRound className="size-[18px]" aria-hidden="true" /> },
+        { id: "models", label: t("settings.models"), icon: <Plug aria-hidden="true" /> },
+        { id: "mcp-servers", label: t("mcp.admin.title"), icon: <Blocks aria-hidden="true" /> },
+        { id: "permissions", label: t("permissions.title"), icon: <ShieldCheck aria-hidden="true" /> },
+        { id: "members", label: t("settings.members"), icon: <UserRound aria-hidden="true" /> },
       ]
     : [];
   // The open section is in the address, so that a link opens it, such as the Memory page from a chat
   // (UX-027), and a reload keeps it.
   const [search, setSearch] = useSearchParams();
-  const tab = [...yours, ...household].find((item) => item.id === search.get("section"))?.id ?? (admin ? "models" : "assistant");
+  const entered = [...yours, ...household].find((item) => item.id === search.get("section"))?.id;
+  const tab = entered ?? (admin ? "models" : "assistant");
   const setTab = (id: Tab) => setSearch({ section: id }, { replace: true });
   return (
     <div className="relative min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid max-w-[900px] grid-cols-1 gap-[18px] px-4 pt-6 pb-14 md:grid-cols-[190px_minmax(0,1fr)] md:gap-9">
-        <h1 className="text-[26px] font-bold tracking-tight md:col-span-2">{t("settings.title")}</h1>
-        <nav aria-label={t("settings.sections")} className="flex gap-3 overflow-x-auto md:flex-col md:gap-4">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-12 md:flex-row md:justify-center md:gap-12 md:px-6 md:pt-8">
+        {/* On a phone: the list of sections until one is entered, then the section alone. */}
+        <nav aria-label={t("settings.sections")} className={cx("flex flex-none flex-col gap-px md:sticky md:top-8 md:w-52 md:self-start", entered && "max-md:hidden")}>
+          <h1 className="px-2 pb-3 font-serif text-display md:sr-only">{t("settings.title")}</h1>
           <TabGroup title={t("settings.yours")} items={yours} tab={tab} onChoose={setTab} />
           {household.length > 0 && <TabGroup title={t("settings.household")} items={household} tab={tab} onChoose={setTab} />}
         </nav>
-        <div className="flex min-w-0 flex-col gap-[34px]">
+        <div className={cx("flex w-full min-w-0 max-w-form flex-col gap-8", !entered && "max-md:hidden")}>
+          <div className="md:hidden">
+            <Button variant="ghost" size="sm" onClick={() => setSearch({}, { replace: true })}>
+              <ChevronLeft aria-hidden="true" />
+              {t("settings.title")}
+            </Button>
+          </div>
           {tab === "models" && admin ? (
             <ModelsSection />
           ) : tab === "mcp-servers" && admin ? (
@@ -118,21 +124,12 @@ export function Settings({ me }: { me: User }) {
 function TabGroup({ title, items, tab, onChoose }: { title: string; items: TabItem[]; tab: Tab; onChoose: (tab: Tab) => void }) {
   const heading = useId();
   return (
-    <div role="group" aria-labelledby={heading} className="flex flex-none gap-0.5 md:flex-col">
-      <h2 id={heading} className="hidden px-3 pb-1 text-xs font-semibold text-faint md:block">
-        {title}
-      </h2>
+    <div role="group" aria-labelledby={heading} className="flex flex-col gap-px">
+      <NavLabel id={heading}>{title}</NavLabel>
       {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-current={tab === item.id ? "page" : undefined}
-          onClick={() => onChoose(item.id)}
-          className="flex items-center gap-2.5 rounded-[9px] px-3 py-2 text-left font-medium whitespace-nowrap text-muted hover:bg-hover hover:text-fg aria-[current=page]:bg-hover aria-[current=page]:font-semibold aria-[current=page]:text-fg"
-        >
-          {item.icon}
+        <NavItem key={item.id} icon={item.icon} current={tab === item.id && "page"} onClick={() => onChoose(item.id)}>
           {item.label}
-        </button>
+        </NavItem>
       ))}
     </div>
   );
@@ -141,30 +138,19 @@ function TabGroup({ title, items, tab, onChoose }: { title: string; items: TabIt
 function AppearanceSection() {
   const { t } = useTranslation();
   const [theme, setTheme] = useTheme();
-  const themes: { id: Theme; label: string; swatch: string }[] = [
-    { id: "system", label: t("settings.system"), swatch: "bg-[linear-gradient(135deg,#f7f7f5_50%,#171719_50%)]" },
-    { id: "light", label: t("settings.light"), swatch: "bg-[linear-gradient(90deg,#efefec_30%,#f7f7f5_30%)]" },
-    { id: "dark", label: t("settings.dark"), swatch: "bg-[linear-gradient(90deg,#1e1e21_30%,#171719_30%)]" },
+  const themes: { value: Theme; label: string }[] = [
+    { value: "system", label: t("settings.system") },
+    { value: "light", label: t("settings.light") },
+    { value: "dark", label: t("settings.dark") },
   ];
   return (
-    <section>
-      <h2 className="mb-1 text-base font-bold">{t("settings.theme")}</h2>
-      <p className="mb-3.5 text-sm text-muted">{t("settings.themeHint")}</p>
-      <div className="grid max-w-[480px] grid-cols-3 gap-2.5">
-        {themes.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-pressed={theme === item.id}
-            onClick={() => setTheme(item.id)}
-            className="flex flex-col gap-2 rounded-[14px] border border-line-strong bg-surface p-3 text-left text-sm font-semibold aria-pressed:border-accent aria-pressed:shadow-[0_0_0_1px_var(--accent)]"
-          >
-            <span className={`h-11 rounded-lg border border-line ${item.swatch}`} aria-hidden="true" />
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </section>
+    <Page title={t("settings.appearance")}>
+      <Card rows>
+        <Row title={t("settings.theme")} description={t("settings.themeHint")}>
+          <ToggleGroup label={t("settings.theme")} options={themes} value={theme} onChange={setTheme} />
+        </Row>
+      </Card>
+    </Page>
   );
 }
 
@@ -204,82 +190,86 @@ function ModelsSection() {
 
   const current = models.data?.default;
   return (
-    <>
-      <p role="note" className="flex max-w-[62ch] items-start gap-2.5 rounded-[14px] border border-line bg-surface px-3.5 py-3 text-sm">
-        <Users className="mt-0.5 size-[18px] flex-none text-muted" aria-hidden="true" />
+    <Page title={t("settings.models")}>
+      <Notice role="note" icon={<Users aria-hidden="true" />}>
         {t("settings.householdNote")}
-      </p>
-      <section>
-        <h2 className="mb-1 text-base font-bold">{t("settings.defaultModel")}</h2>
-        <p className="mb-3.5 max-w-[62ch] text-sm text-muted">{t("settings.defaultHint")}</p>
-        <ModelSelect value={current ?? null} onChange={(choice) => void chooseDefault(choice)} label={t("settings.defaultModel")} placeholder={t("settings.noDefault")} policy="household" />
-      </section>
+      </Notice>
+      <Card rows>
+        <Row wide title={t("settings.defaultModel")} description={t("settings.defaultHint")}>
+          <ModelSelect value={current ?? null} onChange={(choice) => void chooseDefault(choice)} label={t("settings.defaultModel")} placeholder={t("settings.noDefault")} policy="household" />
+        </Row>
+      </Card>
       <HouseholdEgressSection />
       <SpeechSection />
-      <section>
-        <h2 className="mb-1 text-base font-bold">{t("settings.connections")}</h2>
-        <p className="mb-3.5 max-w-[62ch] text-sm text-muted">{t("settings.connectionsHint")}</p>
-        <div className="flex flex-col gap-2.5">
-          {connections.data?.length === 0 && <p className="text-sm text-muted">{t("settings.noConnections")}</p>}
-          {connections.data?.map((connection) => (
-            <div key={connection.id} className="rounded-2xl border border-line bg-surface px-4 py-3.5">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-0.5">
-                <span className="row-span-2 grid size-[42px] place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden="true">
-                  {connection.location === "local" ? <House className="size-5" /> : <Cloud className="size-5" />}
-                </span>
-                <span className="flex flex-wrap items-center gap-2 font-bold">
-                  {connection.name}
-                  <span className="inline-flex items-center gap-1 rounded-full border border-line-strong px-2 text-[11.5px] font-semibold text-muted">
-                    {connection.location === "local" ? t("settings.local") : t("settings.remote")}
-                  </span>
-                </span>
-                <span className="row-span-2 inline-flex items-center gap-1.5 rounded-full bg-ok/15 px-2.5 py-[3px] text-xs font-semibold whitespace-nowrap text-ok">
-                  <Check className="size-3.5" aria-hidden="true" />
-                  {connection.model_count === 1 ? t("settings.modelCountOne", { count: 1 }) : t("settings.modelCountMany", { count: connection.model_count })}
-                </span>
-                <span className="col-start-2 text-[13px] break-all text-muted">{connection.base_url}</span>
-              </div>
-              <ServedWindows connection={connection} models={models.data?.items ?? []} />
-              <div className="mt-2.5 flex gap-2">
-                <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} onClick={() => void test(connection)}>
-                  {t("settings.test")}
-                </button>
-                <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} aria-label={t("settings.editLabel", { name: connection.name })} onClick={() => setEditing(connection)}>
-                  {t("settings.edit")}
-                </button>
-                <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} onClick={() => setRemoving(connection)}>
-                  {t("settings.remove")}
-                </button>
-              </div>
-              {connection.id in results && <TestResult test={results[connection.id] as ConnectionTest} />}
-            </div>
-          ))}
-        </div>
-        <div className="mt-3">
-          <button type="button" className={BUTTON} onClick={() => setAdding(true)}>
-            <Plus className="size-[18px]" aria-hidden="true" />
+      <Group
+        title={t("settings.connections")}
+        description={t("settings.connectionsHint")}
+        action={
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Plus aria-hidden="true" />
             {t("settings.add")}
-          </button>
-        </div>
-      </section>
+          </Button>
+        }
+      >
+        <Card rows>
+          {connections.data?.length === 0 && <EmptyState icon={<Plug />} title={t("settings.noConnections")} />}
+          {connections.data?.map((connection) => (
+            <Row
+              key={connection.id}
+              leading={<Tile>{connection.location === "local" ? <House /> : <Cloud />}</Tile>}
+              title={
+                <>
+                  {connection.name}
+                  <Badge>{connection.location === "local" ? t("settings.local") : t("settings.remote")}</Badge>
+                </>
+              }
+              description={<span className="font-mono break-all">{connection.base_url}</span>}
+              below={
+                <>
+                  <ServedWindows connection={connection} models={models.data?.items ?? []} />
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => void test(connection)}>
+                      {t("settings.test")}
+                    </Button>
+                    <Button size="sm" aria-label={t("settings.editLabel", { name: connection.name })} onClick={() => setEditing(connection)}>
+                      {t("settings.edit")}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => setRemoving(connection)}>
+                      {t("settings.remove")}
+                    </Button>
+                  </div>
+                  {connection.id in results && <TestResult test={results[connection.id] as ConnectionTest} />}
+                </>
+              }
+            >
+              <Badge tone="ok">
+                <Check aria-hidden="true" />
+                {connection.model_count === 1 ? t("settings.modelCountOne", { count: 1 }) : t("settings.modelCountMany", { count: connection.model_count })}
+              </Badge>
+            </Row>
+          ))}
+        </Card>
+      </Group>
       {adding && <ConnectionDialog onClose={() => setAdding(false)} onSaved={refresh} existing={connections.data ?? []} />}
       {editing && <ConnectionDialog key={editing.id} connection={editing} onClose={() => setEditing(null)} onSaved={refresh} existing={connections.data ?? []} />}
-      <Dialog.Root open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-          <Dialog.Content role="alertdialog" className="rise fixed top-1/2 left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] shadow-soft">
-            <Dialog.Title className="mb-2 text-lg font-bold">{t("settings.removeTitle", { name: removing?.name ?? "" })}</Dialog.Title>
-            <Dialog.Description className="text-muted">{t("settings.removeBody")}</Dialog.Description>
-            <div className="mt-[18px] flex justify-end gap-2">
-              <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
-              <button type="button" className="h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold text-on-danger" onClick={() => removing && void remove(removing)}>
+      {removing && (
+        <Dialog
+          asks
+          size="sm"
+          onClose={() => setRemoving(null)}
+          title={t("settings.removeTitle", { name: removing.name })}
+          description={t("settings.removeBody")}
+          footer={
+            <>
+              <Button onClick={() => setRemoving(null)}>{t("connection.cancel")}</Button>
+              <Button variant="danger-solid" onClick={() => void remove(removing)}>
                 {t("settings.remove")}
-              </button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </>
+              </Button>
+            </>
+          }
+        />
+      )}
+    </Page>
   );
 }
 
@@ -293,19 +283,14 @@ function ServedWindows({ connection, models }: { connection: Connection; models:
   if (configured === null || smaller.length === 0) return null;
   const number = (value: number) => value.toLocaleString(i18n.language);
   return (
-    <div role="note" className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-danger/45 bg-raised px-3 py-2.5 text-[13px]">
-      <TriangleAlert className="mt-0.5 size-4 flex-none text-danger" aria-hidden="true" />
-      <div className="min-w-0">
-        <ul className="flex flex-col gap-0.5">
-          {smaller.map((model) => (
-            <li key={model.model}>
-              {t("settings.servedWindow", { model: model.name, served: number(model.served_context_window ?? 0), configured: number(configured) })}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-1 text-muted">{t("settings.servedWindowFix", { configured: number(configured) })}</p>
-      </div>
-    </div>
+    <Notice role="note" tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
+      <ul className="flex flex-col gap-1">
+        {smaller.map((model) => (
+          <li key={model.model}>{t("settings.servedWindow", { model: model.name, served: number(model.served_context_window ?? 0), configured: number(configured) })}</li>
+        ))}
+      </ul>
+      <p className="mt-1 text-ink-2">{t("settings.servedWindowFix", { configured: number(configured) })}</p>
+    </Notice>
   );
 }
 
@@ -341,65 +326,59 @@ function SpeechSection() {
   }
 
   return (
-    <section>
-      <h2 className="mb-1 text-base font-bold">{t("settings.voice")}</h2>
-      <p className="mb-3.5 max-w-[62ch] text-sm text-muted">{t("settings.voiceHint")}</p>
-      <div className="flex max-w-[420px] flex-col gap-3">
-        <div className="flex items-center gap-2">
+    <Group title={t("settings.voice")} description={t("settings.voiceHint")}>
+      <Card rows>
+        <Row wide title={t("settings.transcriptionModel")}>
           <ModelSelect kind="transcription" value={current.transcription} onChange={(choice) => void save({ ...current, transcription: choice })} label={t("settings.transcriptionModel")} placeholder={t("settings.noTranscription")} />
           {current.transcription && (
-            <button type="button" className={`${BUTTON} h-10 flex-none px-3 text-[13px]`} onClick={() => void save({ ...current, transcription: null })}>
+            <Button size="sm" onClick={() => void save({ ...current, transcription: null })}>
               {t("settings.remove")}
-            </button>
+            </Button>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+        </Row>
+        <Row wide title={t("settings.speechModel")}>
           <ModelSelect kind="speech" value={shown?.choice ?? null} onChange={chooseSpeech} label={t("settings.speechModel")} placeholder={t("settings.noSpeech")} />
           {current.speech && (
-            <button type="button" className={`${BUTTON} h-10 flex-none px-3 text-[13px]`} onClick={() => void save({ ...current, speech: null })}>
+            <Button size="sm" onClick={() => void save({ ...current, speech: null })}>
               {t("settings.remove")}
-            </button>
+            </Button>
           )}
-        </div>
+        </Row>
         {shown && (
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const voice = String(new FormData(event.currentTarget).get("voice") ?? "").trim();
-              if (voice) void save({ ...current, speech: { ...shown.choice, voice } });
-            }}
-          >
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label htmlFor={voiceField} className="text-[13.5px] font-semibold">
-                {t("settings.voiceName")}
-              </label>
+          <Row wide title={t("settings.voiceName")} htmlFor={voiceField}>
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const voice = String(new FormData(event.currentTarget).get("voice") ?? "").trim();
+                if (voice) void save({ ...current, speech: { ...shown.choice, voice } });
+              }}
+            >
               {shownModel?.voices?.length ? (
-                <select
+                <Select
                   id={voiceField}
                   name="voice"
                   defaultValue={shown.voice}
                   key={`${shown.choice.model}-${shown.voice}`}
                   onChange={(event) => void save({ ...current, speech: { ...shown.choice, voice: event.target.value } })}
-                  className={INPUT}
                 >
                   {shownModel.voices.map((voice) => (
                     <option key={voice}>{voice}</option>
                   ))}
-                </select>
+                </Select>
               ) : (
-                <input id={voiceField} name="voice" defaultValue={shown.voice} key={`${shown.choice.model}-${shown.voice}`} required maxLength={200} className={INPUT} placeholder={t("settings.voicePlaceholder")} />
+                <>
+                  <TextInput id={voiceField} name="voice" defaultValue={shown.voice} key={`${shown.choice.model}-${shown.voice}`} required maxLength={200} placeholder={t("settings.voicePlaceholder")} />
+                  <Button type="submit" size="sm">
+                    {t("settings.saveVoice")}
+                  </Button>
+                </>
               )}
-            </div>
-            {!shownModel?.voices?.length && (
-              <button type="submit" className={`${BUTTON} h-10`}>
-                {t("settings.saveVoice")}
-              </button>
-            )}
-          </form>
+            </form>
+          </Row>
         )}
-      </div>
-    </section>
+      </Card>
+    </Group>
   );
 }
 
@@ -408,34 +387,36 @@ function TestResult({ test }: { test: ConnectionTest }) {
   const { t } = useTranslation();
   const reason = test.reason;
   return (
-    <div role={test.passed ? "status" : "alert"} className={`mt-3 flex flex-col gap-2.5 rounded-[14px] border px-3.5 py-3 text-[13.5px] ${test.passed ? "border-ok/50" : "border-danger/50"}`}>
-      <div className="flex items-center gap-2 text-[14.5px] font-bold">
-        {test.passed ? <Check className="size-[18px] text-ok" aria-hidden="true" /> : <X className="size-[18px] text-danger" aria-hidden="true" />}
+    <div role={test.passed ? "status" : "alert"} className={cx("flex flex-col gap-3 rounded-md px-4 py-3 text-small", test.passed ? "bg-ok-soft" : "bg-danger-soft")}>
+      <div className={cx("flex items-center gap-2 text-body font-semibold", test.passed ? "text-ok" : "text-danger")}>
+        {test.passed ? <Check className="size-4" aria-hidden="true" /> : <X className="size-4" aria-hidden="true" />}
         {test.passed ? t("connection.passed") : t(`connection.reasons.${reason ?? "http_error"}`)}
       </div>
-      <p className="text-muted">
+      <p>
         {test.passed
           ? test.model_count === 1
             ? t("connection.passedBodyOne", { count: 1 })
             : t("connection.passedBodyMany", { count: test.model_count ?? 0 })
           : t(`connection.fixes.${reason ?? "http_error"}`)}
       </p>
-      <ol className="flex flex-col gap-1.5">
+      <ol className="flex flex-col gap-2">
         {test.steps.map((step) => (
-          <li key={step.step} className={`grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-2 ${step.outcome === "skipped" ? "text-faint" : ""}`}>
-            <span className={`grid place-items-center ${step.outcome === "passed" ? "text-ok" : step.outcome === "failed" ? "text-danger" : ""}`} aria-hidden="true">
-              {step.outcome === "passed" ? <Check className="size-[15px]" strokeWidth={2.4} /> : step.outcome === "failed" ? <X className="size-[15px]" strokeWidth={2.4} /> : "–"}
+          <li key={step.step} className={cx("flex items-start gap-2", step.outcome === "skipped" && "text-ink-3")}>
+            <span className={cx("mt-px flex-none", step.outcome === "passed" ? "text-ok" : step.outcome === "failed" ? "text-danger" : "")} aria-hidden="true">
+              {step.outcome === "passed" ? <Check className="size-4" /> : step.outcome === "failed" ? <X className="size-4" /> : <Minus className="size-4" />}
             </span>
-            <span className={step.outcome === "skipped" ? "font-medium" : "font-semibold"}>{t(`connection.steps.${step.step}`)}</span>
-            <span className="text-xs text-faint tabular-nums">{step.duration_ms === null ? "" : step.duration_ms >= 1000 ? `${Math.round(step.duration_ms / 1000)} s` : `${step.duration_ms} ms`}</span>
-            <span className={`col-span-2 col-start-2 font-mono text-xs break-all ${step.outcome === "failed" ? "text-danger" : "text-muted"}`}>{step.detail}</span>
+            <span className="min-w-0 flex-1">
+              <span className={step.outcome === "skipped" ? "font-medium" : "font-semibold"}>{t(`connection.steps.${step.step}`)}</span>
+              <span className={cx("block font-mono text-caption break-all", step.outcome === "failed" ? "text-danger" : "text-ink-2")}>{step.detail}</span>
+            </span>
+            <span className="flex-none text-caption text-ink-3 tabular-nums">{step.duration_ms === null ? "" : step.duration_ms >= 1000 ? `${Math.round(step.duration_ms / 1000)} s` : `${step.duration_ms} ms`}</span>
           </li>
         ))}
       </ol>
       {test.technical_detail && (
         <details>
-          <summary className="cursor-pointer text-[13px] font-semibold text-muted">{t("connection.technical")}</summary>
-          <pre className="mt-1.5 rounded-lg bg-hover px-2.5 py-2 font-mono text-xs break-all whitespace-pre-wrap">{test.technical_detail}</pre>
+          <summary className="cursor-pointer font-semibold text-ink-2">{t("connection.technical")}</summary>
+          <pre className="mt-2 rounded-sm bg-hover p-2 font-mono text-caption break-all whitespace-pre-wrap">{test.technical_detail}</pre>
         </details>
       )}
     </div>
@@ -559,110 +540,95 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
     }
   }
 
-  const choice = "rounded-[9px] px-3 py-1.5 text-[13.5px] font-medium text-muted aria-pressed:bg-surface aria-pressed:text-fg aria-pressed:shadow-sm";
+  const kinds = [
+    { value: "openrouter" as const, label: t("connection.openrouter") },
+    { value: "openai" as const, label: t("connection.server") },
+  ];
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && props.onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className="rise fixed top-1/2 left-1/2 z-50 max-h-[calc(100%-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[20px] bg-raised p-[22px] shadow-soft">
-          <Dialog.Title className="mb-3 text-lg font-bold">{editing ? t("connection.editTitle", { name: editing.name }) : t("connection.title")}</Dialog.Title>
-          <Dialog.Description className="sr-only">{editing ? t("connection.editDescription") : t("connection.kind")}</Dialog.Description>
-          {!editing && <div role="group" aria-label={t("connection.kind")} className="inline-flex flex-wrap gap-0.5 rounded-xl bg-hover p-[3px]">
-            <button type="button" className={choice} aria-pressed={kind === "openrouter"} onClick={() => (setKind("openrouter"), setResult(null))}>
-              {t("connection.openrouter")}
-            </button>
-            <button type="button" className={choice} aria-pressed={kind === "openai"} onClick={() => (setKind("openai"), setResult(null))}>
-              {t("connection.server")}
-            </button>
-          </div>}
-          <form key={kind} onSubmit={(event) => void (editing ? save(event, editing) : connect(event))} className="mt-3.5 flex flex-col gap-3.5">
-            {kind === "openrouter" ? (
-              <>
-                {editing && (
-                  <Field id="openrouter-name" label={t("connection.name")}>
-                    <input id="openrouter-name" name="name" required maxLength={100} defaultValue={editing.name} className={INPUT} />
-                  </Field>
-                )}
-                <Field id="api-key" label={editing ? t("connection.newApiKey") : t("connection.apiKey")} hint={editing ? t("connection.keepKeyHint") : t("connection.apiKeyHint")}>
-                  <input id="api-key" name="api_key" type="password" autoComplete="off" required={!editing} className={INPUT} />
-                </Field>
-              </>
-            ) : (
-              <>
-                <Field id="server-name" label={t("connection.name")}>
-                  <input id="server-name" name="name" required maxLength={100} defaultValue={editing?.name} className={INPUT} />
-                </Field>
-                <Field id="server-address" label={t("connection.address")} hint={t("connection.addressHint")}>
-                  <input id="server-address" name="base_url" type="url" required defaultValue={editing?.base_url} className={INPUT} />
-                </Field>
-                <fieldset className="flex flex-col gap-1.5">
-                  <legend className="mb-1.5 text-[13.5px] font-semibold">{t("connection.where")}</legend>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="location" value="local" defaultChecked={(editing?.location ?? "local") === "local"} />
-                    {t("connection.atHome")}
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="location" value="remote" defaultChecked={editing?.location === "remote"} />
-                    {t("connection.elsewhere")}
-                  </label>
-                </fieldset>
-                <Field id="server-window" label={t("connection.contextWindow")} hint={t("connection.contextWindowHint")}>
-                  <input id="server-window" name="context_window" type="number" min={512} max={10000000} step={1} required defaultValue={editing?.context_window ?? DEFAULT_CONTEXT_WINDOW} className={INPUT} />
-                </Field>
-                {!editing?.server && (
-                  <Field id="server-images" label={t("connection.imageModels")} hint={t("connection.imageModelsHint")}>
-                    <textarea id="server-images" name="image_models" rows={2} defaultValue={editing?.image_models.join("\n") ?? ""} className={`${INPUT} h-auto py-2`} />
-                  </Field>
-                )}
-                <Field id="server-key" label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
-                  <input id="server-key" name="api_key" type="password" autoComplete="off" className={INPUT} />
-                </Field>
-                {editing?.has_api_key && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="remove_key" />
-                    {t("connection.removeKey")}
-                  </label>
-                )}
-              </>
+    <Dialog
+      onClose={props.onClose}
+      title={editing ? t("connection.editTitle", { name: editing.name }) : t("connection.title")}
+      description={editing ? t("connection.editDescription") : t("connection.kind")}
+      descriptionHidden
+      onSubmit={(event) => void (editing ? save(event, editing) : connect(event))}
+      footerStart={
+        !editing && (
+          <Button disabled={busy} onClick={(event) => void runTest(event.currentTarget.form)}>
+            {t("connection.test")}
+          </Button>
+        )
+      }
+      footer={
+        <>
+          <Button onClick={props.onClose}>{t("connection.cancel")}</Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {editing ? t("connection.save") : t("connection.connect")}
+          </Button>
+        </>
+      }
+    >
+      {!editing && (
+        <div>
+          <ToggleGroup label={t("connection.kind")} options={kinds} value={kind} onChange={(next) => (setKind(next), setResult(null))} />
+        </div>
+      )}
+      {/* Keyed by the kind, so that changing it empties the fields. */}
+      <Fragment key={kind}>
+        {kind === "openrouter" ? (
+          <>
+            {editing && <FormField label={t("connection.name")}>{(ties) => <TextInput {...ties} name="name" required maxLength={100} defaultValue={editing.name} />}</FormField>}
+            <FormField label={editing ? t("connection.newApiKey") : t("connection.apiKey")} hint={editing ? t("connection.keepKeyHint") : t("connection.apiKeyHint")}>
+              {(ties) => <TextInput {...ties} name="api_key" type="password" autoComplete="off" required={!editing} />}
+            </FormField>
+          </>
+        ) : (
+          <>
+            <FormField label={t("connection.name")}>{(ties) => <TextInput {...ties} name="name" required maxLength={100} defaultValue={editing?.name} />}</FormField>
+            <FormField label={t("connection.address")} hint={t("connection.addressHint")}>
+              {(ties) => <TextInput {...ties} name="base_url" type="url" required defaultValue={editing?.base_url} />}
+            </FormField>
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-2 text-small font-semibold">{t("connection.where")}</legend>
+              <label className="flex items-center gap-2 text-body">
+                <Radio name="location" value="local" defaultChecked={(editing?.location ?? "local") === "local"} />
+                {t("connection.atHome")}
+              </label>
+              <label className="flex items-center gap-2 text-body">
+                <Radio name="location" value="remote" defaultChecked={editing?.location === "remote"} />
+                {t("connection.elsewhere")}
+              </label>
+            </fieldset>
+            <FormField label={t("connection.contextWindow")} hint={t("connection.contextWindowHint")}>
+              {(ties) => <TextInput {...ties} name="context_window" type="number" min={512} max={10000000} step={1} required defaultValue={editing?.context_window ?? DEFAULT_CONTEXT_WINDOW} />}
+            </FormField>
+            {!editing?.server && (
+              <FormField label={t("connection.imageModels")} hint={t("connection.imageModelsHint")}>
+                {(ties) => <TextArea {...ties} name="image_models" rows={2} defaultValue={editing?.image_models.join("\n") ?? ""} />}
+              </FormField>
             )}
-            {busy && (
-              <p role="status" className="live-text text-sm">
-                {t("connection.testing")}
-              </p>
+            <FormField label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
+              {(ties) => <TextInput {...ties} name="api_key" type="password" autoComplete="off" />}
+            </FormField>
+            {editing?.has_api_key && (
+              <label className="flex items-center gap-2 text-body">
+                <Checkbox name="remove_key" />
+                {t("connection.removeKey")}
+              </label>
             )}
-            {result && <TestResult test={result} />}
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {!editing && (
-                <button type="button" className={BUTTON} disabled={busy} onClick={(event) => void runTest(event.currentTarget.form)}>
-                  {t("connection.test")}
-                </button>
-              )}
-              <span className="flex-1" />
-              <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
-              <button type="submit" className={PRIMARY} disabled={busy}>
-                {editing ? t("connection.save") : t("connection.connect")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          </>
+        )}
+      </Fragment>
+      {busy && (
+        <p role="status" className="live-text text-body">
+          {t("connection.testing")}
+        </p>
+      )}
+      {result && <TestResult test={result} />}
+    </Dialog>
   );
 }
 
 /** The model names of a field, one per line, without repeats (MOD-020). */
 function named(value: string): string[] {
   return [...new Set(value.split("\n").map((name) => name.trim()).filter(Boolean))];
-}
-
-function Field(props: { id: string; label: string; hint?: string | undefined; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={props.id} className="text-[13.5px] font-semibold">
-        {props.label}
-      </label>
-      {props.children}
-      {props.hint && <small className="text-[12.5px] text-muted">{props.hint}</small>}
-    </div>
-  );
 }

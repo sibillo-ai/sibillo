@@ -1,10 +1,11 @@
-import { Check, ChevronDown, Cloud, House } from "lucide-react";
+import { ChevronDown, Cloud, House } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import type { EgressPolicy, ModelChoice, ModelOption } from "../api/client";
 import { findModel, refusedBy, sameModel, shortPrice, useModels } from "../models";
+import { Badge, Button, PickerEmpty, PickerGroup, PickerOption, PickerPanel, SearchInput, SelectButton } from "../ui";
 
 // The space the panel keeps from the window's edges and from its button.
 const MARGIN = 12;
@@ -35,28 +36,27 @@ export function ModelSelect(props: {
   if (props.compact && !chosen && !props.placeholder) return null;
   const local = chosen?.location === "local";
   const shown = chosen ? (props.compact ? chosen.name : `${chosen.name} · ${chosen.connection_name}`) : props.placeholder;
+  const icon = chosen && (local ? <House aria-hidden="true" /> : <Cloud aria-hidden="true" />);
+  const trigger = {
+    // The name holds what the button shows, so that it can be spoken as it reads (UX-007).
+    ...(props.label ? { "aria-label": `${props.label}: ${shown ?? ""}` } : {}),
+    "aria-haspopup": "dialog" as const,
+    "aria-expanded": open,
+    onClick: () => setOpen(!open),
+  };
   return (
     <>
-      <button
-        ref={button}
-        type="button"
-        className={
-          props.compact
-            ? "flex min-w-0 items-center gap-1.5 rounded-[9px] px-2 py-1.5 text-[13.5px] font-medium text-muted hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
-            : "flex h-10 w-full max-w-[420px] items-center gap-2 rounded-[10px] border border-line-strong bg-bg px-3 text-left outline-none hover:bg-hover focus-visible:border-accent aria-expanded:border-accent"
-        }
-        // The name holds what the button shows, so that it can be spoken as it reads (UX-007).
-        aria-label={props.label && `${props.label}: ${shown ?? ""}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {chosen && (local ? <House className="size-4 flex-none" aria-hidden="true" /> : <Cloud className="size-4 flex-none" aria-hidden="true" />)}
-        <span className={`truncate ${props.compact ? "" : "flex-1"}`}>
+      {props.compact ? (
+        <Button ref={button} variant="ghost" size="sm" shrink {...trigger}>
+          {icon}
+          <span className="truncate">{shown}</span>
+          <ChevronDown aria-hidden="true" />
+        </Button>
+      ) : (
+        <SelectButton ref={button} leading={icon} {...trigger}>
           {shown}
-        </span>
-        <ChevronDown className="size-4 flex-none" aria-hidden="true" />
-      </button>
+        </SelectButton>
+      )}
       {open && models.data && (
         <ModelPicker
           anchor={button}
@@ -134,68 +134,55 @@ function ModelPicker(props: {
   for (const option of matching) groups.set(option.connection_id, [...(groups.get(option.connection_id) ?? []), option]);
 
   return createPortal(
-    <div
+    <PickerPanel
       ref={panel}
-      role="dialog"
-      aria-label={t("picker.title")}
+      label={t("picker.title")}
       style={style ?? { visibility: "hidden" }}
-      className="slide fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-line bg-raised text-fg shadow-soft"
+      header={<SearchInput autoFocus label={t("picker.search")} placeholder={t("picker.searchPlaceholder", { count: props.options.length })} value={query} onChange={(event) => setQuery(event.target.value)} />}
+      footer={t("picker.footer")}
     >
-      <div className="border-b border-line p-2.5">
-        <input
-          type="search"
-          autoFocus
-          aria-label={t("picker.search")}
-          placeholder={t("picker.searchPlaceholder", { count: props.options.length })}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="h-[38px] w-full rounded-[10px] border border-line-strong bg-bg px-3 text-sm outline-none focus:border-accent"
-        />
-      </div>
-      <div className="min-h-0 overflow-y-auto px-1.5 pt-1 pb-2">
-        {matching.length === 0 && <p className="px-2.5 py-4 text-sm text-muted">{t("picker.none", { query })}</p>}
-        {[...groups.values()].map((options) => {
-          const first = options[0];
-          if (first === undefined) return null;
-          return (
-            <section key={first.connection_id}>
-              <h3 className="mx-2.5 mt-3 mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted">
-                {first.location === "local" ? <House className="size-3.5" aria-hidden="true" /> : <Cloud className="size-3.5" aria-hidden="true" />}
-                {first.connection_name}
-                <span className="ml-auto font-normal">{first.location === "local" ? t("picker.local") : t("picker.remote")}</span>
-              </h3>
-              {refusedBy(props.policy, first) && <p className="mx-2.5 mb-1 text-xs text-muted">{t("picker.refused")}</p>}
-              {options.map((option) => (
-                <button
-                  key={option.model}
-                  type="button"
-                  disabled={refusedBy(props.policy, option)}
-                  onClick={() => props.onPick(option)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 rounded-[11px] px-2.5 py-2 text-left hover:bg-hover focus-visible:bg-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-                >
-                  <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
-                    <span className="truncate">{option.name}</span>
-                    {sameModel(option, props.defaultModel) && <span className="rounded-full bg-accent-soft px-[7px] py-px text-[11px] font-bold text-accent">{t("picker.default")}</span>}
-                    {option.tools === false && <span className="rounded-full border border-line-strong px-[7px] py-px text-[11px] font-semibold text-muted">{t("picker.chatOnly")}</span>}
-                    {option.images === true && <span className="rounded-full border border-line-strong px-[7px] py-px text-[11px] font-semibold text-muted">{t("picker.seesImages")}</span>}
-                  </span>
-                  <span className="row-span-2 self-center text-accent">{sameModel(option, props.chosen) && <Check className="size-[18px]" aria-hidden="true" />}</span>
-                  <span className="text-[12.5px] text-muted tabular-nums">
+      {matching.length === 0 && <PickerEmpty>{t("picker.none", { query })}</PickerEmpty>}
+      {[...groups.values()].map((options) => {
+        const first = options[0];
+        if (first === undefined) return null;
+        return (
+          <PickerGroup
+            key={first.connection_id}
+            icon={first.location === "local" ? <House aria-hidden="true" /> : <Cloud aria-hidden="true" />}
+            title={first.connection_name}
+            end={first.location === "local" ? t("picker.local") : t("picker.remote")}
+            note={refusedBy(props.policy, first) && t("picker.refused")}
+          >
+            {options.map((option) => (
+              <PickerOption
+                key={option.model}
+                title={option.name}
+                disabled={refusedBy(props.policy, option)}
+                chosen={sameModel(option, props.chosen)}
+                onPick={() => props.onPick(option)}
+                badges={
+                  <>
+                    {sameModel(option, props.defaultModel) && <Badge tone="accent">{t("picker.default")}</Badge>}
+                    {option.tools === false && <Badge>{t("picker.chatOnly")}</Badge>}
+                    {option.images === true && <Badge>{t("picker.seesImages")}</Badge>}
+                  </>
+                }
+                detail={
+                  <>
                     {option.connection_name} ·{" "}
                     {option.location === "local"
                       ? t("picker.free")
                       : option.prices
                         ? t("picker.price", { input: shortPrice(option.prices.input), output: shortPrice(option.prices.output) })
                         : t("picker.unknownPrice")}
-                  </span>
-                </button>
-              ))}
-            </section>
-          );
-        })}
-      </div>
-      <p className="border-t border-line px-3.5 py-2 text-xs text-faint">{t("picker.footer")}</p>
-    </div>,
+                  </>
+                }
+              />
+            ))}
+          </PickerGroup>
+        );
+      })}
+    </PickerPanel>,
     document.body,
   );
 }

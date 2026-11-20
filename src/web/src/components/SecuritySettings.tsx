@@ -1,22 +1,17 @@
 // The user's passkeys, and the members of the household with theirs for its admins (UX-026, AUTH-010, ADR-0094).
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Plus } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, api, unwrap, type Schemas, type User } from "../api/client";
 import { useNotify } from "../notices";
 import { createPasskey, passkeysSupported } from "../passkeys";
+import { Avatar, Button, Card, Dialog, EmptyState, FormField, Group, Notice, Page, Row, TextInput, Tile } from "../ui";
 
 type Passkey = Schemas["Passkey"];
 
 const PASSKEYS = ["me", "passkeys"] as const;
-const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
-const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
-const DANGER = "h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold text-on-danger disabled:opacity-50";
-const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
-const DIALOG = "rise fixed top-1/2 left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-[20px] bg-raised p-[22px] shadow-soft";
 
 /** What a failed request means for the person typing their password. */
 function problemText(t: (key: string) => string, error: unknown): string {
@@ -32,7 +27,6 @@ function problemText(t: (key: string) => string, error: unknown): string {
 /** The user's passkeys: listed, added and removed with the password (UX-026). */
 export function PasskeysSection() {
   const { t, i18n } = useTranslation();
-  const heading = useId();
   const queries = useQueryClient();
   const passkeys = useQuery({ queryKey: PASSKEYS, queryFn: async () => unwrap(await api.GET("/me/passkeys")) });
   const [adding, setAdding] = useState(false);
@@ -41,67 +35,62 @@ export function PasskeysSection() {
   const refresh = () => queries.invalidateQueries({ queryKey: PASSKEYS });
   const available = passkeys.data?.available ?? true;
   const items = passkeys.data?.items ?? [];
+  const add = available && passkeysSupported() && (
+    <Button size="sm" onClick={() => setAdding(true)}>
+      <Plus aria-hidden="true" />
+      {t("passkeys.add")}
+    </Button>
+  );
   return (
-    <section aria-labelledby={heading} className="flex flex-col gap-3">
-      <div>
-        <h2 id={heading} className="mb-1 text-base font-bold">
-          {t("passkeys.title")}
-        </h2>
-        <p className="max-w-[62ch] text-sm text-muted">{t("passkeys.hint")}</p>
-      </div>
-      {!available && (
-        <p role="note" className="max-w-[62ch] rounded-xl border border-line px-3 py-2.5 text-sm">
-          {t("passkeys.unavailable")}
-        </p>
-      )}
-      {passkeys.data && items.length === 0 && <p className="text-sm text-muted">{t("passkeys.none")}</p>}
-      <ul aria-label={t("passkeys.title")} className="flex flex-col gap-2">
-        {items.map((passkey) => (
-          <li key={passkey.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-line bg-surface px-4 py-3">
-            <KeyRound className="size-[18px] flex-none text-accent" aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-bold break-words">{passkey.name}</span>
-              <span className="block text-[13px] text-muted">
-                {t("passkeys.added", { date: date.format(new Date(passkey.created_at)) })}
-                {" · "}
-                {passkey.last_used_at === null ? t("passkeys.neverUsed") : t("passkeys.lastUsed", { date: date.format(new Date(passkey.last_used_at)) })}
-              </span>
-            </span>
-            <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} aria-label={t("passkeys.removeLabel", { name: passkey.name })} onClick={() => setRemoving(passkey)}>
-              {t("passkeys.remove")}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {available && passkeysSupported() && (
-        <div>
-          <button type="button" className={BUTTON} onClick={() => setAdding(true)}>
-            <Plus className="size-[18px]" aria-hidden="true" />
-            {t("passkeys.add")}
-          </button>
-        </div>
+    <Group role="region" title={t("passkeys.title")} description={t("passkeys.hint")} action={items.length > 0 && add}>
+      {!available && <Notice role="note">{t("passkeys.unavailable")}</Notice>}
+      {passkeys.data && (
+        <Card>
+          {items.length === 0 ? (
+            <EmptyState icon={<KeyRound />} title={t("passkeys.none")} action={add || undefined} />
+          ) : (
+            <ul aria-label={t("passkeys.title")} className="divide-y divide-line">
+              {items.map((passkey) => (
+                <li key={passkey.id}>
+                  <Row
+                    leading={
+                      <Tile>
+                        <KeyRound />
+                      </Tile>
+                    }
+                    title={<span className="min-w-0 break-words">{passkey.name}</span>}
+                    description={
+                      <>
+                        {t("passkeys.added", { date: date.format(new Date(passkey.created_at)) })}
+                        {" · "}
+                        {passkey.last_used_at === null ? t("passkeys.neverUsed") : t("passkeys.lastUsed", { date: date.format(new Date(passkey.last_used_at)) })}
+                      </>
+                    }
+                  >
+                    <Button variant="danger" size="sm" aria-label={t("passkeys.removeLabel", { name: passkey.name })} onClick={() => setRemoving(passkey)}>
+                      {t("passkeys.remove")}
+                    </Button>
+                  </Row>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
       {adding && <AddPasskeyDialog onClose={() => setAdding(false)} onAdded={refresh} />}
       {removing && <RemovePasskeyDialog key={removing.id} passkey={removing} onClose={() => setRemoving(null)} onRemoved={refresh} />}
-    </section>
+    </Group>
   );
 }
 
-function PasswordField({ id }: { id: string }) {
+function PasswordField() {
   const { t } = useTranslation();
-  return (
-    <label htmlFor={id} className="flex flex-col gap-1.5">
-      <span className="text-[13.5px] font-semibold">{t("signIn.password")}</span>
-      <input id={id} name="password" type="password" autoComplete="current-password" required className={INPUT} />
-    </label>
-  );
+  return <FormField label={t("signIn.password")}>{(ties) => <TextInput {...ties} name="password" type="password" autoComplete="current-password" required />}</FormField>;
 }
 
 function AddPasskeyDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => Promise<void> }) {
   const { t } = useTranslation();
   const notify = useNotify();
-  const nameField = useId();
-  const passwordField = useId();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -131,39 +120,30 @@ function AddPasskeyDialog({ onClose, onAdded }: { onClose: () => void; onAdded: 
   }
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className={DIALOG}>
-          <Dialog.Title className="mb-2 text-lg font-bold">{t("passkeys.add")}</Dialog.Title>
-          <Dialog.Description className="text-sm text-muted">{t("passkeys.addHint")}</Dialog.Description>
-          <form onSubmit={(event) => void add(event)} className="mt-3.5 flex flex-col gap-3.5">
-            <label htmlFor={nameField} className="flex flex-col gap-1.5">
-              <span className="text-[13.5px] font-semibold">{t("passkeys.name")}</span>
-              <input id={nameField} name="name" required maxLength={100} placeholder={t("passkeys.namePlaceholder")} className={INPUT} />
-            </label>
-            <PasswordField id={passwordField} />
-            {error && (
-              <p role="alert" className="text-sm text-danger">
-                {error}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
-              <button type="submit" disabled={busy} className={PRIMARY}>
-                {t("passkeys.confirmAdd")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      onClose={onClose}
+      title={t("passkeys.add")}
+      description={t("passkeys.addHint")}
+      size="sm"
+      onSubmit={(event) => void add(event)}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("connection.cancel")}</Button>
+          <Button type="submit" variant="primary" busy={busy}>
+            {t("passkeys.confirmAdd")}
+          </Button>
+        </>
+      }
+    >
+      <FormField label={t("passkeys.name")}>{(ties) => <TextInput {...ties} name="name" required maxLength={100} placeholder={t("passkeys.namePlaceholder")} />}</FormField>
+      <PasswordField />
+      {error && <Notice tone="error">{error}</Notice>}
+    </Dialog>
   );
 }
 
 function RemovePasskeyDialog({ passkey, onClose, onRemoved }: { passkey: Passkey; onClose: () => void; onRemoved: () => Promise<void> }) {
   const { t } = useTranslation();
-  const passwordField = useId();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -187,55 +167,48 @@ function RemovePasskeyDialog({ passkey, onClose, onRemoved }: { passkey: Passkey
     }
   }
 
+  // A dialog, not one that only asks: it is a form that takes the password.
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className={DIALOG}>
-          <Dialog.Title className="mb-2 text-lg font-bold">{t("passkeys.removeLabel", { name: passkey.name })}</Dialog.Title>
-          <Dialog.Description className="text-sm text-muted">{t("passkeys.removeHint")}</Dialog.Description>
-          <form onSubmit={(event) => void remove(event)} className="mt-3.5 flex flex-col gap-3.5">
-            <PasswordField id={passwordField} />
-            {error && (
-              <p role="alert" className="text-sm text-danger">
-                {error}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
-              <button type="submit" disabled={busy} className={DANGER}>
-                {t("passkeys.remove")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      onClose={onClose}
+      title={t("passkeys.removeLabel", { name: passkey.name })}
+      description={t("passkeys.removeHint")}
+      size="sm"
+      onSubmit={(event) => void remove(event)}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("connection.cancel")}</Button>
+          <Button type="submit" variant="danger-solid" busy={busy}>
+            {t("passkeys.remove")}
+          </Button>
+        </>
+      }
+    >
+      <PasswordField />
+      {error && <Notice tone="error">{error}</Notice>}
+    </Dialog>
   );
 }
 
 /** The household's members, with how many passkeys each has, for its admins to remove (UX-026). */
 export function MembersSection() {
   const { t } = useTranslation();
-  const heading = useId();
   const users = useQuery({
     queryKey: ["tenant", "users"],
     queryFn: async () => unwrap(await api.GET("/tenant/users", { params: { query: { limit: 100 } } })).items,
   });
   return (
-    <section aria-labelledby={heading} className="flex flex-col gap-3">
-      <div>
-        <h2 id={heading} className="mb-1 text-base font-bold">
-          {t("members.title")}
-        </h2>
-        <p className="max-w-[62ch] text-sm text-muted">{t("members.hint")}</p>
-      </div>
-      <ul aria-label={t("members.title")} className="flex flex-col gap-2">
-        {(users.data ?? []).map((user) => (
-          <Member key={user.id} user={user} />
-        ))}
-      </ul>
-    </section>
+    <Page title={t("members.title")} description={t("members.hint")}>
+      {users.data && users.data.length > 0 && (
+        <Card>
+          <ul aria-label={t("members.title")} className="divide-y divide-line">
+            {users.data.map((user) => (
+              <Member key={user.id} user={user} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </Page>
   );
 }
 
@@ -262,35 +235,40 @@ function Member({ user }: { user: User }) {
 
   const passkeys = count.data;
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-line bg-surface px-4 py-3">
-      <span className="min-w-0 flex-1">
-        <span className="block font-bold break-words">{user.display_name}</span>
-        <span className="block text-[13px] text-muted">
-          {user.username}
-          {passkeys !== undefined && " · "}
-          {passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : passkeys === 1 ? t("members.onePasskey") : t("members.passkeys", { count: passkeys })}
-        </span>
-      </span>
-      {passkeys !== undefined && passkeys > 0 && (
-        <button type="button" className={`${BUTTON} h-8 px-3 text-[13px]`} aria-label={t("members.removeLabel", { username: user.username })} onClick={() => setConfirming(true)}>
-          {t("passkeys.remove")}
-        </button>
-      )}
-      <Dialog.Root open={confirming} onOpenChange={setConfirming}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-          <Dialog.Content role="alertdialog" className={DIALOG}>
-            <Dialog.Title className="mb-2 text-lg font-bold">{t("members.removeTitle", { name: user.display_name })}</Dialog.Title>
-            <Dialog.Description className="text-muted">{t("members.removeBody", { username: user.username })}</Dialog.Description>
-            <div className="mt-[18px] flex justify-end gap-2">
-              <Dialog.Close className={BUTTON}>{t("connection.cancel")}</Dialog.Close>
-              <button type="button" className={DANGER} onClick={() => void remove()}>
-                {t("members.remove")}
-              </button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+    <li>
+      <Row
+        leading={<Avatar name={user.display_name} />}
+        title={<span className="min-w-0 break-words">{user.display_name}</span>}
+        description={
+          <>
+            {user.username}
+            {passkeys !== undefined && " · "}
+            {passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : passkeys === 1 ? t("members.onePasskey") : t("members.passkeys", { count: passkeys })}
+          </>
+        }
+      >
+        {passkeys !== undefined && passkeys > 0 && (
+          <Button variant="danger" size="sm" aria-label={t("members.removeLabel", { username: user.username })} onClick={() => setConfirming(true)}>
+            {t("passkeys.remove")}
+          </Button>
+        )}
+      </Row>
+      <Dialog
+        asks
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title={t("members.removeTitle", { name: user.display_name })}
+        description={t("members.removeBody", { username: user.username })}
+        size="sm"
+        footer={
+          <>
+            <Button onClick={() => setConfirming(false)}>{t("connection.cancel")}</Button>
+            <Button variant="danger-solid" onClick={() => void remove()}>
+              {t("members.remove")}
+            </Button>
+          </>
+        }
+      />
     </li>
   );
 }

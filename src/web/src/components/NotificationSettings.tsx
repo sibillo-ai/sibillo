@@ -6,16 +6,14 @@ import { useTranslation } from "react-i18next";
 import { api, unwrap } from "../api/client";
 import { useNotify } from "../notices";
 import { pushSupported, subscribe, unsubscribe } from "../push";
+import { Button, Card, Notice, Page, Row, Switch } from "../ui";
 
 export const NOTIFICATIONS = ["me", "notifications"] as const;
 // Set on a device where the user dismissed the sign that notifications are off (UX-033).
 export const SIGN_DISMISSED = "sibillo.notificationsSignDismissed";
-const SWITCH =
-  "relative h-6 w-10 flex-none rounded-full bg-line-strong transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-accent after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-bg after:transition-transform peer-checked:after:translate-x-4";
 
 export function NotificationsSection() {
   const { t } = useTranslation();
-  const heading = useId();
   const field = useId();
   const more = useId();
   const notify = useNotify();
@@ -55,47 +53,25 @@ export function NotificationsSection() {
   }
 
   return (
-    <section aria-labelledby={heading} className="flex flex-col gap-3">
-      <div>
-        <h2 id={heading} className="mb-1 text-base font-bold">
-          {t("notifications.title")}
-        </h2>
-        <p className="max-w-[62ch] text-sm text-muted">{t("notifications.hint")}</p>
-      </div>
+    <Page title={t("notifications.title")} description={t("notifications.hint")}>
       {!available ? (
-        <p role="note" className="max-w-[62ch] rounded-xl border border-line px-3 py-2.5 text-sm">
-          {t("notifications.unavailable")}
-        </p>
+        <Notice role="note">{t("notifications.unavailable")}</Notice>
       ) : !supported ? (
-        <p role="note" className="max-w-[62ch] rounded-xl border border-line px-3 py-2.5 text-sm">
-          {t("notifications.unsupported")}
-        </p>
+        <Notice role="note">{t("notifications.unsupported")}</Notice>
       ) : (
-        <div className="relative flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-4 py-3">
-          <span className="flex min-w-0 flex-col">
-            <label htmlFor={field} className="cursor-pointer font-bold">
-              {t("notifications.thisDevice")}
-            </label>
-            <span id={more} className="text-[12.5px] text-muted">
-              {denied ? t("notifications.blocked") : t("notifications.privacy")}
-            </span>
-          </span>
-          <span className="relative flex-none">
-            <input
+        <Card rows>
+          <Row title={t("notifications.thisDevice")} htmlFor={field} description={<span id={more}>{denied ? t("notifications.blocked") : t("notifications.privacy")}</span>}>
+            <Switch
               id={field}
-              type="checkbox"
-              role="switch"
               checked={subscribed}
               disabled={busy || settings.data === undefined || (denied && !subscribed)}
               aria-describedby={more}
-              onChange={(event) => void change(event.target.checked)}
-              className="peer absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+              onChange={(on) => void change(on)}
             />
-            <span aria-hidden="true" className={`${SWITCH} pointer-events-none block peer-disabled:opacity-50`} />
-          </span>
-        </div>
+          </Row>
+        </Card>
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -131,27 +107,30 @@ export function NotificationsSign() {
     }
   }
 
+  // A region named by its title, as the sign always was; the notice inside it is read in place.
   return (
-    <section aria-labelledby={heading} className="mx-1 flex flex-col gap-2 rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px]">
-      <h2 id={heading} className="font-semibold">
-        {t("notifications.signTitle")}
-      </h2>
-      <p className="text-muted">{denied ? t("notifications.blocked") : t("notifications.signBody")}</p>
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" disabled={busy} onClick={() => void turnOn()} className="h-8 rounded-[10px] bg-fg px-3 font-semibold text-bg disabled:opacity-50">
-          {t("notifications.turnOn")}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            localStorage.setItem(SIGN_DISMISSED, "1");
-            setDismissed(true);
-          }}
-          className="h-8 rounded-[10px] border border-line-strong px-3 font-semibold hover:bg-hover"
-        >
-          {t("notifications.dismiss")}
-        </button>
-      </div>
+    <section aria-labelledby={heading} className="mx-1">
+      <Notice tone="warn" role="note">
+        <h2 id={heading} className="font-semibold">
+          {t("notifications.signTitle")}
+        </h2>
+        <p>{denied ? t("notifications.blocked") : t("notifications.signBody")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button size="sm" busy={busy} onClick={() => void turnOn()}>
+            {t("notifications.turnOn")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              localStorage.setItem(SIGN_DISMISSED, "1");
+              setDismissed(true);
+            }}
+          >
+            {t("notifications.dismiss")}
+          </Button>
+        </div>
+      </Notice>
     </section>
   );
 }

@@ -1,19 +1,19 @@
 // Local models only: the user's own choice, a household admin's for the household and for each user (UX-024,
 // MOD-003, ADR-0091).
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api, unwrap, type EgressPolicy } from "../api/client";
 import { MODELS, useModels } from "../models";
 import { useNotify } from "../notices";
-import { Switch } from "./AssistantSettings";
+import { Card, Group, Row, Switch } from "../ui";
 
 function policyOf(on: boolean): EgressPolicy {
   return on ? "local_only" : "any";
 }
 
-/** A switch that saves at once, saying so; `save` answers the policy as stored. */
+/** A row with a switch that saves at once, saying so; `save` answers the policy as stored. */
 function SavingSwitch(props: {
   label: string;
   description?: string;
@@ -23,6 +23,8 @@ function SavingSwitch(props: {
 }) {
   const { t } = useTranslation();
   const notify = useNotify();
+  const field = useId();
+  const more = useId();
   const [value, setValue] = useState(props.value);
   const [saved, setSaved] = useState(false);
 
@@ -40,16 +42,28 @@ function SavingSwitch(props: {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <Switch label={props.label} description={props.description} checked={props.locked === true || value === "local_only"} locked={props.locked === true} onChange={(on) => void change(on)} strong />
-      <span role="status" className="px-1 text-sm text-muted">
-        {saved ? t("settings.saved") : ""}
-      </span>
-    </div>
+    <Row
+      title={props.label}
+      htmlFor={field}
+      description={
+        <>
+          {props.description && <span id={more}>{props.description} </span>}
+          <span role="status">{saved ? t("settings.saved") : ""}</span>
+        </>
+      }
+    >
+      <Switch
+        id={field}
+        checked={props.locked === true || value === "local_only"}
+        disabled={props.locked === true}
+        aria-describedby={props.description ? more : undefined}
+        onChange={(on) => void change(on)}
+      />
+    </Row>
   );
 }
 
-/** The user's own choice, locked on when the household or an admin already chose it for them. */
+/** The user's own choice, locked on when the household or an admin already chose it for them: a row of a card. */
 export function OwnEgressSwitch() {
   const { t } = useTranslation();
   const models = useModels();
@@ -58,21 +72,17 @@ export function OwnEgressSwitch() {
   if (!egress) return null;
   const chosenBy = egress.household === "local_only" ? "household" : egress.admin === "local_only" ? "admin" : null;
   return (
-    <div>
-      <h3 className="mb-1 text-sm font-bold">{t("egress.title")}</h3>
-      <p className="mb-2.5 max-w-[62ch] text-sm text-muted">{t("egress.hint")}</p>
-      <SavingSwitch
-        label={t("egress.own")}
-        description={chosenBy === "household" ? t("egress.byHousehold") : chosenBy === "admin" ? t("egress.byAdmin") : t("egress.ownHint")}
-        value={egress.own}
-        locked={chosenBy !== null}
-        save={async (policy) => {
-          const stored = unwrap(await api.PUT("/me/egress-policy", { body: { policy } }));
-          await queries.invalidateQueries({ queryKey: MODELS });
-          return stored.own;
-        }}
-      />
-    </div>
+    <SavingSwitch
+      label={t("egress.own")}
+      description={chosenBy === "household" ? t("egress.byHousehold") : chosenBy === "admin" ? t("egress.byAdmin") : t("egress.ownHint")}
+      value={egress.own}
+      locked={chosenBy !== null}
+      save={async (policy) => {
+        const stored = unwrap(await api.PUT("/me/egress-policy", { body: { policy } }));
+        await queries.invalidateQueries({ queryKey: MODELS });
+        return stored.own;
+      }}
+    />
   );
 }
 
@@ -84,23 +94,24 @@ export function HouseholdEgressSection() {
   const egress = models.data?.egress;
   if (!egress) return null;
   return (
-    <section>
-      <h2 className="mb-1 text-base font-bold">{t("egress.title")}</h2>
-      <p className="mb-3.5 max-w-[62ch] text-sm text-muted">{t("egress.householdHint")}</p>
-      <SavingSwitch
-        label={t("egress.everyone")}
-        value={egress.household}
-        save={async (policy) => {
-          const stored = unwrap(await api.PUT("/tenant/egress-policy", { body: { policy } }));
-          await queries.invalidateQueries({ queryKey: MODELS });
-          return stored.policy;
-        }}
-      />
-    </section>
+    <Group title={t("egress.title")}>
+      <Card rows>
+        <SavingSwitch
+          label={t("egress.everyone")}
+          description={t("egress.householdHint")}
+          value={egress.household}
+          save={async (policy) => {
+            const stored = unwrap(await api.PUT("/tenant/egress-policy", { body: { policy } }));
+            await queries.invalidateQueries({ queryKey: MODELS });
+            return stored.policy;
+          }}
+        />
+      </Card>
+    </Group>
   );
 }
 
-/** A household admin's choice for one user, with that user's tool permissions. */
+/** A household admin's choice for one user, with that user's tool permissions: a row of a card. */
 export function UserEgressSwitch({ userId }: { userId: string }) {
   const { t } = useTranslation();
   const queries = useQueryClient();

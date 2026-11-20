@@ -1,9 +1,11 @@
-// Open typefaces, served by the app itself (ADR-0070, OBS-006).
+// Open typefaces, served by the app itself (ADR-0111, OBS-006).
 import "@fontsource/hanken-grotesk/400.css";
 import "@fontsource/hanken-grotesk/500.css";
 import "@fontsource/hanken-grotesk/600.css";
 import "@fontsource/hanken-grotesk/700.css";
+import "@fontsource/newsreader/400.css";
 import "@fontsource/newsreader/400-italic.css";
+import "@fontsource/newsreader/500.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "./styles.css";
 import "./i18n";

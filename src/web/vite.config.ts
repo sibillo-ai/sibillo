@@ -24,8 +24,8 @@ export default defineConfig({
         start_url: "/",
         scope: "/",
         display: "standalone",
-        background_color: "#faf9f6",
-        theme_color: "#faf9f6",
+        background_color: "#faf8f5",
+        theme_color: "#faf8f5",
         // Other apps share text, links and files into a new chat (UX-006, ADR-0102).
         share_target: {
           action: "/share",

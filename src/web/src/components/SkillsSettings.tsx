@@ -1,7 +1,6 @@
 // The Skills page of the user's settings (UX-028, AGT-017, AGT-024, AGT-025, ADR-0096).
-import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, Plus, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
+import { Download, Plus, ShieldAlert, Sparkles, Upload } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -9,29 +8,19 @@ import { Link } from "react-router";
 import { API_BASE, ApiError, api, unwrap, type Schemas } from "../api/client";
 import { fileAddress, SKILLS, type Skill, type SkillDetail, skillDetail, uploadSkill, useSkills } from "../skills";
 import { useNotify } from "../notices";
+import { Badge, Button, buttonClass, Card, Checkbox, Dialog, EmptyState, FileInput, FormField, Group, NavItem, Notice, Page, Row, Switch, TextArea, TextInput, Tile } from "../ui";
 
 type Found = Schemas["SkillImport"]["found"][number];
 
-const BUTTON = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-semibold hover:bg-hover disabled:opacity-50";
-const SMALL = "inline-flex h-8 items-center justify-center gap-1.5 rounded-[10px] border border-line-strong bg-surface px-3 text-[13px] font-semibold hover:bg-hover disabled:opacity-50";
-const PRIMARY = "inline-flex h-[38px] items-center justify-center gap-2 rounded-[10px] bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50";
-const DANGER = "h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold text-on-danger disabled:opacity-50";
-const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
-const TEXTAREA = "min-h-64 w-full rounded-[10px] border border-line-strong bg-bg px-3 py-2 font-mono text-[13px] outline-none focus:border-accent";
-const DIALOG = "slide fixed top-1/2 left-1/2 z-50 flex max-h-[min(92dvh,48rem)] w-[min(94vw,44rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-[20px] bg-raised p-[22px] shadow-soft";
-const SWITCH =
-  "relative h-6 w-10 flex-none rounded-full bg-line-strong transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-accent after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-bg after:transition-transform peer-checked:after:translate-x-4";
 const NEW_SKILL = "---\nname: my-skill\ndescription: Use when …\n---\n\n# My skill\n\nWhat to do, step by step.\n";
 
 /** The built-in skills, then the user's, each with its switch; and creating, uploading and importing them. */
 export function SkillsSection() {
   const { t, i18n } = useTranslation();
-  const heading = useId();
   const queries = useQueryClient();
   const notify = useNotify();
   const skills = useSkills();
   const upload = useRef<HTMLInputElement>(null);
-  const uploadLabel = useId();
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<Skill | null>(null);
   const [trusting, setTrusting] = useState<Skill | null>(null);
@@ -64,93 +53,96 @@ export function SkillsSection() {
   const shown = (skill: Skill): Skill => ({ ...skill, enabled: switched[skill.id ?? skill.name] ?? skill.enabled });
 
   return (
-    <section aria-labelledby={heading} className="flex flex-col gap-3.5">
-      <div>
-        <h2 id={heading} className="mb-1 text-base font-bold">
-          {t("skills.title")}
-        </h2>
-        <p className="max-w-[62ch] text-sm text-muted">{t("skills.hint")}</p>
-      </div>
+    <Page title={t("skills.title")} description={t("skills.hint")}>
+      <Group title={t("skills.builtin")}>
+        {data && (
+          <Card>
+            <ul aria-label={t("skills.builtin")} className="divide-y divide-line">
+              {data.builtin.map((skill) => (
+                <SkillEntry key={skill.name} skill={shown(skill)} onToggle={(on) => void toggle(skill, on)} onOpen={() => setOpen(skill)} />
+              ))}
+            </ul>
+          </Card>
+        )}
+      </Group>
 
-      <h3 className="text-sm font-bold">{t("skills.builtin")}</h3>
-      <ul aria-label={t("skills.builtin")} className="flex flex-col gap-2">
-        {(data?.builtin ?? []).map((skill) => (
-          <SkillEntry key={skill.name} skill={shown(skill)} onToggle={(on) => void toggle(skill, on)} onOpen={() => setOpen(skill)} />
-        ))}
-      </ul>
-
-      <h3 className="mt-2 text-sm font-bold">{t("skills.own")}</h3>
-      {data && (
-        <p className="text-[13px] text-muted">
-          {t("skills.used", { used: number.format(data.used_bytes / 1048576), limit: number.format(data.limit_bytes / 1048576), count: data.own.length, most: data.limit_skills })}
-        </p>
-      )}
-      {data && data.own.length === 0 && <p className="text-sm text-muted">{t("skills.none")}</p>}
-      <ul aria-label={t("skills.own")} className="flex flex-col gap-2">
-        {(data?.own ?? []).map((skill) => (
-          <SkillEntry
-            key={skill.id}
-            skill={shown(skill)}
-            onToggle={(on) => void toggle(skill, on)}
-            onOpen={() => setOpen(skill)}
-            onTrust={() => setTrusting(skill)}
-            onDelete={() => setDeleting(skill)}
-          />
-        ))}
-      </ul>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={BUTTON} onClick={() => setCreating(true)} disabled={!data}>
-          <Plus className="size-[18px]" aria-hidden="true" />
-          {t("skills.create")}
-        </button>
-        <label id={uploadLabel} className={`${BUTTON} cursor-pointer`}>
-          <Upload className="size-[18px]" aria-hidden="true" />
-          {t("skills.upload")}
-          <input
+      <Group
+        title={t("skills.own")}
+        description={
+          data && t("skills.used", { used: number.format(data.used_bytes / 1048576), limit: number.format(data.limit_bytes / 1048576), count: data.own.length, most: data.limit_skills })
+        }
+      >
+        {data && (
+          <Card>
+            {data.own.length === 0 ? (
+              <EmptyState icon={<Sparkles />} title={t("skills.none")} />
+            ) : (
+              <ul aria-label={t("skills.own")} className="divide-y divide-line">
+                {data.own.map((skill) => (
+                  <SkillEntry
+                    key={skill.id}
+                    skill={shown(skill)}
+                    onToggle={(on) => void toggle(skill, on)}
+                    onOpen={() => setOpen(skill)}
+                    onTrust={() => setTrusting(skill)}
+                    onDelete={() => setDeleting(skill)}
+                  />
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setCreating(true)} disabled={!data}>
+            <Plus aria-hidden="true" />
+            {t("skills.create")}
+          </Button>
+          <Button onClick={() => upload.current?.click()}>
+            <Upload aria-hidden="true" />
+            {t("skills.upload")}
+          </Button>
+          <FileInput
             ref={upload}
-            type="file"
             accept=".zip,.skill"
-            aria-labelledby={uploadLabel}
-            className="sr-only"
+            aria-label={t("skills.upload")}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (file) void change(async () => uploadSkill(file));
             }}
           />
-        </label>
-      </div>
+        </div>
+      </Group>
       <ImportForm onImported={refresh} />
 
       {creating && <CreateDialog onClose={() => setCreating(false)} onSaved={refresh} />}
       {open && <SkillDialog key={open.id ?? open.name} skill={open} onClose={() => setOpen(null)} onSaved={refresh} />}
       {trusting && <TrustDialog skill={trusting} onClose={() => setTrusting(null)} onTrusted={refresh} />}
       {deleting && (
-        <Dialog.Root open onOpenChange={(isOpen) => !isOpen && setDeleting(null)}>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-            <Dialog.Content role="alertdialog" className={DIALOG}>
-              <Dialog.Title className="mb-2 text-lg font-bold">{t("skills.deleteTitle", { name: deleting.name })}</Dialog.Title>
-              <Dialog.Description className="text-sm text-muted">{t("skills.deleteBody")}</Dialog.Description>
-              <div className="mt-[18px] flex flex-wrap justify-end gap-2">
-                <Dialog.Close className={BUTTON}>{t("skills.cancel")}</Dialog.Close>
-                <button
-                  type="button"
-                  className={DANGER}
-                  onClick={() => {
-                    const id = deleting.id;
-                    setDeleting(null);
-                    if (id) void change(async () => unwrap(await api.DELETE("/me/skills/{skill_id}", { params: { path: { skill_id: id } } })));
-                  }}
-                >
-                  {t("skills.delete")}
-                </button>
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
+        <Dialog
+          asks
+          size="sm"
+          onClose={() => setDeleting(null)}
+          title={t("skills.deleteTitle", { name: deleting.name })}
+          description={t("skills.deleteBody")}
+          footer={
+            <>
+              <Button onClick={() => setDeleting(null)}>{t("skills.cancel")}</Button>
+              <Button
+                variant="danger-solid"
+                onClick={() => {
+                  const id = deleting.id;
+                  setDeleting(null);
+                  if (id) void change(async () => unwrap(await api.DELETE("/me/skills/{skill_id}", { params: { path: { skill_id: id } } })));
+                }}
+              >
+                {t("skills.delete")}
+              </Button>
+            </>
+          }
+        />
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -176,7 +168,7 @@ function Origin({ skill }: { skill: Skill }) {
   return (
     <>
       {t("skills.savedInChat")}{" "}
-      <Link to={`/c/${conversation.id}`} className="font-semibold text-fg underline underline-offset-2">
+      <Link to={`/c/${conversation.id}`} className="font-semibold text-ink underline underline-offset-2">
         {conversation.title || t("memory.untitledChat")}
       </Link>
     </>
@@ -186,49 +178,47 @@ function Origin({ skill }: { skill: Skill }) {
 function SkillEntry({ skill, onToggle, onOpen, onTrust, onDelete }: { skill: Skill; onToggle: (on: boolean) => void; onOpen: () => void; onTrust?: () => void; onDelete?: () => void }) {
   const { t } = useTranslation();
   return (
-    <li className={`flex flex-col gap-2 rounded-2xl border bg-surface px-4 py-3 ${skill.untrusted ? "border-danger/50" : "border-line"}`}>
-      <div className="relative flex items-start justify-between gap-3">
-        <span className="flex min-w-0 flex-col">
-          <b className="font-mono text-[14px] break-all">{skill.name}</b>
-          <span className="text-sm break-words text-muted">{skill.description}</span>
-        </span>
-        <span className="relative mt-1 flex-none">
-          <input type="checkbox" role="switch" aria-label={skill.name} checked={skill.enabled} onChange={(event) => onToggle(event.target.checked)} className="peer absolute inset-0 size-full cursor-pointer opacity-0" />
-          <span aria-hidden="true" className={`${SWITCH} pointer-events-none block`} />
-        </span>
-      </div>
-      {skill.untrusted && (
-        <p className="flex items-start gap-1.5 text-[13px] text-danger">
-          <ShieldAlert className="mt-px size-4 flex-none" aria-hidden="true" />
-          <span>
-            <b>{t("skills.untrusted")}</b> {t("skills.untrustedHint")}
-          </span>
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <p className="min-w-0 flex-1 text-[13px] break-words text-muted">
-          <Origin skill={skill} />
-        </p>
-        <button type="button" className={SMALL} onClick={onOpen} aria-label={t("skills.openLabel", { name: skill.name })}>
-          {t("skills.open")}
-        </button>
-        {skill.id !== null && (
-          <a className={SMALL} href={`${API_BASE}/me/skills/${skill.id}/archive`} download aria-label={t("skills.downloadLabel", { name: skill.name })}>
-            <Download className="size-3.5" aria-hidden="true" />
-            {t("skills.download")}
-          </a>
-        )}
-        {skill.untrusted && onTrust && (
-          <button type="button" className={SMALL} onClick={onTrust} aria-label={t("skills.trustLabel", { name: skill.name })}>
-            {t("skills.trust")}
-          </button>
-        )}
-        {onDelete && (
-          <button type="button" className={SMALL} onClick={onDelete} aria-label={t("skills.deleteLabel", { name: skill.name })}>
-            {t("skills.delete")}
-          </button>
-        )}
-      </div>
+    <li>
+      <Row
+        mono
+        title={<span className="min-w-0 break-all">{skill.name}</span>}
+        description={skill.description}
+        below={
+          <>
+            {skill.untrusted && (
+              <Notice role="note" tone="warn" icon={<ShieldAlert aria-hidden="true" />} title={t("skills.untrusted")}>
+                {t("skills.untrustedHint")}
+              </Notice>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 text-small break-words text-ink-2">
+                <Origin skill={skill} />
+              </p>
+              <Button size="sm" onClick={onOpen} aria-label={t("skills.openLabel", { name: skill.name })}>
+                {t("skills.open")}
+              </Button>
+              {skill.id !== null && (
+                <a className={buttonClass({ size: "sm" })} href={`${API_BASE}/me/skills/${skill.id}/archive`} download aria-label={t("skills.downloadLabel", { name: skill.name })}>
+                  <Download aria-hidden="true" />
+                  {t("skills.download")}
+                </a>
+              )}
+              {skill.untrusted && onTrust && (
+                <Button size="sm" onClick={onTrust} aria-label={t("skills.trustLabel", { name: skill.name })}>
+                  {t("skills.trust")}
+                </Button>
+              )}
+              {onDelete && (
+                <Button size="sm" variant="danger" onClick={onDelete} aria-label={t("skills.deleteLabel", { name: skill.name })}>
+                  {t("skills.delete")}
+                </Button>
+              )}
+            </div>
+          </>
+        }
+      >
+        <Switch aria-label={skill.name} checked={skill.enabled} onChange={onToggle} />
+      </Row>
     </li>
   );
 }
@@ -236,7 +226,6 @@ function SkillEntry({ skill, onToggle, onOpen, onTrust, onDelete }: { skill: Ski
 /** A new skill from a SKILL.md written here: the user's, and trusted. */
 function CreateDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
   const { t } = useTranslation();
-  const field = useId();
   const [value, setValue] = useState(NEW_SKILL);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -257,35 +246,30 @@ function CreateDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   }
 
   return (
-    <Dialog.Root open onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className={DIALOG}>
-          <Dialog.Title className="mb-2 flex items-center gap-2 text-lg font-bold">
-            <Sparkles className="size-5 text-accent" aria-hidden="true" />
-            {t("skills.newTitle")}
-          </Dialog.Title>
-          <Dialog.Description className="text-sm text-muted">{t("skills.newHint")}</Dialog.Description>
-          <form onSubmit={(event) => void save(event)} className="mt-3.5 flex min-h-0 flex-col gap-3.5">
-            <label htmlFor={field} className="flex min-h-0 flex-col gap-1.5">
-              <span className="text-[13.5px] font-semibold">{t("skills.skillMd")}</span>
-              <textarea id={field} required maxLength={100000} value={value} onChange={(event) => setValue(event.target.value)} className={TEXTAREA} />
-            </label>
-            {error && (
-              <p role="alert" className="text-sm text-danger">
-                {error}
-              </p>
-            )}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Dialog.Close className={BUTTON}>{t("skills.cancel")}</Dialog.Close>
-              <button type="submit" className={PRIMARY} disabled={busy || value.trim() === ""}>
-                {t("skills.save")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      size="lg"
+      onClose={onClose}
+      title={t("skills.newTitle")}
+      description={t("skills.newHint")}
+      leading={
+        <Tile>
+          <Sparkles />
+        </Tile>
+      }
+      onSubmit={(event) => void save(event)}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("skills.cancel")}</Button>
+          <Button type="submit" variant="primary" disabled={busy || value.trim() === ""}>
+            {t("skills.save")}
+          </Button>
+        </>
+      }
+    >
+      <FormField label={t("skills.skillMd")} error={error}>
+        {(ties) => <TextArea {...ties} mono tall required maxLength={100000} value={value} onChange={(event) => setValue(event.target.value)} />}
+      </FormField>
+    </Dialog>
   );
 }
 
@@ -293,8 +277,6 @@ function CreateDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 function SkillDialog({ skill, onClose, onSaved }: { skill: Skill; onClose: () => void; onSaved: () => Promise<void> }) {
   const { t } = useTranslation();
   const queries = useQueryClient();
-  const field = useId();
-  const newPath = useId();
   const editable = skill.id !== null;
   const detail = useQueryDetail(skill);
   const [path, setPath] = useState("SKILL.md");
@@ -323,86 +305,68 @@ function SkillDialog({ skill, onClose, onSaved }: { skill: Skill; onClose: () =>
   }
 
   return (
-    <Dialog.Root open onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className={DIALOG}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Dialog.Title className="font-mono text-lg font-bold break-all">{skill.name}</Dialog.Title>
-              <Dialog.Description className="text-sm text-muted">{editable ? t("skills.editHint") : t("skills.builtinHint")}</Dialog.Description>
+    <Dialog
+      size="lg"
+      onClose={onClose}
+      title={skill.name}
+      description={editable ? t("skills.editHint") : t("skills.builtinHint")}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("skills.close")}</Button>
+          {editable && value !== null && (
+            <Button variant="primary" disabled={busy} onClick={() => void save()}>
+              {t("skills.save")}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row">
+        <div className="flex flex-col gap-4 sm:w-48 sm:flex-none">
+          <ul aria-label={t("skills.files")} className="flex flex-col gap-px">
+            {files.map((item) => (
+              <li key={item.path}>
+                <NavItem current={item.path === path} onClick={() => setPath(item.path)}>
+                  {item.path}
+                </NavItem>
+              </li>
+            ))}
+          </ul>
+          {editable && (
+            <div className="flex flex-col gap-2">
+              <FormField label={t("skills.newFile")}>
+                {(ties) => <TextInput {...ties} mono value={adding} placeholder={t("skills.pathPlaceholder")} onChange={(event) => setAdding(event.target.value)} />}
+              </FormField>
+              <Button
+                size="sm"
+                disabled={adding.trim() === ""}
+                onClick={() => {
+                  const next = adding.trim();
+                  setDrafts((old) => ({ ...old, [next]: old[next] ?? "" }));
+                  setPath(next);
+                  setAdding("");
+                }}
+              >
+                {t("skills.addFile")}
+              </Button>
             </div>
-            <Dialog.Close className="grid size-9 flex-none place-items-center rounded-[10px] text-muted hover:bg-hover hover:text-fg" aria-label={t("skills.close")}>
-              <X className="size-5" aria-hidden="true" />
-            </Dialog.Close>
-          </div>
-          <div className="mt-3.5 grid min-h-0 grid-cols-1 gap-3.5 overflow-y-auto sm:grid-cols-[12rem_minmax(0,1fr)]">
-            <ul aria-label={t("skills.files")} className="flex flex-col gap-0.5 text-[13px]">
-              {files.map((item) => (
-                <li key={item.path}>
-                  <button
-                    type="button"
-                    aria-current={item.path === path ? "true" : undefined}
-                    onClick={() => setPath(item.path)}
-                    className="w-full truncate rounded-lg px-2 py-1 text-left font-mono hover:bg-hover aria-[current=true]:bg-hover aria-[current=true]:font-semibold"
-                  >
-                    {item.path}
-                  </button>
-                </li>
-              ))}
-              {editable && (
-                <li className="mt-2 flex flex-col gap-1.5">
-                  <label htmlFor={newPath} className="text-[12.5px] text-muted">
-                    {t("skills.newFile")}
-                  </label>
-                  <input id={newPath} className={`${INPUT} h-8 text-[13px]`} value={adding} placeholder={t("skills.pathPlaceholder")} onChange={(event) => setAdding(event.target.value)} />
-                  <button
-                    type="button"
-                    className={SMALL}
-                    disabled={adding.trim() === ""}
-                    onClick={() => {
-                      const next = adding.trim();
-                      setDrafts((old) => ({ ...old, [next]: old[next] ?? "" }));
-                      setPath(next);
-                      setAdding("");
-                    }}
-                  >
-                    {t("skills.addFile")}
-                  </button>
-                </li>
-              )}
-            </ul>
-            <div className="flex min-w-0 flex-col gap-2">
-              {value === null ? (
-                <p className="text-sm text-muted">
-                  {t("skills.binary")}{" "}
-                  <a className="font-semibold text-accent underline" href={fileAddress(skill, path)} download>
-                    {t("skills.download")}
-                  </a>
-                </p>
-              ) : (
-                <label htmlFor={field} className="flex flex-col gap-1.5">
-                  <span className="font-mono text-[13.5px] font-semibold">{path}</span>
-                  <textarea id={field} readOnly={!editable} value={value} onChange={(event) => setDrafts((old) => ({ ...old, [path]: event.target.value }))} className={TEXTAREA} />
-                </label>
-              )}
-              {error && (
-                <p role="alert" className="text-sm text-danger">
-                  {error}
-                </p>
-              )}
-              {editable && value !== null && (
-                <div className="flex justify-end">
-                  <button type="button" className={PRIMARY} disabled={busy} onClick={() => void save()}>
-                    {t("skills.save")}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {value === null ? (
+            <p className="text-body text-ink-2">
+              {t("skills.binary")}{" "}
+              <a className="font-semibold text-ink underline underline-offset-2" href={fileAddress(skill, path)} download>
+                {t("skills.download")}
+              </a>
+            </p>
+          ) : (
+            <FormField label={path}>{(ties) => <TextArea {...ties} mono tall readOnly={!editable} value={value} onChange={(event) => setDrafts((old) => ({ ...old, [path]: event.target.value }))} />}</FormField>
+          )}
+          {error && <Notice tone="error">{error}</Notice>}
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -439,36 +403,32 @@ function TrustDialog({ skill, onClose, onTrusted }: { skill: Skill; onClose: () 
   }
 
   return (
-    <Dialog.Root open onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className={DIALOG}>
-          <Dialog.Title className="mb-2 text-lg font-bold break-all">{t("skills.trustTitle", { name: skill.name })}</Dialog.Title>
-          <Dialog.Description className="text-sm text-muted">{t("skills.trustHint")}</Dialog.Description>
-          <div className="mt-3.5 flex min-h-0 flex-col gap-3 overflow-y-auto">
-            {(detail.data?.files ?? []).map((file) => (
-              <section key={file.path} aria-label={file.path} className="rounded-[12px] border border-line">
-                <h3 className="border-b border-line px-3 py-1.5 font-mono text-[13px] font-semibold">
-                  {file.path}
-                  {file.executable && <span className="ml-2 text-[12px] font-normal text-muted">{t("skills.executable")}</span>}
-                </h3>
-                {file.text === null ? (
-                  <p className="px-3 py-2 text-[13px] text-muted">{t("skills.binary")}</p>
-                ) : (
-                  <pre className="max-h-64 overflow-auto px-3 py-2 font-mono text-[12.5px] whitespace-pre-wrap">{file.text}</pre>
-                )}
-              </section>
-            ))}
-          </div>
-          <div className="mt-[18px] flex flex-wrap justify-end gap-2">
-            <Dialog.Close className={BUTTON}>{t("skills.cancel")}</Dialog.Close>
-            <button type="button" className={PRIMARY} disabled={busy || !detail.data} onClick={() => void trust()}>
-              {t("skills.trust")}
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      size="lg"
+      onClose={onClose}
+      title={t("skills.trustTitle", { name: skill.name })}
+      description={t("skills.trustHint")}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("skills.cancel")}</Button>
+          <Button variant="primary" disabled={busy || !detail.data} onClick={() => void trust()}>
+            {t("skills.trust")}
+          </Button>
+        </>
+      }
+    >
+      {(detail.data?.files ?? []).map((file) => (
+        <Group key={file.path} role="region" title={file.path} action={file.executable && <Badge>{t("skills.executable")}</Badge>}>
+          <Card>
+            {file.text === null ? (
+              <p className="px-4 py-3 text-small text-ink-2">{t("skills.binary")}</p>
+            ) : (
+              <pre className="max-h-64 overflow-auto px-4 py-3 font-mono text-small whitespace-pre-wrap">{file.text}</pre>
+            )}
+          </Card>
+        </Group>
+      ))}
+    </Dialog>
   );
 }
 
@@ -504,41 +464,50 @@ function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
   }
 
   return (
-    <form onSubmit={(event) => void run(event)} className="flex flex-col gap-2 rounded-2xl border border-line p-3.5">
-      <label htmlFor={field} className="text-sm font-bold">
-        {t("skills.importLabel")}
-      </label>
-      <p className="max-w-[62ch] text-[13px] text-muted">{t("skills.importHint")}</p>
-      <div className="flex flex-wrap gap-2">
-        <input id={field} className={`${INPUT} min-w-0 flex-1`} value={url} placeholder={t("skills.urlPlaceholder")} onChange={(event) => setUrl(event.target.value)} required />
-        <button type="submit" className={PRIMARY} disabled={busy || url.trim() === ""}>
-          {t("skills.import")}
-        </button>
-      </div>
-      {found !== null && (
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1 text-[13px] font-semibold">{t("skills.choose")}</legend>
-          {found.map((item) => (
-            <label key={item.name} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                disabled={!item.valid}
-                checked={chosen.includes(item.name)}
-                onChange={(event) => setChosen((old) => (event.target.checked ? [...old, item.name] : old.filter((name) => name !== item.name)))}
-                className="mt-1"
-              />
-              <span className="min-w-0">
-                <b className="font-mono">{item.name}</b> <span className="text-muted">{item.valid ? item.description : item.problem}</span>
-              </span>
-            </label>
-          ))}
-          <div>
-            <button type="button" className={BUTTON} disabled={busy || chosen.length === 0} onClick={() => void run(null, chosen)}>
-              {t("skills.importChosen")}
-            </button>
-          </div>
-        </fieldset>
-      )}
+    <form onSubmit={(event) => void run(event)}>
+      <Card>
+        <Row
+          title={t("skills.importLabel")}
+          description={t("skills.importHint")}
+          htmlFor={field}
+          below={
+            <>
+              <div className="flex flex-wrap gap-2">
+                <div className="min-w-0 flex-1">
+                  <TextInput id={field} value={url} placeholder={t("skills.urlPlaceholder")} onChange={(event) => setUrl(event.target.value)} required />
+                </div>
+                <Button type="submit" variant="primary" disabled={busy || url.trim() === ""}>
+                  {t("skills.import")}
+                </Button>
+              </div>
+              {found !== null && (
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="mb-2 text-small font-semibold">{t("skills.choose")}</legend>
+                  {found.map((item) => (
+                    <label key={item.name} className="flex items-start gap-2 text-body">
+                      <span className="flex h-5 items-center">
+                        <Checkbox
+                          disabled={!item.valid}
+                          checked={chosen.includes(item.name)}
+                          onChange={(event) => setChosen((old) => (event.target.checked ? [...old, item.name] : old.filter((name) => name !== item.name)))}
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <b className="font-mono font-semibold">{item.name}</b> <span className="text-ink-2">{item.valid ? item.description : item.problem}</span>
+                      </span>
+                    </label>
+                  ))}
+                  <div>
+                    <Button disabled={busy || chosen.length === 0} onClick={() => void run(null, chosen)}>
+                      {t("skills.importChosen")}
+                    </Button>
+                  </div>
+                </fieldset>
+              )}
+            </>
+          }
+        />
+      </Card>
     </form>
   );
 }

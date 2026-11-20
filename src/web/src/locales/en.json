@@ -1066,5 +1066,8 @@
     "everyHours": "Every {{count}} hours",
     "timesOnce": ", once",
     "times": ", {{count}} times"
+  },
+  "ui": {
+    "close": "Close"
   }
 }

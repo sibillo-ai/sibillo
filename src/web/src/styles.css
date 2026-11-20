@@ -1,28 +1,35 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
-/* The design language of ADR-0070: colors as tokens with a light and a dark
-   value, the theme following the device unless the user chose one (UX-011). */
+/* The design tokens of ADR-0111: the only values the client uses (UX-037). Each color role has a light and a
+   dark value, and the theme follows the device unless the user chose one (UX-011). */
 :root {
-  --bg: #f7f7f5;
-  --panel: #efefec;
+  --canvas: #faf8f5;
+  --sunken: #f2efe9;
   --surface: #ffffff;
   --raised: #ffffff;
-  --line: #e3e3df;
-  --line-strong: #cdcdc8;
-  --fg: #1d1d1f;
-  --muted: #5f5f65;
-  --faint: #6a6a70;
-  --bubble: #ecece8;
-  --hover: rgb(29 29 31 / 0.06);
-  --scrim: rgb(12 12 14 / 0.42);
-  --shadow: 0 1px 2px rgb(20 20 22 / 0.05), 0 10px 30px rgb(20 20 22 / 0.09);
+  --line: #e7e2d9;
+  --line-strong: #d1cabe;
+  --ink: #1f1b18;
+  --ink-2: #5a534b;
+  --ink-3: #6e675e;
+  --hover: rgb(31 27 24 / 0.055);
+  --pressed: rgb(31 27 24 / 0.1);
+  --scrim: rgb(24 20 17 / 0.45);
   --accent: #b3301f;
-  --accent-soft: #fbeae7;
+  --accent-soft: #f9e7e2;
   --on-accent: #ffffff;
-  --ok: #246a40;
-  --danger: #b42318;
-  --on-danger: #ffffff;
+  --ok: #2a6b45;
+  --ok-soft: #e4f1e9;
+  --warn: #855600;
+  --warn-soft: #f8ecd2;
+  --danger: #a3271a;
+  --danger-soft: #f9e7e2;
+  --elevation-line: 0 1px 2px rgb(31 27 24 / 0.05);
+  --elevation-float: 0 1px 2px rgb(31 27 24 / 0.06), 0 8px 24px rgb(31 27 24 / 0.1);
+  --elevation-above: 0 2px 4px rgb(31 27 24 / 0.06), 0 24px 64px rgb(31 27 24 / 0.2);
+  /* The mark of a checked box, in the color of the page. */
+  --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23faf8f5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
   /* The sprite keeps its colors in both themes. */
   --c-hat: #c8352a;
   --c-hat-shade: #992a21;
@@ -36,79 +43,155 @@
   --c-paper: #fbf6ea;
   --c-glass: rgb(150 200 235 / 0.45);
   color-scheme: light;
+  /* The names of ADR-0070, for the screens not yet rebuilt from the shared components; they go with the last one. */
+  --bg: var(--canvas);
+  --panel: var(--sunken);
+  --fg: var(--ink);
+  --muted: var(--ink-2);
+  --faint: var(--ink-3);
+  --bubble: var(--sunken);
+  --shadow: var(--elevation-float);
+  --on-danger: var(--on-accent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #171719;
-    --panel: #1e1e21;
-    --surface: #232327;
-    --raised: #2a2a2f;
-    --line: #323238;
-    --line-strong: #46464d;
-    --fg: #ececef;
-    --muted: #a6a6ae;
-    --faint: #9a9aa2;
-    --bubble: #2d2d32;
-    --hover: rgb(255 255 255 / 0.07);
+    --canvas: #191715;
+    --sunken: #131110;
+    --surface: #211e1b;
+    --raised: #2a2622;
+    --line: #322d29;
+    --line-strong: #4b443d;
+    --ink: #f1ece6;
+    --ink-2: #b5aca2;
+    --ink-3: #9a9187;
+    --hover: rgb(255 244 232 / 0.07);
+    --pressed: rgb(255 244 232 / 0.12);
     --scrim: rgb(0 0 0 / 0.6);
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.45);
-    --accent: #f07163;
-    --accent-soft: #3a2220;
-    --on-accent: #1b0d0b;
-    --ok: #67c18b;
-    --danger: #f2786c;
-    --on-danger: #1b0d0b;
+    --accent: #f07a66;
+    --accent-soft: #3b211c;
+    --on-accent: #1d0c09;
+    --ok: #6cc391;
+    --ok-soft: #1c2f24;
+    --warn: #e0b254;
+    --warn-soft: #33290f;
+    --danger: #f2836f;
+    --danger-soft: #3b211c;
+    --elevation-line: 0 1px 2px rgb(0 0 0 / 0.3);
+    --elevation-float: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.4);
+    --elevation-above: 0 2px 4px rgb(0 0 0 / 0.3), 0 24px 64px rgb(0 0 0 / 0.6);
+    --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23191715' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #171719;
-  --panel: #1e1e21;
-  --surface: #232327;
-  --raised: #2a2a2f;
-  --line: #323238;
-  --line-strong: #46464d;
-  --fg: #ececef;
-  --muted: #a6a6ae;
-  --faint: #9a9aa2;
-  --bubble: #2d2d32;
-  --hover: rgb(255 255 255 / 0.07);
+  --canvas: #191715;
+  --sunken: #131110;
+  --surface: #211e1b;
+  --raised: #2a2622;
+  --line: #322d29;
+  --line-strong: #4b443d;
+  --ink: #f1ece6;
+  --ink-2: #b5aca2;
+  --ink-3: #9a9187;
+  --hover: rgb(255 244 232 / 0.07);
+  --pressed: rgb(255 244 232 / 0.12);
   --scrim: rgb(0 0 0 / 0.6);
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.45);
-  --accent: #f07163;
-  --accent-soft: #3a2220;
-  --on-accent: #1b0d0b;
-  --ok: #67c18b;
-  --danger: #f2786c;
-  --on-danger: #1b0d0b;
+  --accent: #f07a66;
+  --accent-soft: #3b211c;
+  --on-accent: #1d0c09;
+  --ok: #6cc391;
+  --ok-soft: #1c2f24;
+  --warn: #e0b254;
+  --warn-soft: #33290f;
+  --danger: #f2836f;
+  --danger-soft: #3b211c;
+  --elevation-line: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elevation-float: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.4);
+  --elevation-above: 0 2px 4px rgb(0 0 0 / 0.3), 0 24px 64px rgb(0 0 0 / 0.6);
+  --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23191715' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
+  --color-canvas: var(--canvas);
+  --color-sunken: var(--sunken);
   --color-surface: var(--surface);
   --color-raised: var(--raised);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-  --color-fg: var(--fg);
-  --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-bubble: var(--bubble);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
   --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
   --color-scrim: var(--scrim);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
-  --color-on-danger: var(--on-danger);
+  --color-danger-soft: var(--danger-soft);
+  /* Type: six roles. */
+  --text-display: 30px;
+  --text-display--line-height: 36px;
+  --text-display--letter-spacing: -0.01em;
+  --text-display--font-weight: 500;
+  --text-title: 18px;
+  --text-title--line-height: 24px;
+  --text-title--font-weight: 600;
+  --text-reading: 16px;
+  --text-reading--line-height: 26px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-small: 13px;
+  --text-small--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
   --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Shape, widths, elevation and motion. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --container-read: 720px;
+  --container-form: 640px;
+  --container-dialog-sm: 400px;
+  --container-dialog-md: 560px;
+  --container-dialog-lg: 720px;
+  --container-sidebar: 272px;
+  --shadow-line: var(--elevation-line);
+  --shadow-float: var(--elevation-float);
+  --shadow-above: var(--elevation-above);
+  --ease-soft: cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* The names of ADR-0070, until the last screen is rebuilt. */
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-bubble: var(--bubble);
+  --color-on-danger: var(--on-danger);
   --shadow-soft: var(--shadow);
+}
+
+/* Room for a phone's notch and home bar, at the edges of the screen (UX-001). */
+@utility pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+@utility pl-safe {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+}
+@utility pr-safe {
+  padding-right: max(0.5rem, env(safe-area-inset-right));
 }
 
 html,
