@@ -691,7 +691,7 @@ Rationale: persona P4; an empty page reads as a broken one.
 
 ## UX-039: The top bar and the way back
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
