@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sibillo: the design language</title>
+<!-- The reference of the design language (ADR-0111, UX-017): its foundations, its shared components and
+     the screens built from them. Sample data and the prototype bar are not part of the design.
+     Fonts come from a font service here only; the app bundles them (ADR-0111). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<style>
+/* ---------- Foundations: every value used below is one of these tokens ---------- */
+:root {
+  /* color: warm paper neutrals, ink, one accent */
+  --canvas: #faf8f5; --sunken: #f2efe9; --surface: #ffffff; --raised: #ffffff;
+  --line: #e7e2d9; --line-strong: #d1cabe;
+  --ink: #1f1b18; --ink-2: #5a534b; --ink-3: #6e675e;
+  --hover: rgb(31 27 24 / .055); --pressed: rgb(31 27 24 / .1); --scrim: rgb(24 20 17 / .45);
+  --accent: #b3301f; --accent-soft: #f9e7e2; --on-accent: #ffffff;
+  --ok: #2a6b45; --ok-soft: #e4f1e9; --warn: #855600; --warn-soft: #f8ecd2; --danger: #a3271a; --danger-soft: #f9e7e2;
+  /* type: three families, six sizes, three weights */
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --serif: "Newsreader", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  /* space: a 4px grid */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px; --s8: 32px; --s12: 48px;
+  /* shape */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px; --r-full: 999px;
+  /* controls */
+  --h-sm: 32px; --h-md: 40px;
+  /* widths */
+  --w-sidebar: 272px; --w-read: 720px; --w-form: 640px;
+  /* elevation */
+  --e1: 0 1px 2px rgb(31 27 24 / .05);
+  --e2: 0 1px 2px rgb(31 27 24 / .06), 0 8px 24px rgb(31 27 24 / .10);
+  --e3: 0 2px 4px rgb(31 27 24 / .06), 0 24px 64px rgb(31 27 24 / .20);
+  /* motion */
+  --fast: 120ms; --slow: 200ms; --ease: cubic-bezier(.2, .8, .3, 1);
+  /* the sprite keeps its colors in both themes */
+  --c-hat: #c8352a; --c-hat-shade: #992a21; --c-tunic: #b5302a; --c-skin: #f3d6b0; --c-hair: #e1b64c;
+  --c-line: #3a2a22; --c-blush: #ee9682; --c-mouth: #7a2a22;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --canvas: #191715; --sunken: #131110; --surface: #211e1b; --raised: #2a2622;
+  --line: #322d29; --line-strong: #4b443d;
+  --ink: #f1ece6; --ink-2: #b5aca2; --ink-3: #9a9187;
+  --hover: rgb(255 244 232 / .07); --pressed: rgb(255 244 232 / .12); --scrim: rgb(0 0 0 / .6);
+  --accent: #f07a66; --accent-soft: #3b211c; --on-accent: #1d0c09;
+  --ok: #6cc391; --ok-soft: #1c2f24; --warn: #e0b254; --warn-soft: #33290f; --danger: #f2836f; --danger-soft: #3b211c;
+  --e1: 0 1px 2px rgb(0 0 0 / .3);
+  --e2: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .4);
+  --e3: 0 2px 4px rgb(0 0 0 / .3), 0 24px 64px rgb(0 0 0 / .6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--sunken); color: var(--ink); font: 400 14px/20px var(--sans); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* type roles */
+.t-display { font: 500 30px/36px var(--serif); letter-spacing: -.01em; }
+.t-title { font: 600 18px/24px var(--sans); letter-spacing: -.005em; }
+.t-heading { font: 600 14px/20px var(--sans); }
+.t-reading { font: 400 16px/26px var(--sans); }
+.t-body { font: 400 14px/20px var(--sans); }
+.t-small { font: 400 13px/18px var(--sans); }
+.t-caption { font: 500 12px/16px var(--sans); }
+.muted { color: var(--ink-2); } .faint { color: var(--ink-3); }
+.mono { font-family: var(--mono); font-size: 13px; }
+
+/* ---------- Components ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--h-md); padding: 0 var(--s4);
+  border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); font: 600 14px/20px var(--sans);
+  white-space: nowrap; cursor: pointer; transition: background var(--fast) var(--ease), transform var(--fast) var(--ease); }
+.btn:hover, .btn.is-hover { background: color-mix(in srgb, var(--surface), var(--ink) 5%); }
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--canvas); }
+.btn.primary:hover, .btn.primary.is-hover { background: color-mix(in srgb, var(--ink), var(--canvas) 14%); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover, .btn.ghost.is-hover { background: var(--hover); }
+.btn.danger { color: var(--danger); }
+.btn.danger.solid { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.btn.sm { height: var(--h-sm); padding: 0 var(--s3); font-size: 13px; }
+.btn.icon { width: var(--h-md); padding: 0; } .btn.icon.sm { width: var(--h-sm); }
+.btn.block { width: 100%; }
+.btn:disabled, .btn.is-disabled { opacity: .45; cursor: not-allowed; }
+.btn.is-focus, .field.is-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.spin { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: var(--r-full); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+
+.field { display: flex; align-items: center; gap: var(--s2); width: 100%; height: var(--h-md); padding: 0 var(--s3);
+  border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); transition: border-color var(--fast) var(--ease); }
+.field:hover { border-color: var(--ink-3); }
+.field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field input, .field textarea { flex: 1; min-width: 0; border: 0; outline: 0; background: none; }
+.field ::placeholder { color: var(--ink-3); }
+.field.sm { height: var(--h-sm); font-size: 13px; }
+.field.area { height: auto; padding: var(--s2) var(--s3); align-items: flex-start; }
+.field.area textarea { resize: none; min-height: 80px; line-height: 20px; }
+.field.select { cursor: pointer; justify-content: space-between; } .field.select > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field.invalid { border-color: var(--danger); }
+.field.quiet { background: var(--hover); border-color: transparent; }
+.form-field { display: flex; flex-direction: column; gap: var(--s2); }
+.form-field > label { font: 600 13px/18px var(--sans); }
+.form-field > .hint { font: 400 13px/18px var(--sans); color: var(--ink-2); }
+.form-field > .error { font: 400 13px/18px var(--sans); color: var(--danger); display: flex; gap: var(--s1); align-items: center; }
+
+.switch { position: relative; flex: none; width: 36px; height: 20px; border-radius: var(--r-full); background: var(--line-strong); cursor: pointer; transition: background var(--slow) var(--ease); }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--r-full); background: var(--surface); box-shadow: var(--e1); transition: transform var(--slow) var(--ease); }
+.switch.on { background: var(--ink); } .switch.on::after { transform: translateX(16px); background: var(--canvas); }
+
+.segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-md); background: var(--hover); height: var(--h-md); }
+.segmented > button { border: 0; background: none; padding: 0 var(--s4); border-radius: 7px; font: 500 13px/18px var(--sans); color: var(--ink-2); cursor: pointer; }
+.segmented > button.on { background: var(--surface); color: var(--ink); box-shadow: var(--e1); font-weight: 600; }
+
+.badge { display: inline-flex; align-items: center; gap: var(--s1); height: 20px; padding: 0 var(--s2); border-radius: var(--r-sm); background: var(--hover); color: var(--ink-2); font: 500 12px/16px var(--sans); white-space: nowrap; }
+.badge svg.i { width: 12px; height: 12px; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); } .badge.warn { background: var(--warn-soft); color: var(--warn); } .badge.accent { background: var(--accent-soft); color: var(--accent); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.rows > * + * { border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: var(--s4); padding: var(--s4); min-height: 56px; }
+.row > .text { flex: 1; min-width: 0; } .row .text .t-small { color: var(--ink-2); margin-top: 2px; }
+.row.stack { flex-direction: column; align-items: stretch; gap: var(--s3); }
+.row.link { cursor: pointer; } .row.link:hover { background: var(--hover); }
+.tile { display: grid; place-items: center; flex: none; width: var(--h-md); height: var(--h-md); border-radius: var(--r-md); background: var(--hover); color: var(--ink-2); }
+
+.group { display: flex; flex-direction: column; gap: var(--s3); }
+.group > header .t-small { color: var(--ink-2); margin-top: 2px; }
+
+.notice { display: flex; gap: var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r-md); background: var(--hover); font: 400 13px/18px var(--sans); align-items: flex-start; }
+.notice svg.i { margin-top: 1px; } .notice b { font-weight: 600; } .notice .grow { flex: 1; }
+.notice.warn { background: var(--warn-soft); color: var(--warn); } .notice.error { background: var(--danger-soft); color: var(--danger); }
+.notice.warn span, .notice.error span { color: var(--ink); }
+
+.empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s2); padding: var(--s12) var(--s6); }
+.empty .tile { width: 48px; height: 48px; border-radius: var(--r-full); margin-bottom: var(--s2); } .empty .tile svg.i { width: 20px; height: 20px; }
+.empty p { color: var(--ink-2); max-width: 44ch; } .empty .btn { margin-top: var(--s3); }
+
+.menu { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--e2); padding: var(--s1); min-width: 220px; }
+.menu > button { display: flex; align-items: center; gap: var(--s2); width: 100%; height: var(--h-sm); padding: 0 var(--s2); border: 0; background: none; border-radius: var(--r-sm); text-align: left; cursor: pointer; }
+.menu > button:hover, .menu > button.is-hover { background: var(--hover); } .menu > button.danger { color: var(--danger); }
+.menu > button > .end { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.menu > hr { border: 0; border-top: 1px solid var(--line); margin: var(--s1) calc(-1 * var(--s1)); }
+.menu > .label { padding: var(--s2) var(--s2) var(--s1); font: 500 12px/16px var(--sans); color: var(--ink-3); }
+
+.dialog { display: flex; flex-direction: column; background: var(--raised); border-radius: var(--r-lg); box-shadow: var(--e3); width: 560px; max-width: 100%; }
+.dialog.sm { width: 400px; } .dialog.lg { width: 720px; }
+.dialog > header { display: flex; align-items: flex-start; gap: var(--s4); padding: var(--s6) var(--s6) 0; } .dialog > header > div { flex: 1; }
+.dialog > header p { color: var(--ink-2); margin-top: var(--s1); }
+.dialog > .body { display: flex; flex-direction: column; gap: var(--s4); padding: var(--s6); }
+.dialog > footer { display: flex; justify-content: flex-end; gap: var(--s2); padding: var(--s4) var(--s6); border-top: 1px solid var(--line); }
+.dialog.sheet { width: 100%; border-radius: var(--r-lg) var(--r-lg) 0 0; } .dialog.sheet > footer { flex-direction: column-reverse; }
+
+.avatar { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent); font: 600 12px/16px var(--sans); }
+kbd { font: 500 12px/16px var(--sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 var(--s1); }
+
+/* ---------- The app shell ---------- */
+.frame { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--e2); }
+.app { display: grid; grid-template-columns: var(--w-sidebar) minmax(0, 1fr); height: 800px; }
+.side { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s3); background: var(--sunken); border-right: 1px solid var(--line); min-height: 0; }
+.side .brand { display: flex; align-items: center; gap: var(--s2); height: var(--h-md); padding-left: var(--s1); font: 600 16px/20px var(--sans); }
+.side .brand .sp { width: 22px; } .side .brand .grow { flex: 1; }
+.side .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; margin: 0 calc(-1 * var(--s1)); padding: 0 var(--s1); }
+.side .list .label { padding: var(--s3) var(--s2) var(--s1); font: 500 12px/16px var(--sans); color: var(--ink-3); }
+.nav-item { display: flex; align-items: center; gap: var(--s2); height: var(--h-sm); padding: 0 var(--s2); border: 0; background: none; border-radius: var(--r-sm); color: var(--ink-2); text-align: left; cursor: pointer; width: 100%; transition: background var(--fast) var(--ease); }
+.nav-item > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item:hover { background: var(--hover); color: var(--ink); }
+.nav-item.on { background: var(--pressed); color: var(--ink); font-weight: 600; }
+.account { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) 0 0 var(--s2); }
+.account .who { flex: 1; min-width: 0; } .account .who div:first-child { font-weight: 600; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+.topbar { display: flex; align-items: center; gap: var(--s2); height: 56px; padding: 0 var(--s4); flex: none; }
+.topbar.line { border-bottom: 1px solid var(--line); } .topbar .grow { flex: 1; min-width: 0; }
+.topbar .title { font: 600 14px/20px var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scroll { flex: 1; overflow: auto; min-height: 0; }
+.col { width: 100%; max-width: var(--w-read); margin: 0 auto; padding: 0 var(--s6); }
+
+/* home */
+.home { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: var(--s8); padding-bottom: var(--s12); }
+.greet { display: flex; align-items: flex-end; gap: var(--s6); } .greet .sp { width: 76px; flex: none; }
+.greet blockquote { font: italic 400 16px/26px var(--serif); color: var(--ink-2); margin-top: var(--s2); }
+.greet cite { font: 500 12px/16px var(--sans); color: var(--ink-3); font-style: normal; }
+
+/* composer */
+.composer { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--e2); padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); transition: border-color var(--fast) var(--ease); }
+.composer:focus-within { border-color: var(--ink-3); }
+.composer textarea { border: 0; outline: 0; background: none; resize: none; padding: var(--s1) var(--s2); font: 400 16px/26px var(--sans); height: 52px; }
+.composer .bar { display: flex; align-items: center; gap: var(--s1); } .composer .bar .grow { flex: 1; }
+.send { display: grid; place-items: center; width: var(--h-sm); height: var(--h-sm); border: 0; border-radius: var(--r-full); background: var(--accent); color: var(--on-accent); cursor: pointer; }
+.under { text-align: center; padding: var(--s2) 0 var(--s3); color: var(--ink-3); font: 500 12px/16px var(--sans); display: flex; gap: var(--s1); justify-content: center; align-items: center; }
+.dock { flex: none; background: linear-gradient(transparent, var(--canvas) 24px); padding-top: var(--s4); }
+
+/* thread */
+.thread { display: flex; flex-direction: column; gap: var(--s6); padding-top: var(--s6); padding-bottom: var(--s8); }
+.bubble { align-self: flex-end; max-width: 80%; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) var(--r-sm) var(--r-lg); padding: var(--s3) var(--s4); font: 400 16px/26px var(--sans); }
+.answer { display: flex; flex-direction: column; gap: var(--s3); font: 400 16px/26px var(--sans); }
+.answer h3 { font: 600 16px/26px var(--sans); margin-top: var(--s2); } .answer ul { padding-left: var(--s6); display: flex; flex-direction: column; gap: var(--s1); }
+.answer code { font: 400 14px/20px var(--mono); background: var(--hover); border-radius: var(--r-sm); padding: 1px var(--s1); }
+.code { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.code > header { display: flex; align-items: center; justify-content: space-between; height: var(--h-sm); padding: 0 var(--s1) 0 var(--s3); border-bottom: 1px solid var(--line); font: 500 12px/16px var(--sans); color: var(--ink-3); }
+.code > pre { padding: var(--s3); font: 400 13px/20px var(--mono); overflow: auto; }
+.steps { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.steps > button { display: flex; align-items: center; gap: var(--s2); width: 100%; height: var(--h-md); padding: 0 var(--s3); border: 0; background: none; cursor: pointer; font: 500 13px/18px var(--sans); color: var(--ink-2); text-align: left; }
+.steps > button .grow { flex: 1; } .steps > ol { list-style: none; padding: 0 var(--s3) var(--s3); display: flex; flex-direction: column; gap: var(--s2); }
+.steps li { display: flex; gap: var(--s2); align-items: center; font: 400 13px/18px var(--sans); color: var(--ink-2); } .steps li b { color: var(--ink); font-weight: 500; } .steps li .end { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.acts { display: flex; align-items: center; gap: 2px; color: var(--ink-3); margin-left: calc(-1 * var(--s2)); } .acts .t-caption { margin-left: var(--s2); }
+.ask { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--e2); margin-bottom: var(--s2); }
+.ask > header { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4) 0; font: 600 13px/18px var(--sans); }
+.ask > .body { padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+.ask > footer { display: flex; gap: var(--s2); justify-content: flex-end; padding: var(--s3) var(--s4); border-top: 1px solid var(--line); }
+
+/* side panel, picker, radio, meter */
+.app.with-panel { grid-template-columns: var(--w-sidebar) minmax(0, 1fr) 340px; }
+.panel { display: flex; flex-direction: column; min-height: 0; background: var(--canvas); border-left: 1px solid var(--line); }
+.quota { padding: var(--s3) var(--s4); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--s2); }
+.meter { height: 4px; border-radius: var(--r-full); background: var(--hover); overflow: hidden; } .meter i { display: block; height: 100%; background: var(--ink-2); }
+.picker { position: absolute; right: var(--s6); bottom: 148px; width: 380px; z-index: 2; display: flex; flex-direction: column; gap: 1px; }
+.picker .field { margin-bottom: var(--s1); }
+.radio { flex: none; width: 16px; height: 16px; border-radius: var(--r-full); border: 1px solid var(--line-strong); background: var(--surface); }
+.radio.on { border: 5px solid var(--ink); }
+
+/* settings */
+.settings { display: grid; grid-template-columns: 200px minmax(0, var(--w-form)); gap: var(--s12); justify-content: center; padding: var(--s8) var(--s6) var(--s12); }
+.settings nav { display: flex; flex-direction: column; gap: 1px; position: sticky; top: var(--s8); align-self: start; }
+.settings nav .label { padding: var(--s3) var(--s2) var(--s1); font: 500 12px/16px var(--sans); color: var(--ink-3); } .settings nav .label:first-child { padding-top: 0; }
+.page { display: none; flex-direction: column; gap: var(--s8); } .page.on { display: flex; }
+.page > header p { color: var(--ink-2); margin-top: var(--s2); max-width: 60ch; }
+
+/* sign-in */
+.signin { height: 800px; display: grid; place-items: center; background: var(--sunken); }
+.signin .card { width: 400px; padding: var(--s8); display: flex; flex-direction: column; gap: var(--s4); box-shadow: var(--e2); }
+.signin .sp { width: 64px; margin: 0 auto; } .signin header { text-align: center; } .signin header p { color: var(--ink-2); margin-top: var(--s1); }
+.rule { display: flex; align-items: center; gap: var(--s3); color: var(--ink-3); font: 500 12px/16px var(--sans); } .rule::before, .rule::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+
+/* phone */
+.phones { display: flex; gap: var(--s8); flex-wrap: wrap; justify-content: center; }
+.phone { width: 390px; height: 800px; display: flex; flex-direction: column; position: relative; }
+.phone .btn, .phone .field, .phone .nav-item { min-height: 44px; } .phone .btn.icon { min-width: 44px; }
+.phone .col { padding: 0 var(--s4); } .phone .t-display { font-size: 26px; line-height: 32px; }
+.overlay { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: flex-end; }
+.stage { position: relative; height: 800px; background: var(--scrim); display: flex; gap: var(--s8); align-items: center; justify-content: center; flex-wrap: wrap; padding: var(--s8); }
+
+/* ---------- Prototype chrome (not part of the design) ---------- */
+.proto { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s6); background: var(--ink); color: var(--canvas); overflow-x: auto; }
+.proto b { margin-right: var(--s4); white-space: nowrap; } .proto .grow { flex: 1; }
+.proto button { height: var(--h-sm); padding: 0 var(--s3); border: 0; border-radius: var(--r-sm); background: none; color: inherit; opacity: .65; cursor: pointer; white-space: nowrap; font-weight: 500; }
+.proto button.on { opacity: 1; background: rgb(128 128 128 / .35); }
+.screen { display: none; max-width: 1320px; margin: 0 auto; padding: var(--s8) var(--s6) var(--s12); } .screen.on { display: block; }
+.doc { display: flex; flex-direction: column; gap: var(--s12); max-width: 1000px; margin: 0 auto; }
+.doc section { display: flex; flex-direction: column; gap: var(--s4); } .doc section > p { color: var(--ink-2); max-width: 70ch; }
+.spec { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3); }
+.sw { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); } .sw i { display: block; height: 48px; border-bottom: 1px solid var(--line); } .sw div { padding: var(--s2); font: 500 12px/16px var(--sans); } .sw span { display: block; color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.demo { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; padding: var(--s6); background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.demo.col2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+.typerow { display: grid; grid-template-columns: 160px 1fr; gap: var(--s4); align-items: baseline; padding: var(--s3) 0; border-top: 1px solid var(--line); }
+.tick { height: 12px; background: var(--accent); border-radius: 2px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--s3); } .rules .card { padding: var(--s4); } .rules p { color: var(--ink-2); margin-top: var(--s1); }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; } .app > .side { display: none; } .settings { grid-template-columns: 1fr; } .settings nav { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <b>Sibillo design language</b>
+  <button data-go="foundations" class="on">Foundations</button><button data-go="components">Components</button><button data-go="home">Home</button>
+  <button data-go="chat">Conversation</button><button data-go="settings">Settings</button><button data-go="overlays">Dialogs and menus</button><button data-go="panels">Panels and pickers</button>
+  <button data-go="signin">Sign-in</button><button data-go="phone">Phone</button>
+  <span class="grow"></span><button id="theme">Dark theme</button>
+</div>
+
+<!-- ================= FOUNDATIONS ================= -->
+<div class="screen on" id="foundations"><div class="doc">
+  <section>
+    <h1 class="t-display">A house, not a dashboard</h1>
+    <p class="t-reading">Sibillo lives in a home. The interface is warm paper and ink, quiet until something needs attention, with one red: the sprite's hat. Everything on every screen is built from the values on this page, and from nothing else.</p>
+    <div class="rules">
+      <div class="card"><div class="t-heading">Red is rare</div><p class="t-small">The accent marks the one thing to do next (send, focus) and the sprite. Buttons are ink; switches are ink. A screen with five red things has none.</p></div>
+      <div class="card"><div class="t-heading">One of each</div><p class="t-small">One button, one field, one select, one dialog. Two controls that do the same job look the same, on every screen.</p></div>
+      <div class="card"><div class="t-heading">Rows, not boxes</div><p class="t-small">Settings are rows in a card: what it is on the left, the control on the right. Lists are rows too. Cards never nest.</p></div>
+      <div class="card"><div class="t-heading">Serif speaks, sans works</div><p class="t-small">Newsreader is the voice of the house: greetings, page titles, quotes. Hanken Grotesk is everything you operate.</p></div>
+      <div class="card"><div class="t-heading">Nothing is ever blank</div><p class="t-small">Every list has an empty state that says what it is for and offers the first action. Every wait shows that it is waiting.</p></div>
+      <div class="card"><div class="t-heading">Destructive is explicit</div><p class="t-small">Danger shares the red family, so it never relies on color: it has its own verb, an icon, and a confirmation.</p></div>
+    </div>
+  </section>
+  <section><h2 class="t-title">Color</h2><p>Sixteen roles, each with a light and a dark value. Text on its background meets WCAG AA.</p><div class="spec" id="swatches"></div></section>
+  <section><h2 class="t-title">Type</h2><p>Six sizes, three weights (400, 500, 600). No other size exists.</p>
+    <div>
+      <div class="typerow"><span class="t-caption faint">display · 30/36 serif 500</span><span class="t-display">Good evening, Ada.</span></div>
+      <div class="typerow"><span class="t-caption faint">title · 18/24 · 600</span><span class="t-title">Connections</span></div>
+      <div class="typerow"><span class="t-caption faint">reading · 16/26 · 400</span><span class="t-reading">Messages and answers, written to be read at length.</span></div>
+      <div class="typerow"><span class="t-caption faint">body · 14/20 · 400, 600</span><span class="t-body">Controls, rows, menus. <b style="font-weight:600">Headings of rows in 600.</b></span></div>
+      <div class="typerow"><span class="t-caption faint">small · 13/18 · 400</span><span class="t-small">Descriptions, hints and secondary lines.</span></div>
+      <div class="typerow"><span class="t-caption faint">caption · 12/16 · 500</span><span class="t-caption">Labels of groups, badges, metadata</span></div>
+    </div>
+  </section>
+  <section><h2 class="t-title">Space, shape and size</h2><p>A 4px grid with seven steps; four radii; two control heights (44px on touch screens); three widths for content.</p>
+    <div class="demo" style="align-items:flex-end">
+      <div><div class="tick" style="width:4px"></div><span class="t-caption faint">4</span></div><div><div class="tick" style="width:8px"></div><span class="t-caption faint">8</span></div><div><div class="tick" style="width:12px"></div><span class="t-caption faint">12</span></div><div><div class="tick" style="width:16px"></div><span class="t-caption faint">16</span></div><div><div class="tick" style="width:24px"></div><span class="t-caption faint">24</span></div><div><div class="tick" style="width:32px"></div><span class="t-caption faint">32</span></div><div><div class="tick" style="width:48px"></div><span class="t-caption faint">48</span></div>
+      <span style="width:32px"></span>
+      <div class="tile" style="border-radius:6px"></div><span class="t-caption faint">6 · items, badges</span>
+      <div class="tile" style="border-radius:10px"></div><span class="t-caption faint">10 · controls</span>
+      <div class="tile" style="border-radius:16px"></div><span class="t-caption faint">16 · cards, dialogs</span>
+      <div class="tile" style="border-radius:999px"></div><span class="t-caption faint">full · avatars, send</span>
+    </div>
+    <div class="demo"><button class="btn sm">32 · dense</button><button class="btn">40 · default</button><span class="t-small muted">Reading column 720 · form column 640 · dialogs 400, 560, 720 · sidebar 272</span></div>
+  </section>
+  <section><h2 class="t-title">Elevation and motion</h2><p>Three levels: on the page (a line), floating (menus, the message box), above the page (dialogs). Two durations, one curve; nothing moves when the device asks for reduced motion.</p>
+    <div class="demo" style="gap:24px">
+      <div class="card" style="padding:16px;width:180px"><div class="t-heading">Flat</div><div class="t-small muted">a line, no shadow</div></div>
+      <div class="card" style="padding:16px;width:180px;box-shadow:var(--e2)"><div class="t-heading">Floating</div><div class="t-small muted">menus, message box</div></div>
+      <div class="card" style="padding:16px;width:180px;box-shadow:var(--e3);border-color:transparent"><div class="t-heading">Above</div><div class="t-small muted">dialogs, over a scrim</div></div>
+      <span class="t-small muted">120ms for hover and press · 200ms for things that enter</span>
+    </div>
+  </section>
+</div></div>
+
+<!-- ================= COMPONENTS ================= -->
+<div class="screen" id="components"><div class="doc">
+  <section><h1 class="t-display">Components</h1><p class="t-reading">Screens are assembled from these. A screen never styles a button, a field or a dialog of its own.</p></section>
+  <section><h2 class="t-title">Button</h2><p>Primary once per view, at most. Secondary for everything else; ghost inside toolbars; danger only for what cannot be undone.</p>
+    <div class="demo"><button class="btn primary">Primary</button><button class="btn">Secondary</button><button class="btn ghost">Ghost</button><button class="btn danger">Remove</button><button class="btn danger solid">Delete forever</button><button class="btn"><svg class="i" data-i="plus"></svg>With icon</button><button class="btn icon" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+    <div class="demo"><button class="btn primary sm">Small</button><button class="btn sm">Small</button><button class="btn ghost sm"><svg class="i" data-i="folder"></svg>Files</button><button class="btn icon ghost sm" aria-label="Copy"><svg class="i" data-i="copy"></svg></button><span style="width:16px"></span><button class="btn is-hover">Hover</button><button class="btn is-focus">Focus</button><button class="btn primary is-disabled">Disabled</button><button class="btn primary"><span class="spin"></span>Saving</button></div>
+  </section>
+  <section><h2 class="t-title">Fields</h2><p>Label above, hint or error below. A select looks like a field on every browser; the list it opens is the device's own.</p>
+    <div class="demo col2">
+      <div class="form-field"><label>Name</label><div class="field"><input value="Morning briefing"></div><span class="hint">Shown in the list of tasks.</span></div>
+      <div class="form-field"><label>Address</label><div class="field invalid"><input value="htp://ollama.local"></div><span class="error"><svg class="i" data-i="alert"></svg>Start the address with http:// or https://</span></div>
+      <div class="form-field"><label>Language</label><div class="field select"><span>The language of your messages</span><svg class="i" data-i="chevron-down"></svg></div></div>
+      <div class="form-field"><label>Search</label><div class="field quiet sm"><svg class="i" data-i="search"></svg><input placeholder="Search conversations"><kbd>/</kbd></div></div>
+      <div class="form-field" style="grid-column:1/-1"><label>Instructions</label><div class="field area"><textarea>Answer briefly. Use metric units.</textarea></div></div>
+    </div>
+  </section>
+  <section><h2 class="t-title">Choices</h2>
+    <div class="demo"><span class="switch"></span><span class="switch on"></span><span style="width:16px"></span><div class="segmented"><button>Off</button><button class="on">On</button><button>Deep</button></div><span style="width:16px"></span><span class="badge">Remote</span><span class="badge ok"><svg class="i" data-i="check"></svg>513 models</span><span class="badge warn">Needs sign-in</span><span class="badge accent">New</span></div>
+  </section>
+  <section><h2 class="t-title">Rows in a card</h2><p>The one pattern for settings and for lists.</p>
+    <div class="demo" style="display:block"><div class="card rows" style="max-width:640px">
+      <div class="row"><div class="text"><div class="t-heading">Use only local models</div><div class="t-small">Your messages never leave the house.</div></div><span class="switch on"></span></div>
+      <div class="row"><div class="text"><div class="t-heading">Reasoning</div><div class="t-small">How much the model thinks before it answers.</div></div><div class="segmented"><button>Off</button><button class="on">On</button><button>Deep</button></div></div>
+      <div class="row"><span class="tile"><svg class="i" data-i="cloud"></svg></span><div class="text"><div class="t-heading">OpenRouter <span class="badge">Remote</span></div><div class="t-small mono">https://openrouter.ai/api/v1</div></div><span class="badge ok"><svg class="i" data-i="check"></svg>513 models</span><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+    </div></div>
+  </section>
+  <section><h2 class="t-title">Notices and empty states</h2>
+    <div class="demo col2">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="notice"><svg class="i" data-i="info"></svg><span>These settings apply to everyone in the household.</span></div>
+        <div class="notice warn"><svg class="i" data-i="bell"></svg><span class="grow"><b>Notifications are off.</b> Allow them in the browser's site settings.</span><button class="btn sm">Turn on</button></div>
+        <div class="notice error"><svg class="i" data-i="alert"></svg><span class="grow"><b>The model did not answer.</b> The connection to Ollama timed out.</span><button class="btn sm">Try again</button></div>
+      </div>
+      <div class="card"><div class="empty"><span class="tile"><svg class="i" data-i="clock"></svg></span><div class="t-heading">No tasks yet</div><p class="t-small">A task starts a conversation on its own, at the times you choose, and leaves the answer waiting for you.</p><button class="btn"><svg class="i" data-i="plus"></svg>New task</button></div></div>
+    </div>
+  </section>
+</div></div>
+
+<!-- ================= HOME ================= -->
+<div class="screen" id="home"><div class="frame"><div class="app">
+  <aside class="side" data-side="none"></aside>
+  <div class="main">
+    <div class="topbar"><span class="grow"></span><button class="btn ghost sm"><svg class="i" data-i="ghost"></svg>Temporary chat</button></div>
+    <div class="col home">
+      <div class="greet"><span class="sp" data-sprite="wave"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote><cite>Aristotle, Politics</cite></div></div>
+      <div>
+        <div class="composer"><textarea placeholder="What can I help with?"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="btn ghost sm"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
+        <div class="under"><svg class="i" data-i="cloud" style="width:12px;height:12px"></svg>Messages go to OpenRouter and the provider that runs the model.</div>
+      </div>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- ================= CONVERSATION ================= -->
+<div class="screen" id="chat"><div class="frame"><div class="app">
+  <aside class="side" data-side="c1"></aside>
+  <div class="main">
+    <div class="topbar line"><div class="grow title">Sourdough that will not rise</div><span class="t-caption faint">$0.0035</span><button class="btn ghost sm"><svg class="i" data-i="folder"></svg>Files<span class="badge">2</span></button><button class="btn icon ghost sm" aria-label="Chat settings"><svg class="i" data-i="sliders"></svg></button><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+    <div class="scroll"><div class="col thread">
+      <div class="bubble">My sourdough stays flat after eight hours. The kitchen is about 18 degrees. What am I doing wrong?</div>
+      <div class="answer">
+        <div class="steps"><button><svg class="i" data-i="check"></svg><span class="grow">Searched the web and read 2 pages</span><span class="t-caption faint">14 s</span><svg class="i" data-i="chevron-down"></svg></button>
+          <ol><li><svg class="i" data-i="search"></svg><b>Searched</b> sourdough bulk fermentation temperature<span class="end">3 s</span></li><li><svg class="i" data-i="globe"></svg><b>Read</b> theperfectloaf.com<span class="end">6 s</span></li><li><svg class="i" data-i="globe"></svg><b>Read</b> kingarthurbaking.com<span class="end">5 s</span></li></ol></div>
+        <p>Nothing is wrong with the dough: it is cold. At 18 °C bulk fermentation takes <b>10 to 12 hours</b>, not eight.</p>
+        <h3>Two ways to fix it</h3>
+        <ul><li>Give it time: wait until the dough has grown by about half and wobbles when you shake the bowl.</li><li>Give it warmth: the oven with only its light on holds about 26 °C.</li></ul>
+        <p>I can work out the timing for your recipe. It runs <code>schedule.py</code> in your files.</p>
+        <div class="acts"><button class="btn icon ghost sm" aria-label="Copy"><svg class="i" data-i="copy"></svg></button><button class="btn icon ghost sm" aria-label="Read aloud"><svg class="i" data-i="volume"></svg></button><button class="btn icon ghost sm" aria-label="Try again"><svg class="i" data-i="refresh"></svg></button><span class="t-caption">DeepSeek V4.1 Flash · $0.0018</span></div>
+      </div>
+    </div></div>
+    <div class="dock"><div class="col">
+      <div class="ask"><header><svg class="i" data-i="shield"></svg>Sibillo asks to run a command</header><div class="body"><div class="code"><pre>python schedule.py --temp 18 --flour 500</pre></div><span class="t-small muted">It runs in the sandbox of this conversation, with no access to the network.</span></div><footer><button class="btn ghost sm" style="margin-right:auto">Always allow in this chat</button><button class="btn sm">Deny</button><button class="btn primary sm">Allow once</button></footer></div>
+      <div class="composer"><textarea placeholder="Reply…"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><button class="btn icon ghost sm" aria-label="Speak"><svg class="i" data-i="mic"></svg></button><span class="grow"></span><button class="btn ghost sm"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
+      <div class="under">Context 12% used</div>
+    </div></div>
+  </div>
+</div></div></div>
+
+<!-- ================= SETTINGS ================= -->
+<div class="screen" id="settings"><div class="frame"><div class="app">
+  <aside class="side" data-side="settings"></aside>
+  <div class="main"><div class="scroll"><div class="settings">
+    <nav>
+      <div class="label">Yours</div>
+      <button class="nav-item on" data-page="p-assistant"><svg class="i" data-i="message"></svg><span>Assistant</span></button>
+      <button class="nav-item" data-page="p-tasks"><svg class="i" data-i="clock"></svg><span>Tasks</span></button>
+      <button class="nav-item"><svg class="i" data-i="bookmark"></svg><span>Memory</span></button>
+      <button class="nav-item" data-page="p-skills"><svg class="i" data-i="star"></svg><span>Skills</span></button>
+      <button class="nav-item"><svg class="i" data-i="bell"></svg><span>Notifications</span></button>
+      <button class="nav-item"><svg class="i" data-i="key"></svg><span>Security</span></button>
+      <button class="nav-item"><svg class="i" data-i="sun"></svg><span>Appearance</span></button>
+      <div class="label">Household</div>
+      <button class="nav-item" data-page="p-models"><svg class="i" data-i="plug"></svg><span>Models</span></button>
+      <button class="nav-item"><svg class="i" data-i="shield"></svg><span>Tool permissions</span></button>
+      <button class="nav-item"><svg class="i" data-i="users"></svg><span>Members</span></button>
+    </nav>
+    <div>
+      <div class="page on" id="p-assistant">
+        <header><h1 class="t-display">Assistant</h1><p>How your new conversations start. Each conversation can change these in its own settings.</p></header>
+        <div class="group"><header><h2 class="t-heading">Model</h2></header><div class="card rows">
+          <div class="row"><div class="text"><div class="t-heading">Your default model</div><div class="t-small">Overrides the household's default in your new chats.</div></div><div class="field select" style="width:260px"><span>Household default</span><svg class="i" data-i="chevron-down"></svg></div></div>
+          <div class="row"><div class="text"><div class="t-heading">Use only local models</div><div class="t-small">Your messages never leave the house. Remote models become unavailable for you.</div></div><span class="switch"></span></div>
+          <div class="row"><div class="text"><div class="t-heading">Reasoning</div><div class="t-small">Deep is slower, and costs more on paid models.</div></div><div class="segmented"><button>Off</button><button class="on">On</button><button>Deep</button></div></div>
+        </div></div>
+        <div class="group"><header><h2 class="t-heading">Answers</h2></header><div class="card rows">
+          <div class="row"><div class="text"><div class="t-heading">Language</div><div class="t-small">Unless you write in another one or ask for it.</div></div><div class="field select" style="width:260px"><span>The language of your messages</span><svg class="i" data-i="chevron-down"></svg></div></div>
+          <div class="row stack"><div class="text"><div class="t-heading">Instructions</div><div class="t-small">Added to every new conversation.</div></div><div class="field area"><textarea>Answer briefly. Use metric units.</textarea></div><div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn sm">Discard</button><button class="btn primary sm">Save</button></div></div>
+        </div></div>
+        <div class="group"><header><h2 class="t-heading">Tools</h2><div class="t-small">A tool that is off is not offered to the model.</div></header><div class="card rows">
+          <div class="row"><span class="tile"><svg class="i" data-i="globe"></svg></span><div class="text"><div class="t-heading">Web</div><div class="t-small">Search and read pages.</div></div><span class="switch on"></span></div>
+          <div class="row"><span class="tile"><svg class="i" data-i="terminal"></svg></span><div class="text"><div class="t-heading">Sandbox</div><div class="t-small">Run commands and work on files, isolated from the house.</div></div><span class="switch on"></span></div>
+          <div class="row"><span class="tile"><svg class="i" data-i="bookmark"></svg></span><div class="text"><div class="t-heading">Memory</div><div class="t-small">Remember what you ask it to keep.</div></div><span class="switch"></span></div>
+        </div></div>
+      </div>
+      <div class="page" id="p-tasks">
+        <header><h1 class="t-display">Tasks</h1><p>Tasks start a conversation on their own and leave the answer waiting for you.</p></header>
+        <div class="card"><div class="empty"><span class="tile"><svg class="i" data-i="clock"></svg></span><div class="t-heading">No tasks yet</div><p class="t-small">Choose when it runs or what triggers it, and which calls it may make while nobody is there to approve them.</p><button class="btn primary"><svg class="i" data-i="plus"></svg>New task</button></div></div>
+      </div>
+      <div class="page" id="p-skills">
+        <header><h1 class="t-display">Skills</h1><p>Instructions and files the assistant uses when they fit the task.</p></header>
+        <div class="group"><header style="display:flex;align-items:center"><h2 class="t-heading" style="flex:1">Yours</h2><button class="btn sm"><svg class="i" data-i="plus"></svg>New skill</button></header><div class="card rows">
+          <div class="row link"><div class="text"><div class="t-heading mono">weekly-menu</div><div class="t-small">Plan a week of dinners from what is in the pantry list.</div></div><span class="switch on"></span><svg class="i faint" data-i="chevron-right"></svg></div>
+        </div></div>
+        <div class="group"><header><h2 class="t-heading">Built in</h2><div class="t-small">They come with Sibillo.</div></header><div class="card rows">
+          <div class="row link"><div class="text"><div class="t-heading mono">data-and-charts</div><div class="t-small">Analyse tables, compute totals and statistics, make charts.</div></div><span class="switch on"></span><svg class="i faint" data-i="chevron-right"></svg></div>
+          <div class="row link"><div class="text"><div class="t-heading mono">images-and-media</div><div class="t-small">Resize, convert or combine images, audio and video files.</div></div><span class="switch on"></span><svg class="i faint" data-i="chevron-right"></svg></div>
+          <div class="row link"><div class="text"><div class="t-heading mono">office-files</div><div class="t-small">Read, change or make Word, Excel and PowerPoint files.</div></div><span class="switch"></span><svg class="i faint" data-i="chevron-right"></svg></div>
+          <div class="row link"><div class="text"><div class="t-heading mono">pdf-files</div><div class="t-small">Read, split, merge, fill or make PDF files.</div></div><span class="switch on"></span><svg class="i faint" data-i="chevron-right"></svg></div>
+        </div></div>
+      </div>
+      <div class="page" id="p-models">
+        <header><h1 class="t-display">Models</h1><p>Which models the household uses, and where they run.</p></header>
+        <div class="notice"><svg class="i" data-i="users"></svg><span>These settings apply to everyone in the household. Only its admins see them.</span></div>
+        <div class="group"><header><h2 class="t-heading">Defaults</h2></header><div class="card rows">
+          <div class="row"><div class="text"><div class="t-heading">Household default model</div><div class="t-small">New conversations start with it, unless a user chose their own.</div></div><div class="field select" style="width:260px"><span>DeepSeek V4.1 Flash</span><svg class="i" data-i="chevron-down"></svg></div></div>
+          <div class="row"><div class="text"><div class="t-heading">Only local models for everyone</div><div class="t-small">Nobody's messages leave the house.</div></div><span class="switch"></span></div>
+          <div class="row"><div class="text"><div class="t-heading">Spoken turns</div><div class="t-small">The model that turns speech into text.</div></div><div class="field select" style="width:260px"><span>None</span><svg class="i" data-i="chevron-down"></svg></div></div>
+        </div></div>
+        <div class="group"><header style="display:flex;align-items:center"><div style="flex:1"><h2 class="t-heading">Connections</h2><div class="t-small">Each connection brings all of its models.</div></div><button class="btn sm"><svg class="i" data-i="plus"></svg>Add connection</button></header><div class="card rows">
+          <div class="row"><span class="tile"><svg class="i" data-i="cloud"></svg></span><div class="text"><div class="t-heading">OpenRouter <span class="badge">Remote</span></div><div class="t-small mono">https://openrouter.ai/api/v1</div></div><span class="badge ok"><svg class="i" data-i="check"></svg>513 models</span><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+          <div class="row"><span class="tile"><svg class="i" data-i="house"></svg></span><div class="text"><div class="t-heading">Ollama <span class="badge">Local</span></div><div class="t-small mono">http://ollama.local:11434</div></div><span class="badge warn">Not reachable</span><button class="btn icon ghost sm" aria-label="More"><svg class="i" data-i="more"></svg></button></div>
+        </div></div>
+      </div>
+    </div>
+  </div></div></div>
+</div></div></div>
+
+<!-- ================= DIALOGS AND MENUS ================= -->
+<div class="screen" id="overlays"><div class="frame"><div class="stage">
+  <div class="dialog">
+    <header><div><h2 class="t-title">New task</h2><p class="t-small">It starts a conversation on its own and leaves the answer waiting.</p></div><button class="btn icon ghost sm" aria-label="Close"><svg class="i" data-i="x"></svg></button></header>
+    <div class="body">
+      <div class="form-field"><label>Name</label><div class="field"><input value="Morning briefing"></div></div>
+      <div class="form-field"><label>What to do</label><div class="field area"><textarea>Summarise today's calendar and the weather in three lines.</textarea></div></div>
+      <div class="form-field"><label>When</label><div style="display:flex;gap:8px"><div class="field select"><span>Every weekday</span><svg class="i" data-i="chevron-down"></svg></div><div class="field" style="width:120px"><input value="07:30"></div></div><span class="hint">Next run: Monday at 07:30.</span></div>
+    </div>
+    <footer><button class="btn">Cancel</button><button class="btn primary">Create task</button></footer>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:32px;align-items:flex-start">
+    <div class="dialog sm">
+      <header><span class="tile" style="background:var(--danger-soft);color:var(--danger)"><svg class="i" data-i="trash"></svg></span><div><h2 class="t-title">Delete this conversation?</h2><p class="t-small">Its messages and its files are removed for good.</p></div></header>
+      <div class="body" style="padding-top:8px;padding-bottom:16px"></div>
+      <footer><button class="btn">Cancel</button><button class="btn danger solid">Delete</button></footer>
+    </div>
+    <div class="menu">
+      <div class="label">Sourdough that will not rise</div>
+      <button><svg class="i" data-i="edit"></svg>Rename</button>
+      <button><svg class="i" data-i="bookmark"></svg>Pin</button>
+      <button><svg class="i" data-i="folder"></svg>Move to folder<span class="end">›</span></button>
+      <hr><button class="danger"><svg class="i" data-i="trash"></svg>Delete</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- ================= PANELS AND PICKERS ================= -->
+<div class="screen" id="panels"><div class="frame"><div class="app with-panel">
+  <aside class="side" data-side="c1"></aside>
+  <div class="main">
+    <div class="topbar line"><div class="grow title">Sourdough that will not rise</div><span class="t-caption faint">$0.0035</span><button class="btn sm"><svg class="i" data-i="folder"></svg>Files<span class="badge">2</span></button><button class="btn icon ghost sm" aria-label="Chat settings"><svg class="i" data-i="sliders"></svg></button></div>
+    <div class="scroll"><div class="col thread"><div class="bubble">Which flour should I buy for it?</div><div class="answer"><p>That depends on two things. I have asked you below.</p></div></div></div>
+    <div class="dock"><div class="col" style="position:relative">
+      <div class="menu picker">
+        <div class="field quiet sm"><svg class="i" data-i="search"></svg><input placeholder="Search models" aria-label="Search models"></div>
+        <div class="label">Ollama</div>
+        <button><svg class="i" data-i="house"></svg>Qwen 3 14B<span class="badge">Local</span><span class="end">free</span></button>
+        <div class="label">OpenRouter</div>
+        <button class="is-hover"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<span class="badge">Remote</span><span class="end">$0.20 / $0.80</span><svg class="i" data-i="check"></svg></button>
+        <button><svg class="i" data-i="cloud"></svg>Mistral Small 4<span class="badge">Remote</span><span class="badge warn">Chat only</span><span class="end">$0.10 / $0.30</span></button>
+      </div>
+      <div class="ask"><header><svg class="i" data-i="message"></svg><span style="flex:1">Sibillo asks</span><span class="t-caption faint">1 of 2</span><button class="btn icon ghost sm" aria-label="Previous question" disabled><svg class="i" data-i="chevron-left"></svg></button><button class="btn icon ghost sm" aria-label="Next question"><svg class="i" data-i="chevron-right"></svg></button></header>
+        <div class="body"><div class="t-heading">How much do you want to spend on a kilo?</div>
+          <div class="card rows"><label class="row link"><span class="radio on"></span><div class="text"><div class="t-heading">Up to 2 €</div><div class="t-small">Supermarket bread flour</div></div></label><label class="row link"><span class="radio"></span><div class="text"><div class="t-heading">2 to 4 €</div><div class="t-small">Stone-ground, from a mill</div></div></label></div>
+          <div class="field"><input placeholder="Or answer in your own words"></div></div>
+        <footer><button class="btn sm">Skip</button><button class="btn primary sm">Next</button></footer></div>
+      <div class="composer"><textarea placeholder="Reply…"></textarea><div class="bar"><button class="btn icon ghost sm" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><span class="grow"></span><button class="btn ghost sm is-hover"><svg class="i" data-i="cloud"></svg>DeepSeek V4.1 Flash<svg class="i" data-i="chevron-down"></svg></button><button class="send" aria-label="Send"><svg class="i" data-i="arrow-up"></svg></button></div></div>
+      <div class="under">Context 12% used</div>
+    </div></div>
+  </div>
+  <aside class="panel">
+    <div class="topbar line"><div class="grow title">Files</div><button class="btn icon ghost sm" aria-label="Upload"><svg class="i" data-i="arrow-up"></svg></button><button class="btn icon ghost sm" aria-label="New folder"><svg class="i" data-i="folder"></svg></button><button class="btn icon ghost sm" aria-label="Close"><svg class="i" data-i="x"></svg></button></div>
+    <div class="scroll" style="padding:8px">
+      <button class="nav-item"><svg class="i" data-i="chevron-down"></svg><svg class="i" data-i="folder"></svg><span>uploads</span></button>
+      <button class="nav-item" style="padding-left:32px"><svg class="i" data-i="file"></svg><span>recipe.pdf</span><span class="t-caption faint" style="flex:none">212 kB</span></button>
+      <button class="nav-item on"><svg class="i" data-i="file" style="margin-left:24px"></svg><span>schedule.py</span><span class="t-caption faint" style="flex:none">1.4 kB</span></button>
+      <div class="code" style="margin:8px 0"><header>schedule.py · changed 2 min ago<button class="btn icon ghost sm" aria-label="Download"><svg class="i" data-i="copy"></svg></button></header><pre>def bulk_hours(temp):
+    return 4 * 2 ** ((26 - temp) / 8)</pre></div>
+    </div>
+    <div class="quota"><div class="t-caption faint">214 kB of 1 GB</div><div class="meter"><i style="width:4%"></i></div></div>
+  </aside>
+</div></div></div>
+
+<!-- ================= SIGN-IN ================= -->
+<div class="screen" id="signin"><div class="frame"><div class="signin"><div class="card">
+  <span class="sp" data-sprite="wave"></span>
+  <header><h1 class="t-display">Welcome back</h1><p>Sign in to your household.</p></header>
+  <div class="form-field"><label>Username</label><div class="field"><input value="ada"></div></div>
+  <div class="form-field"><label>Password</label><div class="field"><input type="password" value="correct horse"></div></div>
+  <button class="btn primary block">Sign in</button>
+</div></div></div></div>
+
+<!-- ================= PHONE ================= -->
+<div class="screen" id="phone"><div class="phones">
+  <div class="frame phone">
+    <div class="topbar"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><span class="grow"></span><button class="btn icon ghost" aria-label="Temporary chat"><svg class="i" data-i="ghost"></svg></button><button class="btn icon ghost" aria-label="New chat"><svg class="i" data-i="edit"></svg></button></div>
+    <div class="col home" style="gap:24px"><div class="greet" style="gap:16px"><span class="sp" data-sprite="wave" style="width:56px"></span><div><h1 class="t-display">Good evening, Ada.</h1><blockquote>“Well begun is half done.”</blockquote></div></div></div>
+    <div class="dock"><div class="col"><div class="composer"><textarea placeholder="What can I help with?" style="height:32px"></textarea><div class="bar"><button class="btn icon ghost" aria-label="Attach"><svg class="i" data-i="paperclip"></svg></button><span class="grow"></span><button class="btn ghost sm">DeepSeek V4.1<svg class="i" data-i="chevron-down"></svg></button><button class="send" style="width:40px;height:40px" aria-label="Speak"><svg class="i" data-i="mic"></svg></button></div></div><div class="under">Messages go to OpenRouter.</div></div></div>
+  </div>
+  <div class="frame phone">
+    <div class="topbar line"><button class="btn icon ghost" aria-label="Back"><svg class="i" data-i="chevron-left"></svg></button><div class="grow title">Settings</div></div>
+    <div class="scroll"><div class="col" style="display:flex;flex-direction:column;gap:24px;padding-top:24px;padding-bottom:32px">
+      <div class="group"><header><h2 class="t-caption faint">Yours</h2></header><div class="card rows">
+        <div class="row link"><svg class="i" data-i="message"></svg><div class="text t-heading">Assistant</div><svg class="i faint" data-i="chevron-right"></svg></div>
+        <div class="row link"><svg class="i" data-i="clock"></svg><div class="text t-heading">Tasks</div><span class="badge">2</span><svg class="i faint" data-i="chevron-right"></svg></div>
+        <div class="row link"><svg class="i" data-i="bookmark"></svg><div class="text t-heading">Memory</div><svg class="i faint" data-i="chevron-right"></svg></div>
+        <div class="row link"><svg class="i" data-i="star"></svg><div class="text t-heading">Skills</div><svg class="i faint" data-i="chevron-right"></svg></div>
+        <div class="row link"><svg class="i" data-i="bell"></svg><div class="text t-heading">Notifications</div><span class="badge warn">Off</span><svg class="i faint" data-i="chevron-right"></svg></div>
+      </div></div>
+      <div class="group"><header><h2 class="t-caption faint">Household</h2></header><div class="card rows">
+        <div class="row link"><svg class="i" data-i="plug"></svg><div class="text t-heading">Models</div><svg class="i faint" data-i="chevron-right"></svg></div>
+        <div class="row link"><svg class="i" data-i="users"></svg><div class="text t-heading">Members</div><svg class="i faint" data-i="chevron-right"></svg></div>
+      </div></div>
+    </div></div>
+  </div>
+  <div class="frame phone">
+    <div class="topbar line"><button class="btn icon ghost" aria-label="Conversations"><svg class="i" data-i="menu"></svg></button><div class="grow title">Sourdough that will not rise</div></div>
+    <div class="scroll"><div class="col thread"><div class="bubble">My sourdough stays flat after eight hours.</div><div class="answer"><p>Nothing is wrong with the dough: it is cold.</p></div></div></div>
+    <div class="overlay"><div class="dialog sheet">
+      <header><div><h2 class="t-title">Sibillo asks to run a command</h2><p class="t-small">In the sandbox of this conversation, with no network.</p></div></header>
+      <div class="body"><div class="code"><pre>python schedule.py --temp 18</pre></div></div>
+      <footer><button class="btn ghost block">Always allow in this chat</button><button class="btn block">Deny</button><button class="btn primary block">Allow once</button></footer>
+    </div></div>
+  </div>
+</div></div>
+
+<script>
+// Icons in the manner of the app's one icon set (ADR-0111), drawn here by hand for the prototype.
+const ICONS = {
+  plus: "M5 12h14M12 5v14", file: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6", search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3", "chevron-down": "M6 9l6 6 6-6", "chevron-right": "M9 6l6 6-6 6", "chevron-left": "M15 6l-6 6 6 6",
+  "arrow-up": "M12 19V5M5 12l7-7 7 7", x: "M18 6L6 18M6 6l12 12", check: "M20 6L9 17l-5-5", more: "M5 12h.01M12 12h.01M19 12h.01", menu: "M4 6h16M4 12h16M4 18h16",
+  paperclip: "M21.4 11l-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.5A4 4 0 1 1 18 8.8l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5",
+  mic: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3",
+  copy: "M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
+  sliders: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4", bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a2 2 0 0 0 3.4 0",
+  clock: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2", key: "M7.5 10a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM11.4 11.6L21 2M15.5 7.5l3 3L22 7l-3-3",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
+  globe: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z", terminal: "M4 17l6-6-6-6M12 19h8",
+  trash: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+  plug: "M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z", activity: "M22 12h-4l-3 9L9 3l-3 9H2", star: "M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z",
+  bookmark: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z", message: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
+  sun: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  cloud: "M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z", house: "M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10",
+  info: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 16v-4M12 8h.01", alert: "M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01",
+  refresh: "M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5", "log-out": "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  volume: "M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14", ghost: "M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z",
+  edit: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z", panel: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 3v18",
+};
+document.querySelectorAll("svg[data-i]").forEach(icon);
+function icon(el) { el.setAttribute("viewBox", "0 0 24 24"); el.setAttribute("aria-hidden", "true"); el.innerHTML = `<path d="${ICONS[el.dataset.i]}"/>`; if (el.dataset.i === "more") el.style.strokeWidth = 2.75; }
+const I = (name) => `<svg class="i" data-i="${name}"></svg>`;
+
+// The sprite, as the app draws it (ADR-0111): only the standing and waving poses here.
+function sprite(pose) {
+  const LN = "var(--c-line)", SK = "var(--c-skin)", RED = "var(--c-hat)";
+  const limb = (d, c, w = 3.6) => `<path d="${d}" fill="none" stroke="${LN}" stroke-width="${w + 2.4}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const hand = (x, y, r = 3.3) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${SK}" stroke="${LN}" stroke-width="1.3"/>`;
+  const left = limb("M91,128 Q84,141 82,152", SK) + hand(82, 153);
+  const right = pose === "wave" ? limb("M109,128 Q122,121 127,104", SK) + hand(127, 102, 3.9) : limb("M109,128 Q116,141 118,152", SK) + hand(118, 153);
+  return `<svg viewBox="50 12 100 210" style="display:block;width:100%" aria-hidden="true">
+  <ellipse cx="100" cy="214" rx="34" ry="4.5" fill="var(--ink)" opacity=".1"/>
+  ${limb("M95,158 Q91,182 89,203", RED, 4.4)}${limb("M105,158 Q109,182 111,203", RED, 4.4)}
+  <path d="M93,200 Q88,212 73,207 Q64,203 66,196 Q73,204 87,200 Z" fill="var(--c-hat-shade)" stroke="${LN}" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M107,200 Q112,212 127,207 Q136,203 134,196 Q127,204 113,200 Z" fill="var(--c-hat-shade)" stroke="${LN}" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M91,124 Q100,119 109,124 L116,158 Q100,165 84,158 Z" fill="var(--c-tunic)" stroke="${LN}" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M87,146 Q100,151 113,146" stroke="var(--c-hat-shade)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M83,100 L55,86 L84,113 Z" fill="${SK}" stroke="${LN}" stroke-width="1.5" stroke-linejoin="round"/><path d="M117,100 L145,86 L116,113 Z" fill="${SK}" stroke="${LN}" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="100" cy="103" r="21" fill="${SK}" stroke="${LN}" stroke-width="1.6"/><circle cx="87" cy="111" r="4" fill="var(--c-blush)" opacity=".6"/><circle cx="113" cy="111" r="4" fill="var(--c-blush)" opacity=".6"/>
+  <path d="M88,104 Q92,99 96,104 M104,104 Q108,99 112,104" stroke="${LN}" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M91,113 Q100,123 109,113 Q100,116.5 91,113 Z" fill="var(--c-mouth)" stroke="${LN}" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M81,93 L73,108 L80,104 L78,114 L86,102 L85,95 Z" fill="var(--c-hair)" stroke="${LN}" stroke-width="1.2" stroke-linejoin="round"/><path d="M119,93 L127,108 L120,104 L122,114 L114,102 L115,95 Z" fill="var(--c-hair)" stroke="${LN}" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M77,96 C73,72 85,50 101,36 C113,25 128,17 147,17 C139,24 134,33 131,45 C128,61 127,79 124,96 Z" fill="${RED}" stroke="${LN}" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M75,97 Q100,105 126,97 L125,90 Q100,97 76,90 Z" fill="var(--c-hat-shade)" stroke="${LN}" stroke-width="1.4" stroke-linejoin="round"/>
+  ${left}${right}</svg>`;
+}
+
+// The sidebar is the same on every screen.
+const CHATS = [["Pinned", [["c0", "House manual"]]], ["Today", [["c1", "Sourdough that will not rise"], ["c2", "Gift ideas for Nonna"]]], ["This week", [["c3", "Electricity bill, explained"], ["c4", "Trip to Ascoli in March"], ["c5", "Fix the garden tap"]]]];
+document.querySelectorAll("[data-side]").forEach((el) => {
+  el.innerHTML = `<div class="brand"><span class="sp" data-sprite="idle"></span><span class="grow">Sibillo</span><button class="btn icon ghost sm" aria-label="Hide the sidebar">${I("panel")}</button></div>
+  <button class="btn block">${I("plus")}New chat</button>
+  <div class="field quiet sm">${I("search")}<input placeholder="Search" aria-label="Search conversations"><kbd>/</kbd></div>
+  <div class="list">${CHATS.map(([label, items]) => `<div class="label">${label}</div>` + items.map(([id, title]) => `<button class="nav-item${id === el.dataset.side ? " on" : ""}"><span>${title}</span></button>`).join("")).join("")}
+  <div class="label">Folders</div><button class="nav-item">${I("folder")}<span>Recipes</span><span class="faint t-caption" style="flex:none">12</span></button><button class="nav-item">${I("folder")}<span>School</span><span class="faint t-caption" style="flex:none">4</span></button></div>
+  ${el.dataset.side === "none" ? `<div class="notice warn">${I("bell")}<span class="grow"><b>Notifications are off.</b> Answers to tasks wait until you open the app.<span style="display:flex;gap:8px;margin-top:8px"><button class="btn sm">Turn on</button><button class="btn ghost sm">Hide</button></span></span></div>` : ""}
+  <div><button class="nav-item${el.dataset.side === "settings" ? " on" : ""}">${I("sliders")}<span>Settings</span></button>
+  <div class="account"><span class="avatar">A</span><span class="who"><div>Ada</div><div class="t-caption faint">$0.01 in 24 h · $0.42 in 30 days</div></span><button class="btn icon ghost sm" aria-label="Sign out">${I("log-out")}</button></div></div>`;
+  el.querySelectorAll("svg[data-i]").forEach(icon);
+});
+document.querySelectorAll("[data-sprite]").forEach((el) => (el.innerHTML = sprite(el.dataset.sprite)));
+
+// Color swatches, read from the tokens themselves.
+const ROLES = [["canvas", "the page"], ["sunken", "sidebar, user bubble"], ["surface", "cards, fields"], ["raised", "menus, dialogs"], ["line", "dividers"], ["line-strong", "control borders"], ["ink", "text, primary button"], ["ink-2", "secondary text"], ["ink-3", "captions, icons"], ["accent", "send, focus, the hat"], ["accent-soft", "focus halo, avatar"], ["ok", "it worked"], ["warn", "needs attention"], ["danger", "cannot be undone"], ["hover", "under the pointer"], ["scrim", "behind dialogs"]];
+function swatches() {
+  const style = getComputedStyle(document.documentElement);
+  document.getElementById("swatches").innerHTML = ROLES.map(([name, use]) => `<div class="sw"><i style="background:var(--${name})"></i><div>${name}<span>${style.getPropertyValue("--" + name).trim()}</span>${use}</div></div>`).join("");
+}
+// Prototype controls.
+const root = document.documentElement;
+root.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+if (location.hash.includes("dark")) root.dataset.theme = "dark";
+const themeButton = document.getElementById("theme");
+const label = () => (themeButton.textContent = root.dataset.theme === "dark" ? "Light theme" : "Dark theme");
+themeButton.onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; label(); swatches(); };
+label(); swatches();
+function go(id) {
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id));
+  document.querySelectorAll("[data-go]").forEach((b) => b.classList.toggle("on", b.dataset.go === id));
+  scrollTo(0, 0);
+}
+document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => go(b.dataset.go)));
+const first = location.hash.replace("#", "").split(",")[0]; if (document.getElementById(first)) go(first);
+document.querySelectorAll("[data-page]").forEach((b) => (b.onclick = () => {
+  document.querySelectorAll(".settings .nav-item").forEach((n) => n.classList.toggle("on", n === b));
+  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === b.dataset.page));
+}));
+document.querySelectorAll(".switch").forEach((s) => (s.onclick = () => s.classList.toggle("on")));
+document.querySelectorAll(".segmented").forEach((g) => g.querySelectorAll("button").forEach((b) => (b.onclick = () => g.querySelectorAll("button").forEach((o) => o.classList.toggle("on", o === b)))));
+</script>
+</body>
+</html>

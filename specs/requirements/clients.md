@@ -2,7 +2,7 @@
 
 What every first-party client must offer, on the web and on the phone.
 Clients use only the public API (API-001). Background: ADR-0016, ADR-0039,
-ADR-0040, ADR-0042, ADR-0067, ADR-0070, and the personas and journeys of the
+ADR-0040, ADR-0042, ADR-0067, ADR-0070, ADR-0111, and the personas and journeys of the
 [product description](../product.md).
 
 ## UX-001: Installable web app
@@ -218,7 +218,7 @@ contrast that UX-007 requires.
 When the user starts a new conversation, clients SHOULD show the sprite
 greeting them with a quote chosen at random from a list of famous quotes in
 the public domain, with its author and work, translated with the rest of the
-interface (ADR-0070).
+interface (ADR-0111).
 
 ## UX-013: The sprite shows what a run is doing
 
@@ -232,7 +232,7 @@ the assistant is doing: thinking, searching the web, reading, writing files,
 running commands or answering, and in hands-free mode listening to the
 user (UX-005); when the run ends, it stands still. The sprite
 MUST be decorative: the same activity MUST be given as text, and the sprite
-MUST NOT move when the device asks for reduced motion (ADR-0070).
+MUST NOT move when the device asks for reduced motion (ADR-0111).
 
 ## UX-014: Errors say what to do
 
@@ -243,7 +243,7 @@ MUST NOT move when the device asks for reduced motion (ADR-0070).
 
 Clients MUST show errors so that they say what went wrong and how to fix it,
 announced to assistive technologies, and SHOULD show the sprite holding a sign
-beside them (ADR-0070). An error that ended a run MUST be shown in the
+beside them (ADR-0111). An error that ended a run MUST be shown in the
 conversation, in place of the run's answer, with the reason the model or its
 provider gave (MOD-015), and MUST stay there when the conversation is reloaded
 or opened on another device: it is part of the conversation, not a notice to
@@ -287,13 +287,19 @@ ask only for what the kind of connection needs: for OpenRouter, the API key.
 
 ## UX-017: One design language
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** SHOULD
-- **Phase:** 1
+- **Phase:** 2
 - **Verification:** review
 
-Clients SHOULD follow the design language of ADR-0070: its layout, colors,
-typefaces, icons and sprite, as the reference prototype shows them.
+Clients SHOULD follow the design language of ADR-0111: its design tokens,
+shared components, screens, typefaces, icons and sprite, as the reference
+prototype shows them. Two controls that do the same job SHOULD look and
+behave the same on every screen.
+
+Rationale: the first design language (ADR-0070) named colors only, and the
+screens drifted apart; UX-037 checks what a test can check, and a reviewer
+the rest.
 
 ## UX-018: Typing starts where the user expects
 
@@ -645,3 +651,36 @@ message once sent, each removable before sending (ADR-0110).
 
 Rationale: journey J5; a screenshot is pasted far more often than saved and
 picked.
+
+## UX-037: Screens are built from the shared components
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** design
+
+The web client MUST take every color, size of text, spacing step, radius,
+control height, shadow and duration from the design tokens of ADR-0111, and
+MUST build its buttons, fields, selects, switches, dialogs, menus and the
+other controls ADR-0111 lists only from the shared components. Outside the
+shared components its code MUST NOT style a native control, use a value that
+is not a design token, write a color, or show a control with the browser's
+own look.
+
+Rationale: most of the client is written by coding agents, which copy the
+nearest styles and change them; a rule that only a reviewer checks did not
+hold (UX-017).
+
+## UX-038: Nothing is blank
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 2
+- **Verification:** e2e
+
+A list with nothing in it SHOULD say what it is for and, where the user may
+add an entry, offer the action that adds the first one. While content loads
+or an action of the user is in progress, clients SHOULD show that it is, and
+SHOULD NOT let the action be started twice (ADR-0111).
+
+Rationale: persona P4; an empty page reads as a broken one.

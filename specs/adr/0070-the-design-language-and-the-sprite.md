@@ -1,6 +1,6 @@
 # ADR-0070: The design language and the sprite
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0111
 - **Date:** 2026-11-03
 - **Deciders:** @tapionx
 - **Related:** ADR-0058, ADR-0067, ADR-0068, ADR-0069, OBS-001, UX-003, UX-007, UX-011, UX-012, UX-013, UX-014, UX-015, UX-016, UX-017
