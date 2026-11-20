@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from typing import Annotated, Any, cast
 
 import jsonschema
-from croniter import croniter
 from fastapi import APIRouter, Body, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -43,6 +42,8 @@ from sibillo_server.mcp_events import fresh, reviewed, signature_valid
 from sibillo_server.mcp_servers import servers_of, tool_status
 from sibillo_server.memory import memory_enabled
 from sibillo_server.permissions import permissions_of
+from sibillo_server.recurrence import RecurrenceError, next_occurrence, parse_start
+from sibillo_server.recurrence import check as check_recurrence
 from sibillo_server.settings import new_conversation
 from sibillo_server.task_policy import Check, Grant, check, refusal
 
@@ -52,11 +53,6 @@ MAX_TASKS = 50
 MAX_TRIGGERS = 5
 # A task starts at most this many conversations an hour (TSK-009).
 FIRINGS_PER_HOUR = 10
-# A schedule fires at most once every 15 minutes (TSK-003).
-MIN_SCHEDULE_GAP = datetime.timedelta(minutes=15)
-# How many firing times are looked at to find a schedule's shortest gap.
-SCHEDULE_SAMPLES = 2000
-SCHEDULE_START = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
 # A webhook request's body, and a delivery of MCP events (TSK-007, TSK-008).
 WEBHOOK_BODY_BYTES = 64 * 1024
 DELIVERY_BODY_BYTES = 256 * 1024
@@ -76,7 +72,7 @@ TASK_COLUMNS = (
     " uses_memory, time_zone, paused_at, skipped_count, last_skipped_at, created_at, updated_at"
 )
 TRIGGER_COLUMNS = (
-    "id, task_id, kind, schedule, next_fire_at, token_hash, server_id, server_generation, event_name,"
+    "id, task_id, kind, schedule_start, recurrence, next_fire_at, token_hash, server_id, server_generation, event_name,"
     " event_arguments, delivery, cursor, next_poll_at, secret_ciphertext, refresh_before, problem, created_at"
 )
 
@@ -133,24 +129,19 @@ def _zone(name: str) -> zoneinfo.ZoneInfo:
         raise errors.invalid("/time_zone", "unknown") from None
 
 
-def check_schedule(expression: str, location: str) -> None:
-    """A cron expression of five fields that fires at most once every 15 minutes."""
-    if len(expression.split()) != 5 or not croniter.is_valid(expression):
-        raise errors.invalid(location, "invalid_schedule")
-    iterator = croniter(expression, SCHEDULE_START)
-    previous: datetime.datetime = iterator.get_next(datetime.datetime)
-    for _ in range(SCHEDULE_SAMPLES):
-        current: datetime.datetime = iterator.get_next(datetime.datetime)
-        if current - previous < MIN_SCHEDULE_GAP:
-            raise errors.invalid(location, "too_often")
-        previous = current
+def check_schedule(start: str, recurrence: Sequence[str], zone: str, location: str) -> datetime.datetime:
+    """A start and an iCalendar recurrence that parse, fire at most every 15 minutes, and fire again (ADR-0109)."""
+    try:
+        first = parse_start(start)
+        check_recurrence(first, recurrence, zone, datetime.datetime.now(datetime.UTC))
+    except RecurrenceError as error:
+        raise errors.invalid(location, error.reason) from None
+    return first
 
 
-def next_fire(expression: str, zone: str, after: datetime.datetime) -> datetime.datetime:
-    """The schedule's next firing time after `after`, in the task's time zone, as a UTC instant."""
-    local = after.astimezone(zoneinfo.ZoneInfo(zone))
-    found: datetime.datetime = croniter(expression, local).get_next(datetime.datetime)
-    return found.astimezone(datetime.UTC)
+def next_fire(trigger: Any, zone: str, after: datetime.datetime) -> datetime.datetime | None:
+    """A schedule trigger's next firing time after `after`, as a UTC instant; `None` once it ended."""
+    return next_occurrence(trigger.schedule_start, list(trigger.recurrence or []), zone, after)
 
 
 # --- Reading tasks ---
@@ -214,7 +205,8 @@ def _trigger(row: Any, webhook_paths: dict[uuid.UUID, str]) -> schemas.TaskTrigg
     return schemas.TaskTrigger(
         id=row.id,
         kind=row.kind,
-        schedule=row.schedule,
+        start=None if row.schedule_start is None else row.schedule_start.isoformat(timespec="seconds"),
+        recurrence=None if row.kind != "schedule" else list(row.recurrence or []),
         next_fire_at=row.next_fire_at,
         webhook_path=webhook_paths.get(row.id),
         server_id=row.server_id,
@@ -320,7 +312,8 @@ class NewTrigger:
     """A trigger to add, checked: what its row holds."""
 
     kind: str
-    schedule: str | None = None
+    schedule_start: datetime.datetime | None = None
+    recurrence: list[str] | None = None
     server_id: uuid.UUID | None = None
     server_generation: uuid.UUID | None = None
     event: str | None = None
@@ -334,10 +327,11 @@ async def _check_trigger(
     item: schemas.ScheduleTriggerInput | schemas.WebhookTriggerInput | schemas.EventTriggerInput,
     location: str,
     public_origin: str | None,
+    zone: str,
 ) -> NewTrigger:
     if isinstance(item, schemas.ScheduleTriggerInput):
-        check_schedule(item.schedule, f"{location}/schedule")
-        return NewTrigger("schedule", schedule=item.schedule)
+        start = check_schedule(item.start, item.recurrence, zone, location)
+        return NewTrigger("schedule", schedule_start=start, recurrence=list(item.recurrence))
     if isinstance(item, schemas.WebhookTriggerInput):
         return NewTrigger("webhook")
     server = next((s for s in await servers_of(connection, enabled_only=True) if s.id == item.server_id), None)
@@ -395,10 +389,11 @@ async def _insert_trigger(
     now = datetime.datetime.now(datetime.UTC)
     await connection.execute(
         text(
-            "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule, next_fire_at, token_hash,"
+            "INSERT INTO task_triggers (id, tenant_id, owner_id, task_id, kind, schedule_start, recurrence,"
+            " next_fire_at, token_hash,"
             " server_id, server_generation, event_name, event_arguments, delivery, next_poll_at, created_at)"
-            " VALUES (:id, :tenant, :owner, :task, :kind, :schedule, :next_fire_at, :token_hash, :server,"
-            " :generation, :event, CAST(:arguments AS jsonb), :delivery, :next_poll_at, now())"
+            " VALUES (:id, :tenant, :owner, :task, :kind, :schedule_start, :recurrence, :next_fire_at, :token_hash,"
+            " :server, :generation, :event, CAST(:arguments AS jsonb), :delivery, :next_poll_at, now())"
         ),
         {
             "id": trigger_id,
@@ -406,8 +401,9 @@ async def _insert_trigger(
             "owner": identity.user_id,
             "task": task_id,
             "kind": trigger.kind,
-            "schedule": trigger.schedule,
-            "next_fire_at": None if trigger.schedule is None else next_fire(trigger.schedule, zone, now),
+            "schedule_start": trigger.schedule_start,
+            "recurrence": trigger.recurrence,
+            "next_fire_at": None if trigger.schedule_start is None else next_fire(trigger, zone, now),
             "token_hash": token_hash,
             "server": trigger.server_id,
             "generation": trigger.server_generation,
@@ -467,7 +463,7 @@ async def create(
         await _check_model(connection, body.model)
     defaults = await new_conversation(connection)
     triggers = [
-        await _check_trigger(connection, identity, item, f"/triggers/{index}", public_origin)
+        await _check_trigger(connection, identity, item, f"/triggers/{index}", public_origin, body.time_zone)
         for index, item in enumerate(body.triggers)
     ]
     grants = await _check_grants(connection, identity, body.grants)
@@ -554,7 +550,7 @@ async def _restart_triggers(connection: AsyncConnection, state: TaskState, zone:
         if trigger.kind == "schedule":
             await connection.execute(
                 text("UPDATE task_triggers SET next_fire_at = :at WHERE id = :id"),
-                {"id": trigger.id, "at": next_fire(trigger.schedule, zone, now)},
+                {"id": trigger.id, "at": next_fire(trigger, zone, now)},
             )
         elif trigger.kind == "mcp_event":
             await connection.execute(
@@ -744,7 +740,7 @@ async def add_task_trigger(
         state = await find_task(connection, task_id, lock=True)
         if len(state.triggers) >= MAX_TRIGGERS:
             raise errors.invalid("/", "too_many_triggers")
-        trigger = await _check_trigger(connection, identity, body, "", _public_origin(request))
+        trigger = await _check_trigger(connection, identity, body, "", _public_origin(request), state.row.time_zone)
         memory = bool(state.row.uses_memory) and await memory_enabled(connection)
         found = check(
             state.grants,

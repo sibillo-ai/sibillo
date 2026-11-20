@@ -153,8 +153,8 @@ async def list_tasks(ctx: RunContext[RunDeps]) -> str:
             triggers = (
                 await connection.execute(
                     text(
-                        "SELECT kind, schedule, next_fire_at, event_name FROM task_triggers WHERE task_id = :id"
-                        " ORDER BY created_at, id"
+                        "SELECT kind, schedule_start, recurrence, next_fire_at, event_name FROM task_triggers"
+                        " WHERE task_id = :id ORDER BY created_at, id"
                     ),
                     {"id": task.id},
                 )
@@ -187,7 +187,10 @@ async def list_tasks(ctx: RunContext[RunDeps]) -> str:
                     "triggers": [
                         {
                             "kind": trigger.kind,
-                            "schedule": trigger.schedule,
+                            "start": None
+                            if trigger.schedule_start is None
+                            else trigger.schedule_start.isoformat(timespec="seconds"),
+                            "recurrence": trigger.recurrence,
                             "next_firing": None if trigger.next_fire_at is None else trigger.next_fire_at.isoformat(),
                             "event": trigger.event_name,
                         }

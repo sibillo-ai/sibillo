@@ -28,6 +28,8 @@ const DANGER = "h-[38px] rounded-[10px] bg-danger px-4 text-sm font-semibold tex
 const INPUT = "h-10 w-full rounded-[10px] border border-line-strong bg-bg px-3 outline-none focus:border-accent";
 const TEXTAREA = "min-h-24 w-full rounded-[10px] border border-line-strong bg-bg px-3 py-2 text-sm outline-none focus:border-accent";
 const DIALOG = "slide fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[min(94vw,34rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[20px] bg-raised p-[22px] shadow-soft";
+// What a recurrence looks like: the first Monday of the month, twice (RFC 5545).
+const RECURRENCE_EXAMPLE = "RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2";
 // The tools a task may be given for any arguments, in the order the app offers them (TSK-004).
 const OPEN_GRANTS = ["web_search", "read_page", "read_file", "list_directory", "find_files", "search_files", "write_file", "edit_file", "remember"] as const;
 
@@ -87,7 +89,9 @@ function TriggerText({ trigger }: { trigger: TaskTrigger }) {
     const next = trigger.next_fire_at ? new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(trigger.next_fire_at)) : null;
     return (
       <span>
-        {describeSchedule(t, trigger.schedule ?? "") ?? t("taskSettings.cron", { schedule: trigger.schedule })}
+        {describeSchedule(t, i18n.language, trigger.start ?? "", trigger.recurrence ?? []) ??
+          t("taskSettings.asWritten", { start: trigger.start, recurrence: (trigger.recurrence ?? []).join(" ") })}
+        {trigger.next_fire_at === null && ` · ${t("taskSettings.ended")}`}
         {next && ` · ${t("taskSettings.next", { when: next })}`}
       </span>
     );
@@ -264,7 +268,7 @@ function WebhookAddress({ path, onClose }: { path: string; onClose: () => void }
   );
 }
 
-type DraftTrigger = { key: number; kind: "schedule"; schedule: string } | { key: number; kind: "webhook" } | { key: number; kind: "mcp_event"; server_id: string; event: string; arguments: string };
+type DraftTrigger = { key: number; kind: "schedule"; start: string; recurrence: string } | { key: number; kind: "webhook" } | { key: number; kind: "mcp_event"; server_id: string; event: string; arguments: string };
 
 /** Creating a task: its instructions, time zone, triggers and grants (UX-031). */
 function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => void; onWebhook: (path: string) => void }) {
@@ -314,7 +318,10 @@ function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => 
         grants.push({ tool: parsed.tool, arguments: parsed.arguments });
       }
       const added = triggers.map((item): TriggerInput => {
-        if (item.kind === "schedule") return { kind: "schedule", schedule: item.schedule };
+        if (item.kind === "schedule") {
+          const start = item.start.length === 16 ? `${item.start}:00` : item.start;
+          return { kind: "schedule", start, recurrence: item.recurrence.split("\n").map((line) => line.trim()).filter((line) => line !== "") };
+        }
         if (item.kind === "webhook") return { kind: "webhook" };
         return { kind: "mcp_event", server_id: item.server_id, event: item.event, arguments: JSON.parse(item.arguments || "{}") as Record<string, unknown> };
       });
@@ -394,7 +401,7 @@ function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => 
                 />
               ))}
               <div className="flex flex-wrap gap-2">
-                <button type="button" className={SMALL} onClick={() => setTriggers([...triggers, { key: ++next, kind: "schedule", schedule: "" }])}>
+                <button type="button" className={SMALL} onClick={() => setTriggers([...triggers, { key: ++next, kind: "schedule", start: "", recurrence: "" }])}>
                   {t("taskSettings.addSchedule")}
                 </button>
                 <button type="button" className={SMALL} onClick={() => setTriggers([...triggers, { key: ++next, kind: "webhook" }])}>
@@ -465,8 +472,9 @@ function TriggerEditor(props: {
   onChange: (item: DraftTrigger) => void;
   onRemove: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const field = useId();
+  const repeats = useId();
   const { item } = props;
   const remove = (
     <button type="button" className={SMALL} onClick={props.onRemove}>
@@ -482,16 +490,27 @@ function TriggerEditor(props: {
     );
   }
   if (item.kind === "schedule") {
-    const words = item.schedule.trim() ? describeSchedule(t, item.schedule) : null;
+    const lines = item.recurrence.split("\n");
+    const words = item.start ? describeSchedule(t, i18n.language, item.start, lines) : null;
     return (
       <div className="flex flex-col gap-1.5 rounded-xl border border-line px-3 py-2">
-        <label htmlFor={field} className="text-[13px] font-semibold">
-          {t("taskSettings.schedule")}
-        </label>
-        <div className="flex items-center gap-2">
-          <input id={field} required value={item.schedule} placeholder="0 7 * * *" onChange={(event) => props.onChange({ ...item, schedule: event.target.value })} className={`${INPUT} font-mono`} />
+        <div className="flex items-end gap-2">
+          <label htmlFor={field} className="flex flex-1 flex-col gap-1 text-[13px] font-semibold">
+            {t("taskSettings.starts")}
+            <input id={field} type="datetime-local" required value={item.start} onChange={(event) => props.onChange({ ...item, start: event.target.value })} className={INPUT} />
+          </label>
           {remove}
         </div>
+        <label htmlFor={repeats} className="flex flex-col gap-1 text-[13px] font-semibold">
+          {t("taskSettings.repeats")}
+          <textarea
+            id={repeats}
+            value={item.recurrence}
+            placeholder={RECURRENCE_EXAMPLE}
+            onChange={(event) => props.onChange({ ...item, recurrence: event.target.value })}
+            className={`${TEXTAREA} min-h-12 font-mono`}
+          />
+        </label>
         <p className="text-[12.5px] text-muted">{words ?? t("taskSettings.scheduleHint")}</p>
       </div>
     );

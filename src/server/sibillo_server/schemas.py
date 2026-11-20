@@ -1092,8 +1092,13 @@ type TriggerKind = Literal["schedule", "webhook", "mcp_event"]
 
 
 class ScheduleTriggerInput(Request):
+    """A start in the task's time zone, and lines of iCalendar recurrence; none for once (ADR-0109)."""
+
     kind: Literal["schedule"]
-    schedule: Annotated[str, Field(min_length=9, max_length=100)]
+    start: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?$")]
+    recurrence: Annotated[list[Annotated[str, Field(min_length=6, max_length=500)]], Field(max_length=5)] = Field(
+        default_factory=list[str]
+    )
 
 
 class WebhookTriggerInput(Request):
@@ -1115,7 +1120,8 @@ type TaskTriggerInput = Annotated[
 class TaskTrigger(Response):
     id: uuid.UUID
     kind: TriggerKind
-    schedule: str | None
+    start: str | None
+    recurrence: list[str] | None
     next_fire_at: Timestamp | None
     webhook_path: str | None
     server_id: uuid.UUID | None

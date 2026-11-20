@@ -39,8 +39,10 @@ async def propose_task(
         name: A short name of the task.
         instructions: What to do each time, as the user would write it.
         time_zone: The user's IANA time zone, such as `Europe/Rome`.
-        triggers: When it runs: `{"kind": "schedule", "schedule": "<cron, 5 fields>"}`, at most every 15 minutes;
-            or `{"kind": "webhook"}`.
+        triggers: When it runs: `{"kind": "schedule", "start": "<YYYY-MM-DDTHH:MM:SS in time_zone>", "recurrence":
+            ["RRULE:..."]}`, with lines of iCalendar recurrence (RFC 5545) such as
+            `RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2`, `EXDATE:...` or `RDATE:...`, at most every 15 minutes; no
+            recurrence for once, at the start. Or `{"kind": "webhook"}`.
         grants: The calls it may make without asking, nobody being there to approve: `{"tool": "<tool>",
             "arguments": null}` for any arguments, or with the exact arguments. Grant only what it needs.
         uses_memory: Whether it uses what you remember about the user.

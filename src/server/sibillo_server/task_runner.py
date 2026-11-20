@@ -139,7 +139,7 @@ async def _fire_schedule(identity: Identity, trigger_id: uuid.UUID) -> None:
         )
         await connection.execute(
             text("UPDATE task_triggers SET next_fire_at = :at WHERE id = :id"),
-            {"id": trigger.id, "at": next_fire(trigger.schedule, trigger.time_zone, now)},
+            {"id": trigger.id, "at": next_fire(trigger, trigger.time_zone, now)},
         )
 
 
