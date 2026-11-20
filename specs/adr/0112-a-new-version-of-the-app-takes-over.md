@@ -1,6 +1,6 @@
 # ADR-0112: A new version of the app takes over
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 - **Deciders:** @tapionx
 - **Related:** UX-040, UX-001, UX-004, UX-006, ADR-0067, ADR-0101, ADR-0102
