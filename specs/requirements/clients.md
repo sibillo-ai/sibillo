@@ -311,7 +311,11 @@ the rest.
 On devices with a keyboard, clients SHOULD put the focus in the field where
 the user starts typing: the username on the sign-in screen, and the message
 box when a new chat opens. On touch screens they SHOULD NOT, since focusing a
-field opens the on-screen keyboard over the screen.
+field opens the on-screen keyboard over the screen. After a message is sent
+from the message box, clients SHOULD keep the focus in the message box, on
+touch screens too, where the on-screen keyboard is already open: when the
+first message of a new chat opens its conversation, the focus moves to that
+conversation's message box.
 
 ## UX-019: The workspace panel
 

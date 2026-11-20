@@ -120,8 +120,12 @@ household's network (ADR-0061, ADR-0069).
 
 Every connection MUST state whether its inference runs locally, on hardware
 of the household, or remotely, at a provider. Clients MUST show which kind a
-conversation uses, and warn when its data would leave the household; the data
-egress policy (MOD-003) relies on the same statement (ADR-0066, ADR-0069).
+conversation uses wherever its model is shown or chosen: a sign beside the
+model's name, a house or a cloud, that is also given in words, to assistive
+technologies and as a tooltip, with the connection of a remote model. The sign
+of a remote model is the warning that the conversation's data leaves the
+household. The data egress policy (MOD-003) relies on the same statement
+(ADR-0066, ADR-0069).
 
 ## MOD-007: Live usage reporting
 
