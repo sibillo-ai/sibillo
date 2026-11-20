@@ -95,7 +95,7 @@ in the user's language.
 
 ## API-008: A stream of the user's changes
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration

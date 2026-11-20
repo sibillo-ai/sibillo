@@ -526,7 +526,7 @@ are not technical cannot create tokens (T-38).
 
 ## AGT-032: Searching the user's conversations
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
@@ -542,7 +542,7 @@ active path (AGT-003) (ADR-0107).
 
 ## AGT-033: Reading another conversation
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration, security

@@ -164,7 +164,7 @@ ledger (MOD-006) and audit events (AGT-008) like any other run (ADR-0106).
 
 ## TSK-011: Running a task now
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration
@@ -176,7 +176,7 @@ grants as TSK-004 and TSK-005 say (ADR-0107).
 
 ## TSK-012: The assistant changes a task
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
@@ -190,7 +190,7 @@ TSK-004 and TSK-005. It MUST NOT be granted to a task (ADR-0107).
 
 ## TSK-013: The assistant reads the user's tasks
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration

@@ -548,7 +548,7 @@ their place if every new piece of text pulls them back down.
 
 ## UX-031: Tasks in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e
@@ -571,7 +571,7 @@ Rationale: journey J15.
 
 ## UX-032: The app follows what changes
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
@@ -587,7 +587,7 @@ Rationale: journey J15.
 
 ## UX-033: Notifications that are off say so
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** e2e
