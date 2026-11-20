@@ -19,7 +19,7 @@ import pytest
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel, HouseholdModel
-from tests.support.model import OPENROUTER_MODELS, REFUSAL, SERVER_MODELS, ModelRequest
+from tests.support.model import OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS, REFUSAL, SERVER_MODELS, ModelRequest
 from tests.support.runs import create_conversation, messages, run_input, start_run, text_of, wait_for_run
 from tests.support.server import Server
 
@@ -55,6 +55,50 @@ def _models(server: Server, token: str) -> dict[str, Any]:
         response = client.get("/models")
     assert response.status_code == 200, response.text
     return body(response)
+
+
+@pytest.mark.spec("MOD-020")
+def test_openrouter_says_which_models_accept_images_and_an_admin_says_it_for_another_server(
+    server: Server, household: Household
+) -> None:
+    def images() -> dict[str, dict[str, bool | None]]:
+        found: dict[str, dict[str, bool | None]] = {}
+        for item in _models(server, household.token)["items"]:
+            if item["kind"] == "chat":
+                found.setdefault(item["connection_id"], {})[item["model"]] = item["images"]
+        return found
+
+    listed = images()
+    assert listed[household.openrouter_id] == {
+        model[0]: model[0] in OPENROUTER_IMAGE_MODELS for model in OPENROUTER_MODELS
+    }
+    # A server that does not say: unknown, until a tenant admin says.
+    local = household.model.connection_id
+    assert set(listed[local].values()) == {None}
+    path = f"/tenant/connections/{local}"
+    with server.client(household.model.admin_token) as client:
+        connections = {c["id"]: c for c in body(client.get("/tenant/connections"))["items"]}
+        assert connections[local]["image_models"] == []
+        changed = client.patch(path, json={"image_models": ["test-model", "not-listed"]})
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["image_models"] == ["test-model", "not-listed"]
+        seen = images()[local]
+        assert seen["test-model"] is True
+        assert seen["gpt-4o-mini"] is None
+        # Listing the models again does not lose what the admin said.
+        assert client.post(f"{path}/test").status_code == 200
+        assert images()[local]["test-model"] is True
+        # Names, without repeats, and not too many.
+        for refused in (["test-model", "test-model"], [""], ["m"] * 201, "test-model"):
+            assert client.patch(path, json={"image_models": refused}).status_code == 422, refused
+        # OpenRouter says it itself.
+        theirs = client.patch(f"/tenant/connections/{household.openrouter_id}", json={"image_models": ["test/free"]})
+        assert theirs.status_code == 422, theirs.text
+        assert client.patch(path, json={"image_models": []}).status_code == 200
+    assert images()[local]["test-model"] is None
+    # Only a tenant admin says it.
+    with server.client(household.token) as client:
+        assert client.patch(path, json={"image_models": ["test-model"]}).status_code == 403
 
 
 def _choose(server: Server, token: str, conversation_id: str, connection_id: str, model: str) -> None:

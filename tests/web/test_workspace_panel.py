@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 from tests.support.accounts import Account
 from tests.web.conftest import accessibility_violations, sign_in
@@ -243,3 +243,84 @@ def test_a_web_page_runs_in_an_opaque_origin_without_network(page: Page, member:
     # Its source, on request.
     page.get_by_role("region", name="Preview").get_by_role("button", name="Source").click()
     expect(page.get_by_role("region", name="Preview")).to_contain_text("Page script ran")
+
+
+# A PNG image of one pixel.
+PIXEL = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+# Paste files into the message box, as a browser does when the clipboard holds them.
+PASTE = """([files]) => {
+    const data = new DataTransfer();
+    for (const file of files) {
+        const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
+        data.items.add(new File([bytes], file.name, { type: file.type }));
+    }
+    const box = document.getElementById("composer");
+    box.focus();
+    return box.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+}"""
+
+
+def _shown(page: Page, image: Locator) -> None:
+    """Waits until the image has loaded and shows a picture."""
+    expect(image).to_be_visible(timeout=30_000)
+    expect(image).to_have_js_property("complete", True, timeout=30_000)
+    assert image.evaluate("image => image.naturalWidth") > 0
+
+
+@pytest.mark.spec("UX-036", "CNV-017", "UX-007")
+def test_a_pasted_image_is_attached_and_shown(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    # A screenshot in the clipboard has a type and the name `image.png`; the pasted event is taken.
+    taken = page.evaluate(PASTE, [[{"name": "image.png", "type": "image/png", "base64": PIXEL}]])
+    assert taken is False, "the paste inserted text instead of attaching"
+    attachments = page.get_by_role("list", name="Attachments")
+    chip = attachments.get_by_role("listitem").filter(has_text="pasted-image.png")
+    expect(chip).to_be_visible(timeout=30_000)
+    expect(page.get_by_label("Message")).to_have_value("")
+    # A small preview of the image, before sending.
+    _shown(page, chip.get_by_role("img"))
+    assert accessibility_violations(page) == []
+    # Removed before sending, it is gone; pasted again with a file that is not an image, both attach.
+    page.get_by_role("button", name="Remove pasted-image.png").click()
+    expect(attachments).to_have_count(0)
+    page.evaluate(
+        PASTE,
+        [
+            [
+                {"name": "image.png", "type": "image/png", "base64": PIXEL},
+                {"name": "list.txt", "type": "text/plain", "base64": "YmFzaWwK"},
+            ]
+        ],
+    )
+    expect(attachments.get_by_role("listitem")).to_have_count(2, timeout=30_000)
+    expect(attachments.get_by_role("img")).to_have_count(1)
+    expect(attachments).not_to_contain_text("Uploading", timeout=30_000)
+    expect(attachments).not_to_contain_text("Saving", timeout=30_000)
+    _send(page, "what is in the picture")
+    main = page.get_by_role("main")
+    expect(main).to_contain_text("Echo: what is in the picture", timeout=30_000)
+    # The sent message shows the image, also after a reload, and the other file as before.
+    for _ in range(2):
+        _shown(page, main.get_by_role("img", name="pasted-image.png"))
+        expect(main.get_by_role("button", name=re.compile("list.txt"))).to_be_visible()
+        page.reload()
+    assert accessibility_violations(page) == []
+
+
+@pytest.mark.spec("UX-036")
+def test_pasted_text_is_inserted_as_before(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    box = page.get_by_label("Message")
+    box.focus()
+    # Without files, the paste is the browser's own.
+    untouched = page.evaluate(
+        """() => {
+            const data = new DataTransfer();
+            data.setData("text/plain", "some words");
+            const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+            return document.getElementById("composer").dispatchEvent(event);
+        }"""
+    )
+    assert untouched is True
+    expect(page.get_by_role("list", name="Attachments")).to_have_count(0)

@@ -259,6 +259,20 @@ def test_choosing_the_model_of_a_conversation(
     assert (request.openrouter, request.body["model"]) == (True, "test/popular")
 
 
+@pytest.mark.spec("MOD-020", "UX-015")
+def test_the_picker_says_which_models_accept_images(
+    page: Page, server: Server, member: Account, default_model: HarnessModel
+) -> None:
+    _add_openrouter(server, default_model.connect(member.tenant_id))
+    sign_in(page, member)
+    page.get_by_role("button", name=re.compile("test-model")).click()
+    picker = page.get_by_role("dialog", name="Choose a model")
+    expect(picker.get_by_role("button", name=re.compile("Test: Popular"))).to_contain_text("Sees images")
+    expect(picker.get_by_role("button", name=re.compile("Test: Another"))).not_to_contain_text("Sees images")
+    expect(picker.get_by_role("button", name=re.compile("test-model"))).not_to_contain_text("Sees images")
+    assert accessibility_violations(page) == []
+
+
 @pytest.mark.spec("UX-016", "MOD-013", "UX-007")
 def test_adding_a_connection_shows_its_test(page: Page, admin: Account, default_model: HarnessModel) -> None:
     sign_in(page, admin)

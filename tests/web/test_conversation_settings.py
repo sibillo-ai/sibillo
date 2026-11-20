@@ -207,7 +207,8 @@ def test_every_tool_has_a_switch_with_its_name_and_its_group(
     listed = set(tools.locator("code").all_inner_texts())
     page.get_by_role("link", name="New chat").click()
     offered = _request(page, default_model, f"all tools {uuid4().hex[:8]}").tool_names()
-    assert listed == offered - {"load_capability"}
+    # And the tool that looks at an image, offered only to a model that accepts images (ADR-0110).
+    assert listed == (offered | {"view_image"}) - {"load_capability"}
     # A group switches all of its tools at once.
     page.get_by_role("link", name="Settings").click()
     group = tools.get_by_role("switch", name="Commands", exact=True)

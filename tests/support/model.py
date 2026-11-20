@@ -25,6 +25,12 @@ last user message:
 - `chain:<name> <arguments> >>> <name> <arguments> …` calls each tool in
   turn, one per answer, each once the result of the one before has arrived,
   then answers `Tool said: <last result>` (ADR-0090);
+- `images?`, at the start of the message, answers `Saw N image(s): <hashes>`:
+  how many images the request holds and the SHA-256 of the bytes of each, in
+  their order (CNV-020);
+- `look:<path>` calls `view_image` with the path, then, once the result
+  arrives, answers as `images?` does, or `No tool view_image` when the request
+  does not offer it (CNV-020);
 - `think:<text>` streams `Thinking: <text>` as the model's reasoning, then
   `Echo: <message>` (CNV-013);
 - `think-run:<command>` reasons `Planning: <command>` and calls the command
@@ -71,6 +77,11 @@ says `notools` and `thinking` for one that says `nothink`; and `/ollama/api/ps`,
 which lists every model that has answered there, loaded with
 `ollama_context_length`. Outside `/ollama`, `/api/version` is not found.
 
+It says which models accept images as each kind of server does (MOD-020,
+ADR-0110): as OpenRouter, `image` among the `input_modalities` of
+`OPENROUTER_IMAGE_MODELS`; as Ollama, the capability `vision` for
+`OLLAMA_IMAGE_MODELS`; as any other server, nothing.
+
 Every request is recorded, with its headers, so that tests can check what
 reached the model.
 """
@@ -78,6 +89,7 @@ reached the model.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import threading
 import time
@@ -99,6 +111,9 @@ OLLAMA_PREFIX = "/ollama"
 OLLAMA_VERSION = "0.40.16"
 # The models of the Ollama server (ADR-0093).
 OLLAMA_MODELS = ("test-model", "small-notools", "plain-nothink")
+# The models that accept images, as OpenRouter and as Ollama (MOD-020, ADR-0110).
+OPENROUTER_IMAGE_MODELS = ("test/popular", "test/second")
+OLLAMA_IMAGE_MODELS = ("test-model",)
 # The context window an Ollama server runs its models with, unless a test sets another.
 OLLAMA_CONTEXT_LENGTH = 4096
 # What Ollama answers when a model that cannot call tools is offered some.
@@ -200,6 +215,23 @@ class ModelRequest:
                 texts.append("".join(str(part.get("text", "")) for part in parts if part.get("type") == "text"))
         return texts
 
+    def images(self) -> list[bytes]:
+        """The bytes of every image the model received, in order (CNV-020)."""
+        found: list[bytes] = []
+        for message in self.body.get("messages", []):
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in cast(list[dict[str, Any]], content):
+                if part.get("type") != "image_url":
+                    continue
+                url = str(cast(dict[str, Any], part.get("image_url") or {}).get("url", ""))
+                header, _, data = url.partition(",")
+                assert header.startswith("data:image/"), header[:80]
+                assert header.endswith(";base64"), header[:80]
+                found.append(base64.b64decode(data))
+        return found
+
     def system_text(self) -> str:
         """The instructions the model received: its system messages, joined."""
         messages = cast(list[dict[str, Any]], self.body.get("messages", []))
@@ -271,6 +303,31 @@ class ModelServer:
 def _last_text(body: dict[str, Any]) -> str:
     texts = ModelRequest(None, body).user_texts()
     return texts[-1] if texts else ""
+
+
+def saw(images: list[bytes]) -> str:
+    """What the model answers to `images?`: the images it received (CNV-020)."""
+    return f"Saw {len(images)} image(s): " + ", ".join(hashlib.sha256(image).hexdigest() for image in images)
+
+
+def _looking(body: dict[str, Any]) -> tuple[str, bool] | None:
+    """The path of a `look:<path>` turn, and whether the tool's result arrived.
+
+    The image of the result may come in a user message after it, so the
+    turn's own message is the last user message before any tool message.
+    """
+    messages = cast(list[dict[str, Any]], body.get("messages", []))
+    answered = False
+    for index in range(len(messages) - 1, -1, -1):
+        role = messages[index].get("role")
+        if role == "tool":
+            answered = True
+        elif role == "user" and (index == 0 or messages[index - 1].get("role") != "tool"):
+            texts = ModelRequest(None, {"messages": [messages[index]]}).user_texts()
+            if texts and texts[0].startswith("look:"):
+                return texts[0].removeprefix("look:"), answered
+            return None
+    return None
 
 
 def _command_tool(tools: list[dict[str, Any]]) -> tuple[str, str]:
@@ -396,6 +453,19 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 return
             if last == "status:402" and self.openrouter:
                 self._error(402, "Insufficient credits", "payment_required")
+                return
+            looking = _looking(body)
+            if looking is not None:
+                path, answered = looking
+                if answered:
+                    self._answer(body, [(saw(request.images()), 0.0)])
+                elif "view_image" not in request.tool_names():
+                    self._answer(body, [("No tool view_image", 0.0)])
+                else:
+                    self._call(body, "view_image", json.dumps({"path": path}))
+                return
+            if last.startswith("images?"):
+                self._answer(body, [(saw(request.images()), 0.0)])
                 return
             if last.startswith("runs:"):
                 self._tool_turns(body, last.removeprefix("runs:").split(" ||| "))
@@ -622,6 +692,7 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             capabilities = ["completion"]
             capabilities += [] if "notools" in name else ["tools"]
             capabilities += [] if "nothink" in name else ["thinking"]
+            capabilities += ["vision"] if name in OLLAMA_IMAGE_MODELS else []
             self._json(200, {"capabilities": capabilities, "model_info": {"test.context_length": 131072}})
 
         def _cut_off(self, body: dict[str, Any]) -> None:
@@ -738,7 +809,10 @@ def _openrouter_models(most_used_first: bool) -> list[dict[str, Any]]:
             "canonical_slug": model_id,
             "name": name,
             "context_length": context,
-            "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+            "architecture": {
+                "input_modalities": ["text", "image"] if model_id in OPENROUTER_IMAGE_MODELS else ["text"],
+                "output_modalities": ["text"],
+            },
             "pricing": {"prompt": prompt, "completion": completion, "request": "0", "image": "0"},
             "supported_parameters": [
                 "max_tokens",

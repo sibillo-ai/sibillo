@@ -33,6 +33,7 @@ DECLARED: dict[str, tuple[set[str], str]] = {
             "find_files",
             "search_files",
             "file_info",
+            "view_image",
             "read_tool_result",
         )
     },

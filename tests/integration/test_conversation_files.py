@@ -1,14 +1,22 @@
 """A conversation's workspace through the API: browsing, previews, uploads, attachments and offers.
 
-(UX-019, UX-020, CNV-017, AGT-023, ART-001, ART-002, ART-003, SBX-014, SBX-019, TEN-006, ADR-0079, ADR-0086.)
+(UX-019, UX-020, CNV-017, CNV-020, AGT-023, ART-001, ART-002, ART-003, SBX-014, SBX-019, TEN-006, ADR-0079,
+ADR-0086, ADR-0110.)
+
+The control plane never decodes an image, so the images of these tests are a
+format's first bytes followed by anything; the served model answers `images?`
+with the images its request holds, and `look:<path>` by calling `view_image`
+first (tests/support/model.py).
 """
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import secrets
 import zipfile
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -16,8 +24,9 @@ import pytest
 
 from tests.support.accounts import Account, create_account, create_tenant, login
 from tests.support.database import Database
-from tests.support.fixtures import HarnessModel
-from tests.support.runs import create_conversation, messages, run_input, start_run, wait_for_run
+from tests.support.fixtures import HarnessModel, HouseholdModel
+from tests.support.model import saw
+from tests.support.runs import create_conversation, messages, run_input, start_run, text_of, wait_for_run
 from tests.support.sandbox import WORKSPACE_QUOTA_BYTES
 from tests.support.server import Server, fresh_source
 
@@ -307,3 +316,224 @@ def test_the_agent_is_told_how_to_make_pages_and_diagrams(
     system = request.system_text()
     for phrase in ("self-contained", "Mermaid", ".mmd", "offer_download"):
         assert phrase in system, f"the instructions do not mention {phrase}"
+
+
+# The largest image that reaches the model (ADR-0110).
+IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _png(size: int = 64) -> bytes:
+    return b"\x89PNG\r\n\x1a\n" + secrets.token_bytes(size - 8)
+
+
+def _jpeg() -> bytes:
+    return b"\xff\xd8\xff\xe0" + secrets.token_bytes(60)
+
+
+def _gif() -> bytes:
+    return b"GIF89a" + secrets.token_bytes(58)
+
+
+def _webp() -> bytes:
+    return b"RIFF" + (56).to_bytes(4, "little") + b"WEBP" + secrets.token_bytes(52)
+
+
+@dataclass(frozen=True)
+class Household:
+    account: Account
+    token: str
+    model: HouseholdModel
+
+
+@pytest.fixture
+def household(database: Database, server: Server, default_model: HarnessModel) -> Household:
+    """A household whose default model is not known to accept images."""
+    account = create_account(database, create_tenant(database))
+    return Household(account, login(server, account), default_model.connect(account.tenant_id))
+
+
+@pytest.fixture
+def seeing(server: Server, household: Household) -> Household:
+    """The household, once its admin said that its default model accepts images (MOD-020)."""
+    with server.client(household.model.admin_token) as client:
+        response = client.patch(
+            f"/tenant/connections/{household.model.connection_id}", json={"image_models": ["test-model"]}
+        )
+    assert response.status_code == 200, response.text
+    return household
+
+
+def _attach(client: httpx.Client, conversation_id: str, name: str, data: bytes) -> str:
+    response = client.post(
+        f"/conversations/{conversation_id}/workspace/uploads", params={"name": name}, content=data, headers=BINARY
+    )
+    assert response.status_code == 201, response.text
+    path: str = response.json()["path"]
+    return path
+
+
+def _ask(
+    server: Server,
+    token: str,
+    conversation_id: str,
+    text: str,
+    attachments: list[str] | None = None,
+    parent_run_id: str | None = None,
+) -> tuple[str, str]:
+    """Send a message with its attachments; the run's ID and the assistant's answer."""
+    payload = run_input(conversation_id, text, parent_run_id=parent_run_id) | {"attachments": attachments or []}
+    with server.client(token) as client:
+        response = client.post(f"/conversations/{conversation_id}/runs", json=payload)
+        assert response.status_code == 200, response.text
+    run_id = str(payload["runId"])
+    assert wait_for_run(server, token, run_id)["status"] == "completed"
+    answers = [m for m in messages(server, token, conversation_id)["items"] if m["role"] == "assistant"]
+    return run_id, str(answers[-1]["content"])
+
+
+def _request_of(model: HouseholdModel, text: str) -> str:
+    """The body of the request that answered the message holding `text`, as JSON."""
+    bodies = [json.dumps(request.body) for request in model.endpoint.requests if request.body.get("tools")]
+    (found,) = [body for body in bodies if text in body][-1:]
+    return found
+
+
+@pytest.mark.spec("CNV-020")
+def test_an_attached_image_reaches_a_model_that_accepts_images(
+    database: Database, server: Server, seeing: Household
+) -> None:
+    conversation = create_conversation(server, seeing.token)["id"]
+    photo = _png()
+    with server.client(seeing.token) as client:
+        path = _attach(client, conversation, "photo.png", photo)
+    text = f"images? {secrets.token_hex(4)}"
+    _, answer = _ask(server, seeing.token, conversation, text, [path])
+    assert answer == saw([photo])
+    # Its path and size are still listed (CNV-017).
+    assert "uploads/photo.png" in _request_of(seeing.model, text)
+    # The history keeps where the image is, never the image (ADR-0110).
+    encoded = base64.b64encode(photo).decode()[:40]
+    with database.superuser() as conn:
+        stored = conn.execute(
+            "SELECT count(*) FROM conversation_messages WHERE conversation_id = %s AND message::text LIKE %s",
+            (conversation, f"%{encoded}%"),
+        ).fetchone()
+        assert stored == (0,)
+        checkpoints = conn.execute(
+            "SELECT count(*) FROM compaction_checkpoints WHERE conversation_id = %s AND messages::text LIKE %s",
+            (conversation, f"%{encoded}%"),
+        ).fetchone()
+        assert checkpoints == (0,)
+    history = messages(server, seeing.token, conversation)
+    (user,) = [message for message in history["items"] if message["role"] == "user"]
+    assert user["content"] == text
+    assert user["attachments"] == [{"path": "uploads/photo.png", "size": len(photo)}]
+
+
+@pytest.mark.spec("CNV-020")
+def test_an_image_is_told_by_its_bytes_and_bounded_by_its_size(server: Server, seeing: Household) -> None:
+    conversation = create_conversation(server, seeing.token)["id"]
+    jpeg, gif, webp = _jpeg(), _gif(), _webp()
+    with server.client(seeing.token) as client:
+        attachments = [
+            # Not an image, whatever its name says.
+            _attach(client, conversation, "notes.png", b"just some text, named as an image"),
+            # Images, whatever their names say.
+            _attach(client, conversation, "scan.dat", jpeg),
+            _attach(client, conversation, "moving", gif),
+            _attach(client, conversation, "picture.webp", webp),
+            # Too large to send: it stays a path.
+            _attach(client, conversation, "huge.png", _png(IMAGE_MAX_BYTES + 1)),
+        ]
+    text = f"images? {secrets.token_hex(4)}"
+    _, answer = _ask(server, seeing.token, conversation, text, attachments)
+    assert answer == saw([jpeg, gif, webp])
+    assert "uploads/huge.png" in _request_of(seeing.model, text)
+
+
+@pytest.mark.spec("CNV-020", "MOD-020")
+def test_a_model_not_known_to_accept_images_is_told_that_it_cannot_see_them(
+    server: Server, household: Household
+) -> None:
+    conversation = create_conversation(server, household.token)["id"]
+    with server.client(household.token) as client:
+        path = _attach(client, conversation, "photo.png", _png())
+    text = f"images? {secrets.token_hex(4)}"
+    _, answer = _ask(server, household.token, conversation, text, [path])
+    assert answer == saw([])
+    request = _request_of(household.model, text)
+    assert "uploads/photo.png" in request
+    # It is told to say so to the user, rather than to try some other way.
+    assert "cannot see images" in request
+    # Nor is it offered the tool that looks at one.
+    assert '"view_image"' not in request
+    _, events = start_run(server, household.token, conversation, "look:uploads/photo.png")
+    assert text_of(events) == "No tool view_image"
+
+
+@pytest.mark.spec("CNV-020")
+def test_the_assistant_looks_at_an_image_of_the_workspace(server: Server, seeing: Household) -> None:
+    conversation = create_conversation(server, seeing.token)["id"]
+    plot = _png()
+    with server.client(seeing.token) as client:
+        written = client.put(
+            f"/conversations/{conversation}/workspace/file",
+            params={"path": "charts/plot.png"},
+            content=plot,
+            headers=BINARY,
+        )
+        assert written.status_code == 201, written.text
+        client.put(
+            f"/conversations/{conversation}/workspace/file",
+            params={"path": "charts/data.csv"},
+            content=b"a,b\n1,2\n",
+            headers=BINARY,
+        )
+    run_id, events = start_run(server, seeing.token, conversation, "look:charts/plot.png")
+    assert wait_for_run(server, seeing.token, run_id)["status"] == "completed"
+    assert text_of(events) == saw([plot])
+    calls = [event for event in events if event.type == "TOOL_CALL_START"]
+    assert [event.data.get("toolCallName") for event in calls] == ["view_image"]
+    # A file that is not an image, a missing one and a path outside the workspace are told to the
+    # model, and no image is sent.
+    for path in ("charts/data.csv", "charts/missing.png", "../../etc/passwd"):
+        other = create_conversation(server, seeing.token)["id"]
+        if path == "charts/data.csv":
+            with server.client(seeing.token) as client:
+                client.put(
+                    f"/conversations/{other}/workspace/file", params={"path": path}, content=b"a,b\n", headers=BINARY
+                )
+        run_id, events = start_run(server, seeing.token, other, f"look:{path}")
+        assert wait_for_run(server, seeing.token, run_id)["status"] == "completed", path
+        assert text_of(events) == saw([]), path
+
+
+@pytest.mark.spec("CNV-020")
+def test_an_image_follows_its_file_in_later_turns(database: Database, server: Server, seeing: Household) -> None:
+    conversation = create_conversation(server, seeing.token)["id"]
+    photo = _png()
+    with server.client(seeing.token) as client:
+        path = _attach(client, conversation, "photo.png", photo)
+    first, answer = _ask(server, seeing.token, conversation, f"images? {secrets.token_hex(4)}", [path])
+    assert answer == saw([photo])
+    # The next turn's request holds the image again, read from the workspace.
+    second, answer = _ask(server, seeing.token, conversation, "images? again", parent_run_id=first)
+    assert answer == saw([photo])
+    # Changed, the image is no longer the one the user sent: the model is told, and gets no image.
+    with server.client(seeing.token) as client:
+        changed = client.put(
+            f"/conversations/{conversation}/workspace/file", params={"path": path}, content=_png(), headers=BINARY
+        )
+        assert changed.status_code == 201, changed.text
+    text = f"images? changed {secrets.token_hex(4)}"
+    third, answer = _ask(server, seeing.token, conversation, text, parent_run_id=second)
+    assert answer == saw([])
+    assert "no longer" in _request_of(seeing.model, text)
+    # Gone, the same.
+    with server.client(seeing.token) as client:
+        deleted = client.delete(f"/conversations/{conversation}/workspace/entries", params={"path": path})
+        assert deleted.status_code == 204, deleted.text
+    text = f"images? gone {secrets.token_hex(4)}"
+    _, answer = _ask(server, seeing.token, conversation, text, parent_run_id=third)
+    assert answer == saw([])
+    assert "no longer" in _request_of(seeing.model, text)

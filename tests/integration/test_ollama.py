@@ -152,3 +152,15 @@ def test_a_prompt_the_ollama_server_cut_fails_the_first_run(server: Server, hous
     run = wait_for_run(server, household.token, run_id)
     assert run["status"] == "failed"
     assert run["error_code"] == "model.context_exceeded"
+
+
+@pytest.mark.spec("MOD-020")
+def test_an_ollama_server_says_which_models_accept_images(server: Server, household: Household) -> None:
+    assert _option(server, household.token, household.ollama_id, "test-model")["images"] is True
+    assert _option(server, household.token, household.ollama_id, "small-notools")["images"] is False
+    # What a recognized server says wins over what an admin says (ADR-0110).
+    with server.client(household.model.admin_token) as client:
+        response = client.patch(f"/tenant/connections/{household.ollama_id}", json={"image_models": ["small-notools"]})
+        assert response.status_code == 200, response.text
+    assert _option(server, household.token, household.ollama_id, "small-notools")["images"] is False
+    assert _option(server, household.token, household.ollama_id, "test-model")["images"] is True

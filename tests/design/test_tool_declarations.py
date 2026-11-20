@@ -85,6 +85,8 @@ def _result(name: str, call_id: str) -> ModelRequest:
         ([_request(UserPromptPart("Search")), _call("web_search", "a"), _result("web_search", "a")], True),
         ([_request(UserPromptPart("Run")), _call("run_command", "a"), _result("run_command", "a")], True),
         ([_request(UserPromptPart("Read")), _call("read_file", "a"), _result("read_file", "a")], True),
+        # An image may hold instructions, as a page does (CNV-020, ADR-0110).
+        ([_request(UserPromptPart("Look")), _call("view_image", "a"), _result("view_image", "a")], True),
         # Not those of tools that do not.
         ([_request(UserPromptPart("Plan")), _call("write_plan", "a"), _result("write_plan", "a")], False),
         ([_request(UserPromptPart("Write")), _call("write_file", "a"), _result("write_file", "a")], False),
@@ -142,6 +144,7 @@ def _result(name: str, call_id: str) -> ModelRequest:
         "search",
         "command",
         "file",
+        "image",
         "plan",
         "written file",
         "answer",
