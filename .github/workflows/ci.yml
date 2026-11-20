@@ -90,7 +90,8 @@ jobs:
               --ignore=tests/integration/test_forks.py --ignore=tests/integration/test_conversation_list.py
               --ignore=tests/integration/test_workspace_files.py --ignore=tests/integration/test_conversation_files.py
               --ignore=tests/integration/test_ollama.py --ignore=tests/integration/test_skills.py
-              --ignore=tests/integration/test_tasks.py
+              --ignore=tests/integration/test_tasks.py --ignore=tests/integration/test_task_use.py
+              --ignore=tests/integration/test_conversation_tools.py --ignore=tests/integration/test_change_stream.py
             # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
             # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
             budget: 360
@@ -122,13 +123,16 @@ jobs:
               tests/security tests/integration/test_sandbox_driver.py
               --ignore=tests/security/test_task_grants.py --ignore=tests/security/test_task_triggers.py
             budget: 300
-          # Tasks (TSK-001 to TSK-010, ADR-0106): each firing runs a conversation, and the
-          # grant and trigger tests wait for the worker's sweeps; about 185 seconds.
+          # Tasks (TSK-001 to TSK-013, ADR-0106, ADR-0107): each firing runs a conversation, and the
+          # grant and trigger tests wait for the worker's sweeps; about 185 seconds. Raised from 240
+          # with running and changing tasks, reading conversations and the stream of changes
+          # (AGT-032, AGT-033, API-008), about 95 seconds.
           - part: tasks
             paths: >-
               tests/integration/test_tasks.py tests/security/test_task_grants.py
-              tests/security/test_task_triggers.py
-            budget: 240
+              tests/security/test_task_triggers.py tests/integration/test_task_use.py
+              tests/integration/test_conversation_tools.py tests/integration/test_change_stream.py
+            budget: 300
           # The server image now builds the web app as well (ADR-0067).
           - part: end-to-end
             paths: tests/e2e/test_deployment.py
