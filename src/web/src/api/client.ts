@@ -69,3 +69,10 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
   }
   return result.data;
 }
+
+/** Throws the API's problem when a request whose answer has no body, such as a deletion, failed. */
+export function ok(result: { error?: unknown; response: Response }): void {
+  if (result.response.ok) return;
+  const problem = (result.error ?? {}) as Partial<Problem> & Record<string, unknown>;
+  throw new ApiError(result.response.status, problem.code ?? "internal.error", problem);
+}

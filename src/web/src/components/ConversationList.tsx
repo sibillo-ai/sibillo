@@ -4,9 +4,10 @@ import { createContext, type DragEvent, type FormEvent, useContext, useId, useSt
 import { useTranslation } from "react-i18next";
 
 import { api, unwrap, type Conversation, type Folder, type ListEntry } from "../api/client";
+import { useBusy } from "../busy";
 import { useRunning } from "../changes";
 import { CONVERSATIONS, createFolder, updateConversation, updateFolder, useConversationList } from "../conversations";
-import { Badge, Button, cx, Dialog, EmptyState, FormField, IconButton, NavItem, NavLabel, SearchInput, TextInput } from "../ui";
+import { Badge, Button, cx, Dialog, EmptyState, FormField, IconButton, Loading, NavItem, NavLabel, SearchInput, TextInput } from "../ui";
 import { DROP_TARGET, NavEntry } from "../ui/Sidebar";
 import { ConversationMenu } from "./ConversationMenu";
 
@@ -87,7 +88,12 @@ export function ConversationList() {
           <SearchResults query={query.trim()} />
         ) : (
           <Dragging.Provider value={{ dragged, start: setDragged, drop: (move) => void drop(move) }}>
-            {entries.length === 0 && list.isSuccess && <EmptyState icon={<MessageSquare aria-hidden="true" />} title={t("shell.empty")} />}
+            {list.isPending && <Loading compact />}
+            {entries.length === 0 && list.isSuccess && (
+              <EmptyState icon={<MessageSquare aria-hidden="true" />} title={t("shell.empty")}>
+                {t("shell.emptyHint")}
+              </EmptyState>
+            )}
             {pinned.length > 0 && <Group title={t("shell.pinned")} entries={pinned} folders={folders} move={{ pinned: true, folder_id: null }} />}
             {pinned.length === 0 && dragged !== null && <PinHere />}
             {others.length > 0 && <Group title={pinned.length > 0 ? t("shell.recent") : null} entries={others} folders={folders} move={{ pinned: false, folder_id: null }} />}
@@ -193,6 +199,7 @@ function SearchResults({ query }: { query: string }) {
     queryKey: ["search", query],
     queryFn: async () => unwrap(await api.GET("/search", { params: { query: { q: query } } })).items,
   });
+  if (results.isPending) return <Loading compact />;
   if (results.data?.length === 0) return <p className="p-2 text-small text-ink-2">{t("shell.noResults")}</p>;
   return (
     <ul aria-label={t("shell.results")} className="flex flex-col gap-px">
@@ -206,13 +213,16 @@ function SearchResults({ query }: { query: string }) {
 function NewFolder({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const queries = useQueryClient();
+  const { busy, run } = useBusy();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = String(new FormData(event.currentTarget).get("name") ?? "").trim();
     if (!name) return;
-    await createFolder(name);
-    await queries.invalidateQueries({ queryKey: CONVERSATIONS });
-    onClose();
+    await run("create", async () => {
+      await createFolder(name);
+      await queries.invalidateQueries({ queryKey: CONVERSATIONS });
+      onClose();
+    });
   }
   return (
     <Dialog
@@ -226,7 +236,7 @@ function NewFolder({ open, onClose }: { open: boolean; onClose: () => void }) {
       footer={
         <>
           <Button onClick={onClose}>{t("conversationMenu.cancel")}</Button>
-          <Button type="submit" variant="primary">
+          <Button type="submit" variant="primary" busy={busy("create")}>
             {t("shell.createFolder")}
           </Button>
         </>

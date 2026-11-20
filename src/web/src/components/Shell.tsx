@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import type { User } from "../api/client";
 import { formatMoney, useUsage } from "../costs";
+import { useBusy } from "../busy";
 import { useSignOut } from "../session";
 import { useLeavingTemporary } from "../temporary";
 import { useChangeStream } from "../changes";
@@ -22,6 +23,7 @@ export function Shell({ me }: { me: User }) {
   // The sidebar starts with the width of the design language, and the user may resize it (UX-021).
   const list = usePanelWidth("sibillo.listWidth", 272, 220, 440);
   const signOut = useSignOut();
+  const { busy, run } = useBusy();
   const location = useLocation();
   useLeavingTemporary();
   // What changes elsewhere, such as a conversation a task started, shows at once (UX-032).
@@ -74,7 +76,7 @@ export function Shell({ me }: { me: User }) {
                 <div className="truncate text-body font-semibold">{me.display_name}</div>
                 <UsageSummary />
               </div>
-              <IconButton label={t("shell.signOut")} onClick={() => void signOut()}>
+              <IconButton label={t("shell.signOut")} busy={busy("signOut")} onClick={() => void run("signOut", signOut)}>
                 <LogOut aria-hidden="true" />
               </IconButton>
             </div>

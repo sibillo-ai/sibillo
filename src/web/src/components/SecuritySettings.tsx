@@ -5,9 +5,10 @@ import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, api, unwrap, type Schemas, type User } from "../api/client";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { createPasskey, passkeysSupported } from "../passkeys";
-import { Avatar, Button, Card, Dialog, EmptyState, FormField, Group, Notice, Page, Row, TextInput, Tile } from "../ui";
+import { Avatar, Button, Card, Dialog, EmptyState, FormField, Group, Loading, Notice, Page, Row, TextInput, Tile } from "../ui";
 
 type Passkey = Schemas["Passkey"];
 
@@ -44,10 +45,17 @@ export function PasskeysSection() {
   return (
     <Group role="region" title={t("passkeys.title")} description={t("passkeys.hint")} action={items.length > 0 && add}>
       {!available && <Notice role="note">{t("passkeys.unavailable")}</Notice>}
+      {passkeys.isPending && (
+        <Card>
+          <Loading />
+        </Card>
+      )}
       {passkeys.data && (
         <Card>
           {items.length === 0 ? (
-            <EmptyState icon={<KeyRound />} title={t("passkeys.none")} action={add || undefined} />
+            <EmptyState icon={<KeyRound />} title={t("passkeys.none")} action={add || undefined}>
+              {t("passkeys.noneHint")}
+            </EmptyState>
           ) : (
             <ul aria-label={t("passkeys.title")} className="divide-y divide-line">
               {items.map((passkey) => (
@@ -199,6 +207,11 @@ export function MembersSection() {
   });
   return (
     <Page title={t("members.title")} description={t("members.hint")}>
+      {users.isPending && (
+        <Card>
+          <Loading />
+        </Card>
+      )}
       {users.data && users.data.length > 0 && (
         <Card>
           <ul aria-label={t("members.title")} className="divide-y divide-line">
@@ -222,6 +235,7 @@ function Member({ user }: { user: User }) {
     queryFn: async () => unwrap(await api.GET("/tenant/users/{user_id}/passkeys", { params: { path: { user_id: user.id } } })).count,
   });
   const [confirming, setConfirming] = useState(false);
+  const { busy, run } = useBusy();
 
   async function remove() {
     const result = await api.DELETE("/tenant/users/{user_id}/passkeys", { params: { path: { user_id: user.id } } });
@@ -263,7 +277,7 @@ function Member({ user }: { user: User }) {
         footer={
           <>
             <Button onClick={() => setConfirming(false)}>{t("connection.cancel")}</Button>
-            <Button variant="danger-solid" onClick={() => void remove()}>
+            <Button variant="danger-solid" busy={busy("remove")} onClick={() => void run("remove", remove)}>
               {t("members.remove")}
             </Button>
           </>

@@ -5,10 +5,11 @@ import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-import { ApiError, api, unwrap, type Schemas } from "../api/client";
+import { api, ApiError, ok, unwrap, type Schemas } from "../api/client";
+import { useBusy } from "../busy";
 import { MEMORY, useMemory } from "../memory";
 import { useNotify } from "../notices";
-import { Button, Card, Dialog, EmptyState, FormField, Group, Notice, Page, Row, Switch, TextArea, Tile } from "../ui";
+import { Button, Card, Dialog, EmptyState, FormField, Group, Loading, Notice, Page, Row, Switch, TextArea, Tile } from "../ui";
 
 type MemoryItem = Schemas["MemoryItem"];
 
@@ -22,6 +23,7 @@ export function MemorySection() {
   const queries = useQueryClient();
   const notify = useNotify();
   const memory = useMemory();
+  const { busy, run } = useBusy();
   const [editing, setEditing] = useState<MemoryItem | "new" | null>(null);
   const [clearing, setClearing] = useState(false);
   // The switch moves at once; the server's answer follows.
@@ -71,7 +73,7 @@ export function MemorySection() {
         action={
           items.length > 0 && (
             <div className="flex flex-none flex-wrap justify-end gap-2">
-              <Button size="sm" variant="danger" onClick={() => setClearing(true)}>
+              <Button size="sm" variant="danger" busy={busy("clear")} onClick={() => setClearing(true)}>
                 {t("memory.deleteAll")}
               </Button>
               {add}
@@ -80,8 +82,14 @@ export function MemorySection() {
         }
       >
         <Card rows>
-          {items.length === 0 ? (
-            data && <EmptyState icon={<Brain />} title={t("memory.none")} action={add} />
+          {memory.isPending ? (
+            <Loading />
+          ) : items.length === 0 ? (
+            data && (
+              <EmptyState icon={<Brain />} title={t("memory.none")} action={add}>
+                {t("memory.noneHint")}
+              </EmptyState>
+            )
           ) : (
             <ul aria-label={t("memory.items")} className="divide-y divide-line">
               {items.map((item) => (
@@ -89,7 +97,8 @@ export function MemorySection() {
                   key={item.id}
                   item={item}
                   onEdit={() => setEditing(item)}
-                  onDelete={() => void change(async () => unwrap(await api.DELETE("/me/memory/items/{memory_item_id}", { params: { path: { memory_item_id: item.id } } })))}
+                  deleting={busy(item.id)}
+                  onDelete={() => void run(item.id, () => change(async () => ok(await api.DELETE("/me/memory/items/{memory_item_id}", { params: { path: { memory_item_id: item.id } } }))))}
                 />
               ))}
             </ul>
@@ -111,7 +120,7 @@ export function MemorySection() {
                 variant="danger-solid"
                 onClick={() => {
                   setClearing(false);
-                  void change(async () => unwrap(await api.DELETE("/me/memory/items")));
+                  void run("clear", () => change(async () => ok(await api.DELETE("/me/memory/items"))));
                 }}
               >
                 {t("memory.deleteAll")}
@@ -125,7 +134,7 @@ export function MemorySection() {
 }
 
 /** One item: its text, when it was written, by whom or in which chat, and whether it is untrusted (MEM-005, MEM-008). */
-function MemoryEntry({ item, onEdit, onDelete }: { item: MemoryItem; onEdit: () => void; onDelete: () => void }) {
+function MemoryEntry({ item, deleting, onEdit, onDelete }: { item: MemoryItem; deleting: boolean; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
   const date = new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium" }).format(new Date(item.updated_at));
   const conversation = item.conversation;
@@ -162,7 +171,7 @@ function MemoryEntry({ item, onEdit, onDelete }: { item: MemoryItem; onEdit: () 
               <Button size="sm" onClick={onEdit} aria-label={t("memory.editLabel", { text: item.text })}>
                 {t("memory.edit")}
               </Button>
-              <Button size="sm" variant="danger" onClick={onDelete} aria-label={t("memory.deleteLabel", { text: item.text })}>
+              <Button size="sm" variant="danger" busy={deleting} onClick={onDelete} aria-label={t("memory.deleteLabel", { text: item.text })}>
                 {t("memory.delete")}
               </Button>
             </div>

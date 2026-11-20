@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import { hasKeyboard } from "../focus";
 import { useNotify } from "../notices";
+import { useBusy } from "../busy";
 import { ME, useSignOut } from "../session";
 import { Button, FormField, Group, Notice, Page, TextInput } from "../ui";
 import { Frame } from "./SignIn";
@@ -88,11 +89,12 @@ export function ChoosePassword() {
   const { t } = useTranslation();
   const queries = useQueryClient();
   const signOut = useSignOut();
+  const { busy, run } = useBusy();
   return (
     <Frame title={t("password.chooseTitle")} subtitle={t("password.chooseSubtitle")}>
       <PasswordForm block autoFocus onChanged={() => queries.invalidateQueries({ queryKey: ME })} />
       <div className="mt-3 flex w-full">
-        <Button block onClick={() => void signOut()}>
+        <Button block busy={busy("signOut")} onClick={() => void run("signOut", signOut)}>
           {t("shell.signOut")}
         </Button>
       </div>

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router";
 import { Ellipsis } from "lucide-react";
 
 import type { Conversation, Folder } from "../api/client";
+import { useBusy } from "../busy";
 import { deleteConversation, updateConversation, useRefreshConversations } from "../conversations";
 import { Button, Dialog, FormField, IconButton, Menu, MenuItem, MenuSub, TextInput } from "../ui";
 
@@ -19,6 +20,8 @@ export function ConversationMenu({ conversation, folders }: { conversation: Conv
   async function leaveIfOpen() {
     if (conversationId === conversation.id) await navigate("/");
   }
+
+  const { busy, run } = useBusy();
 
   async function change(changes: Parameters<typeof updateConversation>[1]) {
     await updateConversation(conversation.id, changes);
@@ -83,11 +86,14 @@ export function ConversationMenu({ conversation, folders }: { conversation: Conv
           title={t("conversationMenu.rename")}
           description={t("conversationMenu.renamePrompt")}
           descriptionHidden
-          onSubmit={(event) => void rename(event)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run("rename", () => rename(event));
+          }}
           footer={
             <>
               <Button onClick={() => setDialog(null)}>{t("conversationMenu.cancel")}</Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" busy={busy("rename")}>
                 {t("conversationMenu.save")}
               </Button>
             </>
@@ -106,7 +112,7 @@ export function ConversationMenu({ conversation, folders }: { conversation: Conv
           footer={
             <>
               <Button onClick={() => setDialog(null)}>{t("conversationMenu.cancel")}</Button>
-              <Button variant="danger-solid" onClick={() => void remove()}>
+              <Button variant="danger-solid" busy={busy("delete")} onClick={() => void run("delete", remove)}>
                 {t("conversationMenu.confirmDelete")}
               </Button>
             </>

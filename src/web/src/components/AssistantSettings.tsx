@@ -11,9 +11,10 @@ import { languageOptions } from "../languages";
 import { findModel, useModels } from "../models";
 import { skillsOn, useSkills } from "../skills";
 import { useMcpServers } from "../mcp";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { toolLabel, useLockedTools } from "../tools";
-import { Button, Card, Dialog, EmptyState, Group, Page, Row, Segmented, Select, Switch as Toggle, TextArea } from "../ui";
+import { Button, Card, Dialog, EmptyState, Group, Loading, Page, Row, Segmented, Select, Switch as Toggle, TextArea } from "../ui";
 import { OwnEgressSwitch } from "./EgressSettings";
 import { ServerSwitches } from "./McpSettings";
 import { ModelSelect } from "./ModelPicker";
@@ -229,6 +230,7 @@ function DangerZone({ value, inherited, onChange }: { value: string; inherited: 
 /** The user's defaults, in the settings: settings save at once, prompts on request. */
 export function AssistantSection() {
   const settings = useSettings();
+  if (settings.isPending) return <Loading />;
   if (!settings.data) return null;
   return <AssistantForm view={settings.data} />;
 }
@@ -246,6 +248,7 @@ function AssistantForm({ view }: { view: UserSettingsView }) {
   const [base, setBase] = useState(settings.base_instructions ?? builtIn);
   const [additional, setAdditional] = useState(settings.additional_instructions ?? "");
   const [saved, setSaved] = useState(false);
+  const { busy, run } = useBusy();
 
   async function save(changes: Partial<UserSettings>) {
     const body = { ...settings, ...changes };
@@ -302,7 +305,7 @@ function AssistantForm({ view }: { view: UserSettingsView }) {
         }}
       />
       <div className="flex items-center gap-3">
-        <Button variant="primary" onClick={() => void savePrompts()}>
+        <Button variant="primary" busy={busy("prompts")} onClick={() => void run("prompts", savePrompts)}>
           {t("assistant.savePrompts")}
         </Button>
         <span role="status" className="text-small text-ink-2">
@@ -321,7 +324,14 @@ export function ChatSettings({ conversation, open, onOpenChange }: { conversatio
 
 /** The dialog's fields start from the user's defaults, so it waits for them. */
 function ChatSettingsLoader(props: { conversation: Conversation; onDone: () => void }) {
+  const { t } = useTranslation();
   const settings = useSettings();
+  if (settings.isPending)
+    return (
+      <Dialog onClose={props.onDone} title={t("assistant.chat")} description={t("assistant.chatHint")} size="lg">
+        <Loading />
+      </Dialog>
+    );
   if (!settings.data) return null;
   return <ChatSettingsForm {...props} defaults={settings.data} />;
 }
@@ -340,6 +350,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
   const [base, setBase] = useState(conversation.base_instructions ?? inheritedBase);
   const [additional, setAdditional] = useState(conversation.additional_instructions ?? inheritedAdditional);
   const [allowances, setAllowances] = useState<Allowances>(conversation.allowances);
+  const { busy, run } = useBusy();
   const withdrawn = allowances.web_and_commands !== conversation.allowances.web_and_commands || allowances.tools.length !== conversation.allowances.tools.length;
 
   async function save() {
@@ -369,7 +380,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
       footer={
         <>
           <Button onClick={onDone}>{t("conversationMenu.cancel")}</Button>
-          <Button variant="primary" onClick={() => void save()}>
+          <Button variant="primary" busy={busy("save")} onClick={() => void run("save", save)}>
             {t("conversationMenu.save")}
           </Button>
         </>
@@ -400,7 +411,11 @@ function SkillSwitches({ off, onChange }: { off: string[]; onChange: (off: strin
   return (
     <Group role="group" title={t("skills.title")} description={t("skills.chatHint")}>
       <Card rows>
-        {skills.length === 0 && <EmptyState icon={<Sparkles />} title={t("skills.noneOn")} />}
+        {skills.length === 0 && (
+          <EmptyState icon={<Sparkles />} title={t("skills.noneOn")}>
+            {t("skills.noneOnHint")}
+          </EmptyState>
+        )}
         {skills.map((skill) => (
           <Switch
             key={skill.name}
@@ -425,7 +440,11 @@ function AllowedInChat({ allowances, onChange }: { allowances: Allowances; onCha
   return (
     <Group role="region" title={t("approvals.allowedInChat")} description={t("approvals.allowedHint")}>
       <Card rows>
-        {items.length === 0 && <EmptyState icon={<ShieldCheck />} title={t("approvals.nothingAllowed")} />}
+        {items.length === 0 && (
+          <EmptyState icon={<ShieldCheck />} title={t("approvals.nothingAllowed")}>
+            {t("approvals.nothingAllowedHint")}
+          </EmptyState>
+        )}
         {items.map((item) => (
           <Row key={item.key} title={item.label}>
             <Button size="sm" variant="danger" onClick={item.withdraw}>

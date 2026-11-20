@@ -6,9 +6,10 @@ import { useSearchParams } from "react-router";
 
 import { ApiError, api, unwrap, type Connection, type ConnectionTest, type ModelChoice, type Schemas, type User } from "../api/client";
 import { findModel, MODELS, useModels } from "../models";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { type Theme, useTheme } from "../theme";
-import { Badge, Button, Card, Checkbox, cx, Dialog, EmptyState, FormField, Group, NavItem, NavLabel, Notice, Page, Radio, Row, Select, TextArea, TextInput, Tile, ToggleGroup } from "../ui";
+import { Badge, Button, Card, Checkbox, cx, Dialog, EmptyState, FormField, Group, Loading, NavItem, NavLabel, Notice, Page, Radio, Row, Select, TextArea, TextInput, Tile, ToggleGroup } from "../ui";
 import { AssistantSection } from "./AssistantSettings";
 import { ModelSelect } from "./ModelPicker";
 import { HouseholdEgressSection } from "./EgressSettings";
@@ -175,6 +176,7 @@ function ModelsSection() {
   const [editing, setEditing] = useState<Connection | null>(null);
   const [removing, setRemoving] = useState<Connection | null>(null);
   const [results, setResults] = useState<Record<string, ConnectionTest>>({});
+  const { busy, run } = useBusy();
 
   async function refresh() {
     await queries.invalidateQueries({ queryKey: CONNECTIONS });
@@ -216,14 +218,30 @@ function ModelsSection() {
         title={t("settings.connections")}
         description={t("settings.connectionsHint")}
         action={
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <Plus aria-hidden="true" />
-            {t("settings.add")}
-          </Button>
+          connections.data?.length !== 0 && (
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus aria-hidden="true" />
+              {t("settings.add")}
+            </Button>
+          )
         }
       >
         <Card rows>
-          {connections.data?.length === 0 && <EmptyState icon={<Plug />} title={t("settings.noConnections")} />}
+          {connections.isPending && <Loading />}
+          {connections.data?.length === 0 && (
+            <EmptyState
+              icon={<Plug />}
+              title={t("settings.noConnections")}
+              action={
+                <Button variant="primary" onClick={() => setAdding(true)}>
+                  <Plus aria-hidden="true" />
+                  {t("settings.add")}
+                </Button>
+              }
+            >
+              {t("settings.noConnectionsHint")}
+            </EmptyState>
+          )}
           {connections.data?.map((connection) => (
             <Row
               key={connection.id}
@@ -239,7 +257,7 @@ function ModelsSection() {
                 <>
                   <ServedWindows connection={connection} models={models.data?.items ?? []} />
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => void test(connection)}>
+                    <Button size="sm" busy={busy(`test ${connection.id}`)} onClick={() => void run(`test ${connection.id}`, () => test(connection))}>
                       {t("settings.test")}
                     </Button>
                     <Button size="sm" aria-label={t("settings.editLabel", { name: connection.name })} onClick={() => setEditing(connection)}>
@@ -273,7 +291,7 @@ function ModelsSection() {
           footer={
             <>
               <Button onClick={() => setRemoving(null)}>{t("connection.cancel")}</Button>
-              <Button variant="danger-solid" onClick={() => void remove(removing)}>
+              <Button variant="danger-solid" busy={busy("remove")} onClick={() => void run("remove", () => remove(removing))}>
                 {t("settings.remove")}
               </Button>
             </>
@@ -442,7 +460,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
   const [chosenKind, setKind] = useState<"openrouter" | "openai">("openrouter");
   const kind = editing?.kind ?? chosenKind;
   const [result, setResult] = useState<ConnectionTest | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"test" | "save" | null>(null);
 
   /** OpenRouter needs only its key; its name is OpenRouter, numbered when the household has one already. */
   function request(form: HTMLFormElement) {
@@ -497,7 +515,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       props.onClose();
       return;
     }
-    setBusy(true);
+    setBusy("save");
     setResult(null);
     try {
       const saved = unwrap(await api.PATCH("/tenant/connections/{connection_id}", { params: { path: { connection_id: connection.id } }, body: update }));
@@ -507,7 +525,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
     } catch (error) {
       failed(error);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -521,18 +539,18 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
 
   async function runTest(form: HTMLFormElement | null) {
     if (form === null || !form.reportValidity()) return;
-    setBusy(true);
+    setBusy("test");
     setResult(null);
     try {
       setResult(unwrap(await api.POST("/tenant/connection-tests", { body: request(form) })));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
+    setBusy("save");
     setResult(null);
     const body = request(event.currentTarget);
     try {
@@ -547,7 +565,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
     } catch (error) {
       failed(error);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -564,7 +582,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       onSubmit={(event) => void (editing ? save(event, editing) : connect(event))}
       footerStart={
         !editing && (
-          <Button disabled={busy} onClick={(event) => void runTest(event.currentTarget.form)}>
+          <Button busy={busy === "test"} disabled={busy !== null} onClick={(event) => void runTest(event.currentTarget.form)}>
             {t("connection.test")}
           </Button>
         )
@@ -572,7 +590,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       footer={
         <>
           <Button onClick={props.onClose}>{t("connection.cancel")}</Button>
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button type="submit" variant="primary" busy={busy === "save"} disabled={busy !== null}>
             {editing ? t("connection.save") : t("connection.connect")}
           </Button>
         </>

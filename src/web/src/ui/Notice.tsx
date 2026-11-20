@@ -1,5 +1,7 @@
 // Messages in place, and what a list shows when it has nothing (UX-014, UX-038, ADR-0111).
+import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { cx } from "./cx";
 
@@ -33,16 +35,27 @@ export function Notice({
   );
 }
 
-/** What a list is for, and the action that adds its first entry. */
-export function EmptyState({ icon, title, action, children }: { icon: ReactNode; title: string; action?: ReactNode; children?: ReactNode }) {
+/** What a list is for, and the action that adds its first entry where the user may add one. */
+export function EmptyState({ icon, title, action, children }: { icon: ReactNode; title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
       <span aria-hidden="true" className="mb-2 grid size-12 place-items-center rounded-full bg-hover text-ink-2 [&_svg]:size-5">
         {icon}
       </span>
       <p className="text-body font-semibold">{title}</p>
-      {children && <p className="max-w-sm text-small text-ink-2">{children}</p>}
+      <p className="max-w-sm text-small text-ink-2">{children}</p>
       {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+/** What a list or a page shows while its content loads, in place of saying that it is empty. */
+export function Loading({ label, compact = false }: { label?: string; compact?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div role="status" className={cx("flex items-center justify-center gap-2 text-small text-ink-2 [&_svg]:size-4", compact ? "py-3" : "py-12")}>
+      <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      {label ?? t("ui.loading")}
     </div>
   );
 }

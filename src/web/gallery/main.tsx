@@ -24,6 +24,7 @@ import {
   FormField,
   Group,
   IconButton,
+  Loading,
   Menu,
   MenuItem,
   MenuLabel,
@@ -93,6 +94,9 @@ function Gallery() {
           Files
         </Button>
         <IconButton label="Copy">
+          <Copy aria-hidden="true" />
+        </IconButton>
+        <IconButton label="Copying" busy>
           <Copy aria-hidden="true" />
         </IconButton>
         <Button variant="primary" disabled>
@@ -226,6 +230,9 @@ function Gallery() {
             >
               A task starts a conversation on its own, at the times you choose, and leaves the answer waiting for you.
             </EmptyState>
+          </Card>
+          <Card>
+            <Loading />
           </Card>
         </div>
       </Group>

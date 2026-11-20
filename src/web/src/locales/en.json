@@ -30,6 +30,7 @@
     "signOut": "Sign out",
     "untitled": "New conversation",
     "empty": "No conversations yet.",
+    "emptyHint": "Your conversations appear here, newest first. Start one with New chat.",
     "search": "Search conversations",
     "searchPlaceholder": "Search",
     "results": "Search results",
@@ -225,6 +226,7 @@
       "allTools": "All tools",
       "calls": "Tool calls",
       "none": "No tool calls yet.",
+      "noneHint": "Each call the assistant makes to a tool in your chats appears here, with what it asked and how it ended.",
       "repeated": "May have run twice",
       "deletedChat": "In a deleted chat",
       "untitled": "Untitled chat"
@@ -264,6 +266,7 @@
     "servedWindow": "The server runs {{model}} with a context window of {{served}} tokens, smaller than this connection's {{configured}}, so long conversations are compacted sooner and some requests can't fit.",
     "servedWindowFix": "To give it {{configured}} tokens, set OLLAMA_CONTEXT_LENGTH={{configured}} on the Ollama server and restart it, or lower this connection's context window to match.",
     "noConnections": "No connections yet.",
+    "noConnectionsHint": "A connection to a model provider, or to a model server in your home, brings its models to everyone in the household.",
     "add": "Add a connection",
     "modelCountOne": "{{count}} model",
     "modelCountMany": "{{count}} models",
@@ -597,6 +600,7 @@
     "allowedInChat": "Allowed in this chat",
     "allowedHint": "What you allowed when the assistant asked. Withdraw it and it asks again.",
     "nothingAllowed": "Nothing allowed yet.",
+    "nothingAllowedHint": "When you allow something as the assistant asks, it appears here, for you to withdraw.",
     "webAndCommands": "Web and commands",
     "withdraw": "Withdraw",
     "proposalUntrusted": "This chat holds content from elsewhere, which may have asked for this task."
@@ -648,6 +652,7 @@
     "hint": "A passkey makes signing in need your device too, unlocked with your fingerprint, face or PIN, on top of your password. Add one on each device you use, so that losing one never locks you out.",
     "unavailable": "Passkeys are not available on this server yet. The instance admin can enable them by setting the address people use to open Sibillo.",
     "none": "No passkeys yet.",
+    "noneHint": "A passkey signs you in with this device's fingerprint, face or screen lock, as a second step after your password.",
     "added": "Added {{date}}",
     "lastUsed": "last used {{date}}",
     "neverUsed": "Never used",
@@ -733,6 +738,7 @@
     "off": "Memory is off: the assistant neither uses nor adds to it. What is here stays until you delete it.",
     "used": "{{used}} of {{limit}} characters",
     "none": "Nothing remembered yet.",
+    "noneHint": "What the assistant remembers about you appears here, for you to read, change or delete. Add a fact yourself, or tell the assistant to remember it.",
     "items": "Memory items",
     "add": "Add",
     "addTitle": "Add to memory",
@@ -769,7 +775,8 @@
     "builtin": "Built-in skills",
     "own": "Your skills",
     "used": "{{count}} of {{most}} skills, {{used}} of {{limit}} MB",
-    "none": "No skills of your own yet. Create one, upload one, import one, or ask the assistant to make one.",
+    "none": "No skills of your own yet.",
+    "noneHint": "A skill teaches the assistant how you like something done, such as a kind of report. Create one, upload one, import one, or ask the assistant to make one.",
     "create": "Create",
     "upload": "Upload a skill",
     "newTitle": "New skill",
@@ -816,6 +823,7 @@
     "invalid": "This is not a valid skill.",
     "chatHint": "The skills this chat may use. A skill you add later is on here too.",
     "noneOn": "No skills are on.",
+    "noneOnHint": "The skills you turn on in your settings appear here, each with a switch for this chat.",
     "chatUsing": "Using a skill",
     "chatSaved": "Saved a skill",
     "chatLink": "Skills",
@@ -834,6 +842,7 @@
       "title": "MCP servers",
       "hint": "Services the assistant can use through the Model Context Protocol, such as Home Assistant or GitHub. You choose which of each server's tools the household may use; the assistant asks before every call. People who need an account connect their own.",
       "none": "No server yet.",
+      "noneHint": "An MCP server brings the tools of a service, such as Home Assistant or GitHub, to the assistant. You choose which of them it may use.",
       "add": "Add a server",
       "addTitle": "Add an MCP server",
       "addHint": "Its address speaks Streamable HTTP. You review its tools after adding it.",
@@ -877,6 +886,7 @@
       "hint": "Accept only the tools whose description you are happy for the assistant to read: the model reads every word of it. A tool that changes is not used until you accept it again.",
       "accept": "Accept {{name}}",
       "noTools": "The server lists no tools yet.",
+      "noToolsHint": "When the server lists tools, they appear here for you to review. Refresh the server to ask it again.",
       "noDescription": "No description.",
       "schema": "Input",
       "hints": "Hints from the server, which grant nothing:",
@@ -903,6 +913,7 @@
       "title": "Services",
       "hint": "Services your household connected the assistant to. For those that need an account, connect your own: nobody else uses it, and the assistant asks you before every call.",
       "none": "Your household has connected no service yet.",
+      "noneHint": "The services your household's admins add appear here, for you to connect your own account where one is needed.",
       "tools": "Tools: {{tools}}",
       "noAccount": "No account needed.",
       "state": {
@@ -940,6 +951,7 @@
     "title": "Tasks",
     "hint": "Tasks start a conversation on their own, at the times you choose or when something happens, and you find the answer waiting. Each one may make only the calls you grant it, since nobody is there to approve them.",
     "none": "No tasks yet.",
+    "noneHint": "A task starts a conversation on its own, at the times you choose, and leaves the answer waiting for you.",
     "list": "Your tasks",
     "new": "New task",
     "newHint": "Write what the assistant should do each time, as you would in a chat.",
@@ -997,6 +1009,7 @@
     "back": "All tasks",
     "conversations": "Conversations of this task",
     "noConversations": "It hasn't run yet.",
+    "noConversationsHint": "Each time the task runs, the conversation it starts appears here.",
     "ranWithoutGrants": "Ran without its grants",
     "outcomes": {
       "queued": "Waiting",
@@ -1068,6 +1081,7 @@
     "times": ", {{count}} times"
   },
   "ui": {
-    "close": "Close"
+    "close": "Close",
+    "loading": "Loading…"
   }
 }

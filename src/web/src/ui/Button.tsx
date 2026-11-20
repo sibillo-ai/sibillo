@@ -56,13 +56,15 @@ type IconButtonProps = Omit<ComponentProps<"button">, "className" | "aria-label"
   label: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** While its action is in progress: a spinner in place of the icon, and no second press (UX-038). */
+  busy?: boolean;
 };
 
 /** A button that shows an icon alone. */
-export function IconButton({ label, variant = "ghost", size = "sm", type = "button", children, ...rest }: IconButtonProps) {
+export function IconButton({ label, variant = "ghost", size = "sm", type = "button", busy = false, disabled, children, ...rest }: IconButtonProps) {
   return (
-    <button type={type} aria-label={label} title={label} className={buttonClass({ variant, size, square: true })} {...rest}>
-      {children}
+    <button type={type} aria-label={label} title={label} disabled={disabled || busy} aria-busy={busy || undefined} className={buttonClass({ variant, size, square: true })} {...rest}>
+      {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : children}
     </button>
   );
 }

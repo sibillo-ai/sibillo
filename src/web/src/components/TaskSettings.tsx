@@ -8,10 +8,11 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 
 import { ApiError, api, unwrap, type Schemas } from "../api/client";
+import { useBusy } from "../busy";
 import { useMcpServers } from "../mcp";
 import { useNotify } from "../notices";
 import { describeSchedule } from "../schedules";
-import { Badge, Button, buttonClass, Card, Checkbox, Dialog, EmptyState, FormField, Group, Notice, Page, Row, Select, Switch, TextArea, TextInput, Tile } from "../ui";
+import { Badge, Button, buttonClass, Card, Checkbox, Dialog, EmptyState, FormField, Group, Loading, Notice, Page, Row, Select, Switch, TextArea, TextInput, Tile } from "../ui";
 
 type Task = Schemas["Task"];
 type TaskTrigger = Schemas["TaskTrigger"];
@@ -62,6 +63,11 @@ function TaskList() {
           )
         }
       >
+        {tasks.isPending && (
+          <Card>
+            <Loading />
+          </Card>
+        )}
         {tasks.data && (
           <Card>
             {items.length === 0 ? (
@@ -74,7 +80,9 @@ function TaskList() {
                     {t("taskSettings.new")}
                   </Button>
                 }
-              />
+              >
+                {t("taskSettings.noneHint")}
+              </EmptyState>
             ) : (
               <ul aria-label={t("taskSettings.list")} className="divide-y divide-line">
                 {items.map((task) => (
@@ -121,6 +129,7 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
   const [replacing, setReplacing] = useState<TaskTrigger | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const { busy, run } = useBusy();
   const refresh = () => queries.invalidateQueries({ queryKey: TASKS });
 
   async function setPaused(paused: boolean) {
@@ -143,11 +152,15 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
   }
 
   async function replace(trigger: TaskTrigger) {
+    try {
+      const replaced = unwrap(
+        await api.POST("/tasks/{task_id}/triggers/{trigger_id}/webhook-address", { params: { path: { task_id: task.id, trigger_id: trigger.id } } }),
+      );
+      if (replaced.webhook_path) onWebhook(replaced.webhook_path);
+    } catch {
+      notify({ kind: "error", title: t("assistant.notSaved") });
+    }
     setReplacing(null);
-    const replaced = unwrap(
-      await api.POST("/tasks/{task_id}/triggers/{trigger_id}/webhook-address", { params: { path: { task_id: task.id, trigger_id: trigger.id } } }),
-    );
-    if (replaced.webhook_path) onWebhook(replaced.webhook_path);
     await refresh();
   }
 
@@ -189,7 +202,7 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
             )}
             {task.skipped.count !== 0 && skipped && <p className="text-small text-ink-2">{t("taskSettings.skipped", { count: task.skipped.count, when: skipped })}</p>}
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => void runNow()} aria-label={t("taskSettings.runLabel", { name: task.name })}>
+              <Button size="sm" busy={busy("fire")} onClick={() => void run("fire", runNow)} aria-label={t("taskSettings.runLabel", { name: task.name })}>
                 {t("taskSettings.run")}
               </Button>
               <Button size="sm" onClick={() => setEditing(true)} aria-label={t("taskSettings.editLabel", { name: task.name })}>
@@ -213,8 +226,9 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
           title={t("taskSettings.replaceTitle")}
           body={t("taskSettings.replaceBody")}
           action={t("taskSettings.replace")}
+          busy={busy("replace")}
           onCancel={() => setReplacing(null)}
-          onConfirm={() => void replace(replacing)}
+          onConfirm={() => void run("replace", () => replace(replacing))}
         />
       )}
       {deleting && (
@@ -222,21 +236,22 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
           title={t("taskSettings.deleteTitle", { name: task.name })}
           body={t("taskSettings.deleteBody")}
           action={t("taskSettings.delete")}
+          busy={busy("delete")}
           onCancel={() => setDeleting(false)}
-          onConfirm={() => {
-            setDeleting(false);
-            void (async () => {
+          onConfirm={() =>
+            void run("delete", async () => {
               await api.DELETE("/tasks/{task_id}", { params: { path: { task_id: task.id } } });
+              setDeleting(false);
               await refresh();
-            })();
-          }}
+            })
+          }
         />
       )}
     </li>
   );
 }
 
-function Confirm(props: { title: string; body: string; action: string; onCancel: () => void; onConfirm: () => void }) {
+function Confirm(props: { title: string; body: string; action: string; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
   const { t } = useTranslation();
   return (
     <Dialog
@@ -248,7 +263,7 @@ function Confirm(props: { title: string; body: string; action: string; onCancel:
       footer={
         <>
           <Button onClick={props.onCancel}>{t("taskSettings.cancel")}</Button>
-          <Button variant="danger-solid" onClick={props.onConfirm}>
+          <Button variant="danger-solid" busy={props.busy} onClick={props.onConfirm}>
             {props.action}
           </Button>
         </>
@@ -566,10 +581,17 @@ function TaskPage({ taskId }: { taskId: string }) {
           </div>
         )}
         <Group title={t("taskSettings.conversations")}>
+          {started.isPending && (
+            <Card>
+              <Loading />
+            </Card>
+          )}
           {started.data && (
             <Card>
               {started.data.length === 0 ? (
-                <EmptyState icon={<MessagesSquare />} title={t("taskSettings.noConversations")} />
+                <EmptyState icon={<MessagesSquare />} title={t("taskSettings.noConversations")}>
+                  {t("taskSettings.noConversationsHint")}
+                </EmptyState>
               ) : (
                 <ul aria-label={t("taskSettings.conversations")} className="divide-y divide-line">
                   {started.data.map((item) => (

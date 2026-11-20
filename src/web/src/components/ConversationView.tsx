@@ -10,12 +10,13 @@ import { forkConversation, rewindConversation, updateConversation, useRefreshCon
 import { formatMoney, isPaid, USAGE } from "../costs";
 import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
 import { useServerTool } from "../mcp";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel } from "../tools";
-import { Badge, Button, Dialog, IconButton, Notice, TextArea } from "../ui";
+import { Badge, Button, Dialog, IconButton, Loading, Notice, TextArea } from "../ui";
 import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
 import { useVoice, type VoiceMode } from "../voice";
 import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, listFolder, previewUrl, useAttachments } from "../workspace";
@@ -124,6 +125,7 @@ export function ConversationView() {
   const queries = useQueryClient();
   const refreshList = useRefreshConversations();
   const notify = useNotify();
+  const actions = useBusy();
   const conversation = useQuery({
     queryKey: ["conversation", conversationId, "details"],
     queryFn: async () => unwrap(await api.GET("/conversations/{conversation_id}", { params: { path: { conversation_id: conversationId } } })),
@@ -379,6 +381,11 @@ export function ConversationView() {
               )}
             </li>
           )}
+          {history.isPending && live === null && (
+            <li>
+              <Loading />
+            </li>
+          )}
           {shown.map((turn, index) => (
             <TurnView
               key={turn.run.run_id}
@@ -391,7 +398,8 @@ export function ConversationView() {
               onEdit={() => setEditing(index)}
               onCancelEdit={() => setEditing(null)}
               onSendEdit={(text) => askToEdit(index, turn, text)}
-              onFork={temporary ? undefined : () => void fork(turn)}
+              forking={actions.busy(`fork ${turn.run.run_id}`)}
+              onFork={temporary ? undefined : () => void actions.run(`fork ${turn.run.run_id}`, () => fork(turn))}
               conversationId={conversationId}
               onShow={show}
               decided={decidedCalls}
@@ -555,6 +563,7 @@ function TurnView(props: {
   onCancelEdit: () => void;
   onSendEdit: (text: string) => void;
   /** Absent where the conversation cannot be forked, as a temporary one (CNV-011). */
+  forking: boolean;
   onFork: (() => void) | undefined;
   conversationId: string;
   onShow: (path: string) => void;
@@ -624,7 +633,7 @@ function TurnView(props: {
           <CopyButton text={answerText} />
           <ReadAloudButton id={turn.run.run_id} text={answerText} />
           {props.onFork && (
-            <IconButton label={t("message.fork")} disabled={busy} onClick={props.onFork}>
+            <IconButton label={t("message.fork")} busy={props.forking} disabled={busy} onClick={props.onFork}>
               <GitFork aria-hidden="true" />
             </IconButton>
           )}

@@ -7,9 +7,10 @@ import { Link } from "react-router";
 
 import { api, unwrap, type AuditEvent, type CapabilityClass, type PermissionSetting, type ToolInfo, type ToolName, type ToolPermissions } from "../api/client";
 import { useHouseholdMcpServers } from "../mcp";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
 import { outcomeLabel, toolLabel, useTools } from "../tools";
-import { Badge, Button, Card, Checkbox, EmptyState, Group, Page, Row, Select } from "../ui";
+import { Badge, Button, Card, Checkbox, EmptyState, Group, Loading, Page, Row, Select } from "../ui";
 import { UserEgressSwitch } from "./EgressSettings";
 
 const CLASSES: CapabilityClass[] = ["reads_private_data", "ingests_untrusted", "external_communication", "irreversible", "physical"];
@@ -40,7 +41,12 @@ export function ActivitySection() {
             ))}
           </Select>
         </Row>
-        {activity.data && activity.data.length === 0 && <EmptyState icon={<Activity />} title={t("activity.page.none")} />}
+        {activity.isPending && <Loading />}
+        {activity.data && activity.data.length === 0 && (
+          <EmptyState icon={<Activity />} title={t("activity.page.none")}>
+            {t("activity.page.noneHint")}
+          </EmptyState>
+        )}
         {activity.data && activity.data.length > 0 && (
           <ul aria-label={t("activity.page.calls")} className="divide-y divide-line">
             {activity.data.map((event) => (
@@ -126,6 +132,7 @@ function PermissionsLoader({ userId }: { userId: string }) {
     queryFn: async () => unwrap(await api.GET("/tenant/users/{user_id}/tool-permissions", { params: { path: { user_id: userId } } })),
   });
   const tools = useTools();
+  if (stored.isPending || tools.isPending) return <Loading />;
   if (!stored.data || !tools.data) return null;
   return <PermissionsForm userId={userId} stored={stored.data} tools={tools.data} />;
 }
@@ -163,6 +170,7 @@ function PermissionsForm({ userId, stored, tools }: { userId: string; stored: To
   const notify = useNotify();
   const [permissions, setPermissions] = useState<ToolPermissions>(stored);
   const [saved, setSaved] = useState(false);
+  const { busy, run } = useBusy();
 
   function setTool(name: ToolName, value: PermissionSetting | undefined) {
     const next = { ...permissions.tools };
@@ -238,7 +246,7 @@ function PermissionsForm({ userId, stored, tools }: { userId: string; stored: To
       </Group>
       <ServerPermissions denied={permissions.servers ?? {}} onChange={setServer} />
       <div className="flex items-center gap-3">
-        <Button variant="primary" onClick={() => void save()}>
+        <Button variant="primary" busy={busy("save")} onClick={() => void run("save", save)}>
           {t("permissions.save")}
         </Button>
         <span role="status" className="text-small text-ink-2">

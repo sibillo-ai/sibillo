@@ -4,8 +4,9 @@ import { type CSSProperties, type FormEvent, type KeyboardEvent, useEffect, useI
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
-import { Button, Checkbox, Dialog, FileInput, FormField, IconButton, TextInput } from "../ui";
+import { Button, Checkbox, Dialog, FileInput, FormField, IconButton, Loading, TextInput } from "../ui";
 import { CodeFrame, Meter, PanelHeader, PanelSheet, TreeEntry, Viewer } from "../ui/Panel";
 import {
   archiveUrl,
@@ -118,6 +119,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [asking, setAsking] = useState<Asking | null>(null);
+  const actions = useBusy();
   const [large, setLarge] = useState<WorkspaceEntry | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const picker = useRef<HTMLInputElement>(null);
@@ -174,15 +176,18 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
     }
   }
 
+  // The dialog that asked stays open, its button busy, until the action is done (UX-038).
   async function run(action: () => Promise<unknown>, after?: () => void) {
-    setAsking(null);
-    try {
-      await action();
-      after?.();
-    } catch (error) {
-      failed(error);
-    }
-    await changed();
+    await actions.run("asked", async () => {
+      try {
+        await action();
+        after?.();
+      } catch (error) {
+        failed(error);
+      }
+      setAsking(null);
+      await changed();
+    });
   }
 
   const quota = summary.data;
@@ -296,6 +301,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
                 <Button onClick={() => setAsking(null)}>{t("files.cancel")}</Button>
                 <Button
                   variant="danger-solid"
+                  busy={actions.busy("asked")}
                   onClick={() =>
                     asking.kind === "reset"
                       ? void run(() => resetWorkspace(conversationId), () => setSelected(null))
@@ -314,6 +320,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
             label={t("files.pathLabel")}
             initial={asking.kind === "rename" ? asking.entry.path : asking.kind === "folder" && asking.in ? `${asking.in}/` : ""}
             confirm={asking.kind === "rename" ? t("files.renameConfirm") : t("files.create")}
+            busy={actions.busy("asked")}
             onClose={() => setAsking(null)}
             onSubmit={(path) =>
               asking.kind === "rename"
@@ -327,7 +334,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
   );
 }
 
-function PathForm(props: { title: string; label: string; initial: string; confirm: string; onClose: () => void; onSubmit: (path: string) => void }) {
+function PathForm(props: { title: string; label: string; initial: string; confirm: string; busy: boolean; onClose: () => void; onSubmit: (path: string) => void }) {
   const { t } = useTranslation();
   return (
     <Dialog
@@ -346,7 +353,7 @@ function PathForm(props: { title: string; label: string; initial: string; confir
           <Button size="sm" onClick={props.onClose}>
             {t("files.cancel")}
           </Button>
-          <Button size="sm" type="submit" variant="primary">
+          <Button size="sm" type="submit" variant="primary" busy={props.busy}>
             {props.confirm}
           </Button>
         </>
@@ -427,6 +434,11 @@ function Tree(props: TreeProps) {
           <TreeItem key={entry.path} {...props} entry={entry} level={1} focusable={focusable} />
         ))}
       </ul>
+      {root.isPending && (
+        <div className="-mt-12">
+          <Loading compact />
+        </div>
+      )}
       {root.isSuccess && entries.length === 0 && <p className={`-mt-12 px-4 pb-6 ${NOTE}`}>{t("files.empty")}</p>}
       {root.isError && <p className="-mt-12 px-4 pb-6 text-small text-danger">{t("files.errors.sandbox_unavailable")}</p>}
     </>
@@ -520,7 +532,7 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
       </div>
     );
   }
-  if (content.data === undefined) return <p className={NOTE}>{t("files.loading")}</p>;
+  if (content.data === undefined) return <Loading compact label={t("files.loading")} />;
   const truncated = TEXT_PREVIEW_BYTES < entry.size;
   const cut = truncated ? <p className="mt-2 text-caption text-ink-2">{t("files.cut")}</p> : null;
   if (showSource || kind === "code") {
@@ -616,7 +628,7 @@ function Diagram({ text, name, large }: { text: string; name: string; large: boo
     };
   }, [text, id]);
   if (failed) return <p className={NOTE}>{t("files.diagramFailed")}</p>;
-  if (drawn === null) return <p className={NOTE}>{t("files.loading")}</p>;
+  if (drawn === null) return <Loading compact label={t("files.loading")} />;
   // Mermaid sizes its drawing to its container: as an image it takes the panel's width, or fits the full view.
   const size = large ? "h-(--preview-limit) w-full" : "h-auto max-h-(--preview-limit) w-full";
   return <img src={drawn} alt={name} style={large ? DIAGRAM_LIMIT : PREVIEW_LIMIT} className={`${size} rounded-sm border border-line bg-surface object-contain p-2`} />;

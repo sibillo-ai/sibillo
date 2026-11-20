@@ -5,10 +5,11 @@ import { type FormEvent, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-import { API_BASE, ApiError, api, unwrap, type Schemas } from "../api/client";
+import { api, API_BASE, ApiError, ok, unwrap, type Schemas } from "../api/client";
 import { fileAddress, SKILLS, type Skill, type SkillDetail, skillDetail, uploadSkill, useSkills } from "../skills";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
-import { Badge, Button, buttonClass, Card, Checkbox, Dialog, EmptyState, FileInput, FormField, Group, NavItem, Notice, Page, Row, Switch, TextArea, TextInput, Tile } from "../ui";
+import { Badge, Button, buttonClass, Card, Checkbox, Dialog, EmptyState, FileInput, FormField, Group, Loading, NavItem, Notice, Page, Row, Switch, TextArea, TextInput, Tile } from "../ui";
 
 type Found = Schemas["SkillImport"]["found"][number];
 
@@ -27,6 +28,7 @@ export function SkillsSection() {
   const [deleting, setDeleting] = useState<Skill | null>(null);
   // A switch moves at once; the server's answer follows.
   const [switched, setSwitched] = useState<Record<string, boolean>>({});
+  const { busy, run } = useBusy();
   const refresh = () => queries.invalidateQueries({ queryKey: SKILLS });
   const data = skills.data;
   const number = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 });
@@ -55,6 +57,11 @@ export function SkillsSection() {
   return (
     <Page title={t("skills.title")} description={t("skills.hint")}>
       <Group title={t("skills.builtin")}>
+        {skills.isPending && (
+          <Card>
+            <Loading />
+          </Card>
+        )}
         {data && (
           <Card>
             <ul aria-label={t("skills.builtin")} className="divide-y divide-line">
@@ -75,7 +82,9 @@ export function SkillsSection() {
         {data && (
           <Card>
             {data.own.length === 0 ? (
-              <EmptyState icon={<Sparkles />} title={t("skills.none")} />
+              <EmptyState icon={<Sparkles />} title={t("skills.none")}>
+                {t("skills.noneHint")}
+              </EmptyState>
             ) : (
               <ul aria-label={t("skills.own")} className="divide-y divide-line">
                 {data.own.map((skill) => (
@@ -97,7 +106,7 @@ export function SkillsSection() {
             <Plus aria-hidden="true" />
             {t("skills.create")}
           </Button>
-          <Button onClick={() => upload.current?.click()}>
+          <Button busy={busy("upload")} onClick={() => upload.current?.click()}>
             <Upload aria-hidden="true" />
             {t("skills.upload")}
           </Button>
@@ -108,7 +117,7 @@ export function SkillsSection() {
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) void change(async () => uploadSkill(file));
+              if (file) void run("upload", () => change(async () => uploadSkill(file)));
             }}
           />
         </div>
@@ -130,10 +139,14 @@ export function SkillsSection() {
               <Button onClick={() => setDeleting(null)}>{t("skills.cancel")}</Button>
               <Button
                 variant="danger-solid"
+                busy={busy("delete")}
                 onClick={() => {
                   const id = deleting.id;
-                  setDeleting(null);
-                  if (id) void change(async () => unwrap(await api.DELETE("/me/skills/{skill_id}", { params: { path: { skill_id: id } } })));
+                  if (id)
+                    void run("delete", async () => {
+                      await change(async () => ok(await api.DELETE("/me/skills/{skill_id}", { params: { path: { skill_id: id } } })));
+                      setDeleting(null);
+                    });
                 }}
               >
                 {t("skills.delete")}
@@ -260,7 +273,7 @@ function CreateDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () =
       footer={
         <>
           <Button onClick={onClose}>{t("skills.cancel")}</Button>
-          <Button type="submit" variant="primary" disabled={busy || value.trim() === ""}>
+          <Button type="submit" variant="primary" busy={busy} disabled={value.trim() === ""}>
             {t("skills.save")}
           </Button>
         </>
@@ -314,7 +327,7 @@ function SkillDialog({ skill, onClose, onSaved }: { skill: Skill; onClose: () =>
         <>
           <Button onClick={onClose}>{t("skills.close")}</Button>
           {editable && value !== null && (
-            <Button variant="primary" disabled={busy} onClick={() => void save()}>
+            <Button variant="primary" busy={busy} onClick={() => void save()}>
               {t("skills.save")}
             </Button>
           )}
@@ -411,7 +424,7 @@ function TrustDialog({ skill, onClose, onTrusted }: { skill: Skill; onClose: () 
       footer={
         <>
           <Button onClick={onClose}>{t("skills.cancel")}</Button>
-          <Button variant="primary" disabled={busy || !detail.data} onClick={() => void trust()}>
+          <Button variant="primary" busy={busy} disabled={!detail.data} onClick={() => void trust()}>
             {t("skills.trust")}
           </Button>
         </>
@@ -476,7 +489,7 @@ function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
                 <div className="min-w-0 flex-1">
                   <TextInput id={field} value={url} placeholder={t("skills.urlPlaceholder")} onChange={(event) => setUrl(event.target.value)} required />
                 </div>
-                <Button type="submit" variant="primary" disabled={busy || url.trim() === ""}>
+                <Button type="submit" variant="primary" busy={busy && found === null} disabled={busy || url.trim() === ""}>
                   {t("skills.import")}
                 </Button>
               </div>
@@ -498,7 +511,7 @@ function ImportForm({ onImported }: { onImported: () => Promise<void> }) {
                     </label>
                   ))}
                   <div>
-                    <Button disabled={busy || chosen.length === 0} onClick={() => void run(null, chosen)}>
+                    <Button busy={busy} disabled={chosen.length === 0} onClick={() => void run(null, chosen)}>
                       {t("skills.importChosen")}
                     </Button>
                   </div>

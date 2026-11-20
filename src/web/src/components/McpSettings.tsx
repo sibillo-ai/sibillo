@@ -5,10 +5,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
 
-import { api, ApiError, unwrap, type Schemas } from "../api/client";
+import { api, ApiError, ok, unwrap, type Schemas } from "../api/client";
 import { HOUSEHOLD_MCP_SERVERS, MCP_SERVERS, useHouseholdMcpServers, useMcpServers, type McpServer, type McpServerAuth, type McpServerSummary, type McpServerTool } from "../mcp";
+import { useBusy } from "../busy";
 import { useNotify } from "../notices";
-import { Badge, Button, Card, Checkbox, Dialog, EmptyState, FormField, Notice, Page, Row, Select, TextInput, Tile } from "../ui";
+import { Badge, Button, Card, Checkbox, Dialog, EmptyState, FormField, Loading, Notice, Page, Row, Select, TextInput, Tile } from "../ui";
 import { Switch } from "./AssistantSettings";
 
 const AUTHS: McpServerAuth[] = ["none", "token", "oauth"];
@@ -30,7 +31,7 @@ export function McpServersSection() {
   const [adding, setAdding] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<McpServer | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const { busy, run } = useBusy();
 
   async function changed() {
     await queries.invalidateQueries({ queryKey: HOUSEHOLD_MCP_SERVERS });
@@ -38,14 +39,12 @@ export function McpServersSection() {
   }
 
   async function refresh(server: McpServer) {
-    setBusy(server.id);
     try {
       unwrap(await api.POST("/tenant/mcp-servers/{server_id}/refresh", { params: { path: { server_id: server.id } } }));
       notify({ kind: "info", title: t("mcp.admin.refreshed", { name: server.name }) });
     } catch (error) {
       notify({ kind: "error", title: t("mcp.admin.notRefreshed"), text: problemText(error, t("errors.title")) });
     } finally {
-      setBusy(null);
       await changed();
     }
   }
@@ -61,7 +60,7 @@ export function McpServersSection() {
 
   async function remove(server: McpServer) {
     try {
-      unwrap(await api.DELETE("/tenant/mcp-servers/{server_id}", { params: { path: { server_id: server.id } } }));
+      ok(await api.DELETE("/tenant/mcp-servers/{server_id}", { params: { path: { server_id: server.id } } }));
     } catch (error) {
       notify({ kind: "error", title: t("errors.title"), text: problemText(error, t("assistant.notSaved")) });
     }
@@ -79,10 +78,21 @@ export function McpServersSection() {
   return (
     <Page title={t("mcp.admin.title")} description={t("mcp.admin.hint")}>
       <div className="flex flex-col items-start gap-3">
+        {servers.isPending && (
+          <div className="w-full">
+            <Card>
+              <Loading />
+            </Card>
+          </div>
+        )}
         {servers.data && (
           <div className="w-full">
             <Card rows>
-              {servers.data.length === 0 && <EmptyState icon={<Plug />} title={t("mcp.admin.none")} action={add} />}
+              {servers.data.length === 0 && (
+                <EmptyState icon={<Plug />} title={t("mcp.admin.none")} action={add}>
+                  {t("mcp.admin.noneHint")}
+                </EmptyState>
+              )}
               {servers.data.map((server) => {
                 const accepted = server.tools.filter((tool) => tool.status === "accepted").length;
                 const changedTools = server.tools.filter((tool) => tool.status === "changed" || tool.status === "gone").length;
@@ -116,10 +126,15 @@ export function McpServersSection() {
                         <Button size="sm" aria-label={t("mcp.admin.reviewLabel", { name: server.name })} onClick={() => setReviewing(server.id)}>
                           {t("mcp.admin.review")}
                         </Button>
-                        <Button size="sm" busy={busy === server.id} aria-label={t("mcp.admin.refreshLabel", { name: server.name })} onClick={() => void refresh(server)}>
-                          {busy === server.id ? t("mcp.admin.refreshing") : t("mcp.admin.refresh")}
+                        <Button
+                          size="sm"
+                          busy={busy(`refresh ${server.id}`)}
+                          aria-label={t("mcp.admin.refreshLabel", { name: server.name })}
+                          onClick={() => void run(`refresh ${server.id}`, () => refresh(server))}
+                        >
+                          {busy(`refresh ${server.id}`) ? t("mcp.admin.refreshing") : t("mcp.admin.refresh")}
                         </Button>
-                        <Button size="sm" onClick={() => void switchServer(server, !server.enabled)}>
+                        <Button size="sm" busy={busy(`switch ${server.id}`)} onClick={() => void run(`switch ${server.id}`, () => switchServer(server, !server.enabled))}>
                           {server.enabled ? t("mcp.admin.switchOff") : t("mcp.admin.switchOn")}
                         </Button>
                         <Button size="sm" variant="danger" aria-label={t("mcp.admin.removeLabel", { name: server.name })} onClick={() => setRemoving(server)}>
@@ -148,7 +163,7 @@ export function McpServersSection() {
           footer={
             <>
               <Button onClick={() => setRemoving(null)}>{t("connection.cancel")}</Button>
-              <Button variant="danger-solid" onClick={() => void remove(removing)}>
+              <Button variant="danger-solid" busy={busy("remove")} onClick={() => void run("remove", () => remove(removing))}>
                 {t("settings.remove")}
               </Button>
             </>
@@ -320,7 +335,11 @@ function ReviewDialog({ server, onClose, onSaved }: { server: McpServer; onClose
       }
     >
       <Card rows>
-        {server.tools.length === 0 && <EmptyState icon={<Plug />} title={t("mcp.review.noTools")} />}
+        {server.tools.length === 0 && (
+          <EmptyState icon={<Plug />} title={t("mcp.review.noTools")}>
+            {t("mcp.review.noToolsHint")}
+          </EmptyState>
+        )}
         {server.tools.map((tool) => {
           const label = tool.listed?.title ?? tool.accepted?.title ?? tool.name;
           const usable = tool.listed !== null && tool.problem === null;
@@ -352,9 +371,18 @@ export function ServicesSection() {
   const servers = useMcpServers();
   return (
     <Page title={t("mcp.services.title")} description={t("mcp.services.hint")}>
+      {servers.isPending && (
+        <Card>
+          <Loading />
+        </Card>
+      )}
       {servers.data && (
         <Card rows>
-          {servers.data.length === 0 && <EmptyState icon={<Plug />} title={t("mcp.services.none")} />}
+          {servers.data.length === 0 && (
+            <EmptyState icon={<Plug />} title={t("mcp.services.none")}>
+              {t("mcp.services.noneHint")}
+            </EmptyState>
+          )}
           {servers.data.map((server) => (
             <Service key={server.id} server={server} />
           ))}
@@ -370,7 +398,7 @@ function Service({ server }: { server: McpServerSummary }) {
   const notify = useNotify();
   const heading = useId();
   const [token, setToken] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"connect" | "signIn" | "disconnect" | null>(null);
 
   async function changed() {
     await queries.invalidateQueries({ queryKey: MCP_SERVERS });
@@ -379,7 +407,7 @@ function Service({ server }: { server: McpServerSummary }) {
 
   async function connect(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
+    setBusy("connect");
     try {
       unwrap(await api.PUT("/mcp-servers/{server_id}/credential", { params: { path: { server_id: server.id } }, body: { token } }));
       setToken("");
@@ -387,28 +415,28 @@ function Service({ server }: { server: McpServerSummary }) {
     } catch (error) {
       notify({ kind: "error", title: t("mcp.services.notConnectedError"), text: problemText(error, t("errors.title")) });
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function signIn() {
-    setBusy(true);
+    setBusy("signIn");
     try {
       const started = unwrap(await api.POST("/mcp-servers/{server_id}/sign-in", { params: { path: { server_id: server.id } } }));
       window.location.assign(started.authorization_url);
     } catch (error) {
       notify({ kind: "error", title: t("mcp.services.notConnectedError"), text: problemText(error, t("errors.title")) });
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function disconnect() {
-    setBusy(true);
+    setBusy("disconnect");
     try {
-      unwrap(await api.DELETE("/mcp-servers/{server_id}/credential", { params: { path: { server_id: server.id } } }));
+      ok(await api.DELETE("/mcp-servers/{server_id}/credential", { params: { path: { server_id: server.id } } }));
       await changed();
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -444,7 +472,7 @@ function Service({ server }: { server: McpServerSummary }) {
                     {(ties) => (
                       <div className="flex gap-2">
                         <TextInput {...ties} type="password" autoComplete="off" required value={token} onChange={(event) => setToken(event.target.value)} />
-                        <Button type="submit" disabled={busy}>
+                        <Button type="submit" busy={busy === "connect"} disabled={busy !== null}>
                           {t("mcp.services.connect")}
                         </Button>
                       </div>
@@ -454,14 +482,14 @@ function Service({ server }: { server: McpServerSummary }) {
               )}
               {server.auth === "oauth" && !connected && (
                 <div>
-                  <Button disabled={busy} onClick={() => void signIn()}>
+                  <Button busy={busy === "signIn"} disabled={busy !== null} onClick={() => void signIn()}>
                     {t("mcp.services.signIn")}
                   </Button>
                 </div>
               )}
               {server.credential !== "missing" && (
                 <div className="flex flex-col items-start gap-1">
-                  <Button size="sm" disabled={busy} onClick={() => void disconnect()}>
+                  <Button size="sm" busy={busy === "disconnect"} disabled={busy !== null} onClick={() => void disconnect()}>
                     {t("mcp.services.disconnect")}
                   </Button>
                   {server.auth === "oauth" && <p className="text-small text-ink-2">{t("mcp.services.revokeHint")}</p>}
