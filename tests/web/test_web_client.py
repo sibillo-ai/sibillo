@@ -249,9 +249,11 @@ def test_choosing_the_model_of_a_conversation(
     expect(picker.get_by_role("button", name=re.compile("Test: Popular"))).to_have_count(0)
     picker.get_by_role("searchbox").fill("")
     picker.get_by_role("button", name=re.compile("Test: Popular")).click()
-    # The data of this conversation now leaves the household, and the client says so (MOD-010).
-    expect(page.get_by_role("button", name=re.compile("Test: Popular"))).to_be_visible()
-    expect(page.get_by_role("main")).to_contain_text("OpenRouter")
+    # The data of this conversation now leaves the household, and its model's button says so, in words too (MOD-010).
+    chosen = page.get_by_role("button", name=re.compile(r"Test: Popular.*remotely, at OpenRouter"))
+    expect(chosen).to_be_visible()
+    expect(chosen).to_have_attribute("title", re.compile("OpenRouter"))
+    expect(page.get_by_role("main")).not_to_contain_text("Messages go to")
     mark = uuid4().hex[:8]
     _send(page, f"through openrouter {mark}")
     _answer(page, f"Echo: through openrouter {mark}")
@@ -463,6 +465,51 @@ def test_typing_starts_in_the_expected_field(page: Page, member: Account) -> Non
     expect(page.get_by_label("Username")).to_be_focused()
     sign_in(page, member, form=True)
     expect(page.get_by_label("Message")).to_be_focused()
+
+
+@pytest.mark.spec("MOD-010")
+def test_a_local_model_says_it_runs_at_home(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    model = page.get_by_role("button", name=re.compile(r"test-model.*on your home server"))
+    expect(model).to_be_visible()
+    expect(model).to_have_attribute("title", re.compile("home server"))
+
+
+@pytest.mark.spec("UX-018")
+def test_the_focus_stays_in_the_message_box_after_sending(page: Page, member: Account) -> None:
+    sign_in(page, member)
+    box = page.get_by_label("Message")
+    expect(box).to_be_focused()
+    # The first message opens its conversation, whose message box takes the focus.
+    box.fill("first")
+    box.press("Enter")
+    expect(page).to_have_url(re.compile("/c/"))
+    _answer(page, "Echo: first")
+    expect(page.get_by_label("Message")).to_be_focused()
+    # Sent with the button, the next message leaves the focus in the box as well.
+    page.get_by_label("Message").fill("second")
+    page.get_by_role("button", name="Send").click()
+    _answer(page, "Echo: second")
+    expect(page.get_by_label("Message")).to_be_focused()
+
+
+@pytest.mark.spec("UX-018")
+def test_touch_screens_keep_the_keyboard_open_after_sending(browser: Browser, web_origin: str, member: Account) -> None:
+    context = browser.new_context(
+        base_url=web_origin, viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True
+    )
+    page = context.new_page()
+    try:
+        sign_in(page, member)
+        box = page.get_by_label("Message")
+        box.tap()
+        box.fill("first")
+        page.get_by_role("button", name="Send").tap()
+        expect(page).to_have_url(re.compile("/c/"))
+        _answer(page, "Echo: first")
+        expect(page.get_by_label("Message")).to_be_focused()
+    finally:
+        context.close()
 
 
 @pytest.mark.spec("UX-018")
