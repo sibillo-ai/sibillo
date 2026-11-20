@@ -744,7 +744,7 @@ kept showing old screens for days after each deployment.
 
 ## UX-041: Approval requests in hands-free mode
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e

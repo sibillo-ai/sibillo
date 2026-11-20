@@ -1,6 +1,6 @@
 # ADR-0114: A sandbox engine, so that the host needs only Docker
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 - **Deciders:** @tapionx
 - **Related:** ADR-0007, ADR-0021, ADR-0022, ADR-0023, ADR-0053, ADR-0098, ADR-0113, OPS-001, OPS-002, OPS-006, OPS-009, SBX-002, SBX-003, SBX-005, SBX-009, SBX-015, SBX-017, SBX-024, SBX-025

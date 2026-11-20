@@ -1,6 +1,6 @@
 # ADR-0113: Internet access, one permission for the web and the sandbox's network
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 - **Deciders:** @tapionx
 - **Related:** ADR-0012, ADR-0021, ADR-0033, ADR-0078, ADR-0087, ADR-0088, ADR-0090, ADR-0106, AGT-002, AGT-003, AGT-004, AGT-005, AGT-006, AGT-007, AGT-012, AGT-020, AGT-021, AGT-034, SBX-004, SBX-005, SBX-007, SBX-015, SBX-018, SBX-024, TSK-004, TSK-005, UX-005, UX-022, UX-023, UX-041

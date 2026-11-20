@@ -563,7 +563,7 @@ untrusted content on its active path (AGT-003) (ADR-0107).
 
 ## AGT-034: Internet access
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security, eval

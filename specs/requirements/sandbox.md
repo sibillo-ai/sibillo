@@ -317,7 +317,7 @@ host needs attention.
 
 ## SBX-024: No network without internet access
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security
@@ -344,7 +344,7 @@ only thing between injected instructions and the user's files (T-08, T-46).
 
 ## SBX-025: The sandbox engine
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** design, integration, security
