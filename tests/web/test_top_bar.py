@@ -16,8 +16,9 @@ from tests.support.fixtures import HarnessModel
 from tests.web.conftest import accessibility_violations, sign_in
 
 PHONE: ViewportSize = {"width": 390, "height": 844}
-# The top bar is 56 px high, under the edge of the screen.
+# The top bar is 56 px high, under the edge of the screen; a conversation's, on a phone, has a second line.
 TOP_BAR = 64
+PHONE_BAR = 108
 
 
 def _send(page: Page, text: str) -> None:
@@ -31,9 +32,9 @@ def _box(locator: Locator) -> FloatRect:
     return box
 
 
-def _in_top_bar(locator: Locator) -> bool:
+def _in_top_bar(locator: Locator, bottom: int = TOP_BAR) -> bool:
     box = _box(locator)
-    return box["y"] + box["height"] <= TOP_BAR
+    return box["y"] + box["height"] <= bottom
 
 
 def _model_button(page: Page) -> Locator:
@@ -87,14 +88,24 @@ def test_on_a_phone_the_conversations_top_bar_holds_its_model(
     sign_in(phone, member)
     _send(phone, "the model on a phone")
     expect(phone.get_by_role("main")).to_contain_text("Echo: the model on a phone", timeout=30_000)
+    # The first line: the conversation list, the title, the files and the settings.
     for control in (
         phone.get_by_role("button", name="Open the conversation list"),
-        _model_button(phone),
         phone.get_by_role("button", name="Files"),
-        phone.get_by_text("This conversation", exact=True),
+        phone.get_by_role("button", name="Chat settings"),
     ):
         expect(control).to_be_visible()
         assert _in_top_bar(control)
+    # The second line: the model with its name in full, and the cost as an amount alone.
+    model = _model_button(phone)
+    expect(model).to_be_visible()
+    expect(model).to_contain_text("test-model")
+    assert model.evaluate("button => [...button.querySelectorAll('span')].every((s) => s.scrollWidth <= s.clientWidth)")
+    assert _in_top_bar(model, PHONE_BAR)
+    cost = phone.get_by_role("main").get_by_text(re.compile(r"^\$\d[\d.,]*$")).filter(visible=True).first
+    expect(cost).to_be_visible()
+    assert _in_top_bar(cost, PHONE_BAR)
+    expect(phone.get_by_text("This conversation", exact=True)).to_be_hidden()
     expect(phone.locator("form").get_by_role("button", name=re.compile("test-model"))).to_have_count(0)
     assert accessibility_violations(phone) == []
 
