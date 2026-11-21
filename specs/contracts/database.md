@@ -322,9 +322,9 @@ A user's groups of conversations (CNV-007, ADR-0073).
 | `title` | text | not null; empty while untitled (ADR-0052), then named by its user or by its model (CNV-006); searched through a GIN index on its `simple` tsvector (CNV-009) |
 | `active_run_id` | uuid | the last run of the active path (ADR-0037); null before the first run; (`tenant_id`, `owner_id`, `active_run_id`) references `runs` on delete set null (`active_run_id`) |
 | `usage` | jsonb | Pydantic AI conversation usage |
-| `pending_interrupts` | jsonb | serialized `DeferredToolRequests` while an interrupt is pending: questions to the user, and approvals (ADR-0033, ADR-0083), with, for each approval, what the server showed the user: its reason and the scopes it offered (ADR-0090), and, for a request for internet access, the calls that wait for it (AGT-034, ADR-0113); else null |
+| `pending_interrupts` | jsonb | serialized `DeferredToolRequests` while an interrupt is pending: questions to the user, and approvals (ADR-0033, ADR-0083), with, for each approval, what the server showed the user: its reason and the scopes it offered (ADR-0090); else null |
 | `approvals_expire_at` | timestamptz | 24 hours after the interrupt was stored while approvals are pending (AGT-007, ADR-0090); null when none is, also while questions alone are pending; indexed for the expiry job |
-| `allowed_internet_access` | boolean | not null, default false; the conversation has internet access (AGT-034, ADR-0113): the web tools run and its sandbox has network; set only when a resume answers a request for internet access with scope `conversation`, cleared when its user withdraws it; not copied into a fork. Replaces `allowed_web_and_commands`, whose values it takes |
+| `allowed_web_and_commands` | boolean | not null, default false; the web and command tools allowed in this conversation despite untrusted content (AGT-004, ADR-0090); set only when a resume answers an approval request with scope `conversation`; not copied into a fork |
 | `allowed_tools` | text[] | not null, default empty; the tools whose approval is lifted in this conversation (AGT-006), set the same way; not copied into a fork |
 | `folder_id` | uuid | its folder, or null; (`tenant_id`, `owner_id`, `folder_id`) references `folders` on delete set null (`folder_id`) |
 | `pinned_at` | timestamptz | when it was pinned; null when not pinned (CNV-008) |
@@ -464,8 +464,7 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `conversation_id` | uuid | not null; (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete cascade |
 | `parent_run_id` | uuid | the run this run continues (ADR-0037); null for the first run; (`tenant_id`, `owner_id`, `parent_run_id`) references `runs` on delete cascade; indexed |
 | `kind` | text | `message` (a new turn) or `resume` (answers to an interrupt, ADR-0033) |
-| `turn_allows_internet_access` | boolean | not null, default false; the turn has internet access (AGT-034, ADR-0113): set on a resume run answering a request for internet access with scope `turn`, and copied from the parent by every resume run. Replaces `turn_allows_web_and_commands` |
-| `turn_denied_internet_access` | boolean | not null, default false; internet access was denied in this turn, or its request expired, so later calls that need it are denied without asking (AGT-034): set on the resume run that carries the denial, and copied from the parent by every resume run |
+| `turn_allows_web_and_commands` | boolean | not null, default false; the web and command tools are allowed for the rest of the turn (ADR-0090): set on a resume run answering an approval request with scope `turn`, and copied from the parent by every resume run |
 | `task_grants` | boolean | not null, default false; the calls of the run follow its conversation's task's grants (TSK-004, ADR-0106): set on the run a firing starts, unless the task failed the check of TSK-005 at the firing, and copied from the parent by every resume run |
 | `status` | text | `queued`, `running`, `interrupted`, `completed`, `failed`, `cancelled` |
 | `error_code` | text | stable error code when failed (API-007) |
@@ -785,7 +784,6 @@ A user's tasks (TSK-001, ADR-0106).
 | `disabled_tools`, `disabled_skills` | text[] | not null, default empty; as in `conversations` |
 | `disabled_servers` | uuid[] | not null, default empty; as in `conversations` |
 | `uses_memory` | boolean | not null, default false; whether its runs use memory, when memory is on for its owner |
-| `internet_access` | boolean | not null, default false; the task's grant of internet access (TSK-004, AGT-034, ADR-0113). A task that had an open grant of `web_search` or `read_page` has it, and loses those grants |
 | `time_zone` | text | not null; an IANA time zone name, such as `Europe/Rome` |
 | `paused_at` | timestamptz | when it was paused; null while it fires |
 | `skipped_count` | integer | not null, default 0; firings that did not run, over the limit or while paused (TSK-009) |
@@ -812,9 +810,7 @@ The task grants of a task (TSK-004, TSK-005, ADR-0106).
 
 Unique (`task_id`, `tool`, `arguments`), with nulls not distinct. At most 20
 rows per task. A row with `server_id` has `arguments`: open grants never
-cover a server's tool. No row names `web_search`, `read_page` or
-`request_internet_access`, which follow the task's `internet_access`
-(ADR-0113).
+cover a server's tool.
 
 ### `task_triggers` (private)
 

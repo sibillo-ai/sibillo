@@ -2396,10 +2396,8 @@ paths:
         its question, or an approval with a scope its request did not offer
         are refused with `approval.invalid` (AGT-012, AGT-015, ADR-0083,
         ADR-0090). A run whose tool calls need approval ends with an
-        `approval` interrupt for each (AGT-004, AGT-006, AGT-007), except
-        the calls that need internet access, which share one interrupt
-        (AGT-034, ADR-0113).
-      x-requirements: [AGT-004, AGT-006, AGT-007, AGT-009, AGT-010, AGT-012, AGT-015, AGT-034, API-003, API-004, CNV-002, MOD-003, TEN-006]
+        `approval` interrupt for each (AGT-004, AGT-006, AGT-007).
+      x-requirements: [AGT-004, AGT-006, AGT-007, AGT-009, AGT-010, AGT-012, AGT-015, API-003, API-004, CNV-002, MOD-003, TEN-006]
       requestBody:
         required: true
         content:
@@ -3759,7 +3757,6 @@ components:
       enum:
         - web_search
         - read_page
-        - request_internet_access
         - run_command
         - start_command
         - check_command
@@ -4144,9 +4141,7 @@ components:
       description: |
         A tool permission (AGT-002, ADR-0090): `allow` lifts the tool's
         default approval, `ask` needs approval for every call, `deny` takes
-        the tool away. `deny` of the `external_communication` class also
-        denies the user internet access, which no setting gives (AGT-034,
-        ADR-0113).
+        the tool away.
       enum: [allow, ask, deny]
 
     ToolPermissions:
@@ -4207,9 +4202,9 @@ components:
     ApprovalScope:
       type: string
       description: |
-        What an approval covers (ADR-0090, ADR-0113): this call; internet
-        access for the rest of the turn; or the tool, or internet access, in
-        this conversation. Internet access is never approved `once`.
+        What an approval covers (ADR-0090): this call; the web and command
+        tools for the rest of the turn; or the tool, or the web and command
+        tools, in this conversation.
       enum: [once, turn, conversation]
 
     ApprovalOutcome:
@@ -4228,24 +4223,20 @@ components:
         Why a call needs approval: untrusted content in the run (AGT-004), the
         tool's default or a tool permission (AGT-006, AGT-002), its
         `irreversible` or `physical` class, a device or MCP server
-        (AGT-018), a task the assistant proposes or changes, whose every
-        call is asked (TSK-006, TSK-012), or internet access, which the
-        conversation does not have (AGT-034).
-      enum: [untrusted_content, tool_default, permission, consequential, device, task_proposal, internet_access]
+        (AGT-018), or a task the assistant proposes or changes, whose every
+        call is asked (TSK-006, TSK-012).
+      enum: [untrusted_content, tool_default, permission, consequential, device, task_proposal]
 
     Allowances:
       type: object
       description: |
         What the user allowed in this conversation by answering approval
-        requests (AGT-006, ADR-0090, ADR-0113). Never copied into a fork.
-      required: [internet_access, tools]
+        requests (AGT-006, ADR-0090). Never copied into a fork.
+      required: [web_and_commands, tools]
       properties:
-        internet_access:
+        web_and_commands:
           type: boolean
-          description: |
-            Whether the conversation has internet access (AGT-034): `web_search`
-            and `read_page` run, and its sandbox has network. An allowance
-            for the turn only is not shown here.
+          description: Whether `web_search`, `read_page`, `run_command` and `start_command` are allowed despite untrusted content (AGT-004).
         tools:
           type: array
           description: The tools whose approval, by default or by a tool permission, is lifted in this conversation.
@@ -4710,11 +4701,7 @@ components:
         names it (AGT-015, ADR-0083). An approval request has `reason`
         `approval`, the ID `apr-` followed by its `toolCallId`, and
         `metadata.approval`, built by the server from the stored call
-        (AGT-007, AGT-012, ADR-0090). A request for internet access has
-        `reason` `approval`, the ID `apr-internet-` followed by the run's
-        ID, no `toolCallId`, and `metadata.internet_access` in place of
-        `metadata.approval`: one for all the calls of the run that wait for
-        it (AGT-034, ADR-0113).
+        (AGT-007, AGT-012, ADR-0090).
       required: [id, reason]
       additionalProperties: true
       properties:
@@ -4732,45 +4719,6 @@ components:
               minItems: 1
               items: { $ref: "#/components/schemas/Question" }
             approval: { $ref: "#/components/schemas/ApprovalRequest" }
-            internet_access: { $ref: "#/components/schemas/InternetAccessRequest" }
-
-    InternetAccessRequest:
-      type: object
-      description: |
-        A request for internet access (AGT-034, ADR-0113), built by the
-        server from the stored calls: nothing in it is written by the model
-        but the arguments of the calls that wait.
-      required: [untrusted_content, calls, scopes]
-      properties:
-        untrusted_content:
-          type: boolean
-          description: Whether the run holds untrusted content, which could be trying to steer the assistant (AGT-003).
-        calls:
-          type: array
-          description: |
-            The calls to `web_search` and `read_page` that wait for the
-            answer; empty when the assistant only asked with
-            `request_internet_access`.
-          items:
-            type: object
-            required: [tool, arguments, data, destination]
-            properties:
-              tool: { $ref: "#/components/schemas/ToolName" }
-              arguments:
-                type: object
-                additionalProperties: true
-                description: The call's arguments, in full, as the model gave them.
-              data:
-                type: string
-                description: The data the call sends, the query or the address.
-              destination:
-                type: string
-                description: Where the data goes, the search service or a web address's host.
-        scopes:
-          type: array
-          description: The scopes the user may approve with, `turn` first; never `once`.
-          minItems: 1
-          items: { type: string, enum: [turn, conversation] }
 
     ApprovalRequest:
       type: object
@@ -4879,12 +4827,10 @@ components:
         allowances:
           allOf: [{ $ref: "#/components/schemas/Allowances" }]
           description: |
-            Withdraws allowances: `internet_access` may only become false,
-            which takes the network from the conversation's sandbox at once
-            (AGT-034), and `tools` may only lose tools. An allowance it
-            would add is refused with `request.validation_failed`;
-            allowances are created only by answering approval requests
-            (AGT-006, AGT-012).
+            Withdraws allowances: `web_and_commands` may only become false,
+            and `tools` may only lose tools. An allowance it would add is
+            refused with `request.validation_failed`; allowances are created
+            only by answering approval requests (AGT-006, AGT-012).
         base_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
           description: Its own base instructions, or `null` to restore its user's defaults (CNV-014).
@@ -5156,9 +5102,7 @@ components:
                   For an approval (`approval`), with `status` `resolved`:
                   `{"approved": true|false, "scope"}`, where `scope` is one
                   of the request's `scopes` and is required when approved;
-                  `cancelled` denies it (AGT-012, ADR-0090). A request for
-                  internet access is answered the same way, once for all
-                  the calls that wait for it (AGT-034). For a question
+                  `cancelled` denies it (AGT-012, ADR-0090). For a question
                   (`ask_user`), with `status` `resolved`: `{"answers": [...]}`,
                   one per question, each `{"header", "selected": [labels]}`
                   or `{"header", "custom_answer"}` with the user's own words,
@@ -5370,9 +5314,7 @@ components:
         ADR-0106): with `arguments`, a fixed grant, which covers a call only
         when its arguments equal these; with `arguments` `null`, an open
         grant, of the tool with any arguments. A remote MCP server's tool
-        takes only fixed grants. `web_search`, `read_page` and
-        `request_internet_access` take no grants: they follow the task's
-        `internet_access` (ADR-0113).
+        takes only fixed grants.
       required: [tool, arguments]
       additionalProperties: false
       properties:
@@ -5392,10 +5334,8 @@ components:
         sources of each element of the lethal trifecta, each a tool's name;
         `memory`, when the task uses memory and memory is on for the user; or
         `event_trigger`, when it has a webhook trigger or a trigger on an
-        event; or `internet_access`, under `untrusted_content` and
-        `external_communication`, when the task has the grant of internet
-        access (ADR-0113). It passes when at least one list is empty. Fixed
-        grants never appear under `external_communication`.
+        event. It passes when at least one list is empty. Fixed grants never
+        appear under `external_communication`.
       required: [passes, private_data, untrusted_content, external_communication]
       properties:
         passes: { type: boolean }
@@ -5411,7 +5351,7 @@ components:
         a change of a tool permission or of the user's memory, fires without
         grants. `skipped` counts the firings over the limit or while paused,
         with when the latest arrived (TSK-009).
-      required: [id, name, instructions, model, reasoning, disabled_tools, disabled_skills, disabled_servers, uses_memory, time_zone, paused, triggers, grants, internet_access, grant_check, skipped, last_fired_at, created_at, updated_at]
+      required: [id, name, instructions, model, reasoning, disabled_tools, disabled_skills, disabled_servers, uses_memory, time_zone, paused, triggers, grants, grant_check, skipped, last_fired_at, created_at, updated_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         name: { type: string }
@@ -5432,12 +5372,6 @@ components:
         grants:
           type: array
           items: { $ref: "#/components/schemas/TaskGrant" }
-        internet_access:
-          type: boolean
-          description: |
-            The grant of internet access (TSK-004, AGT-034, ADR-0113): the
-            runs of the task's first turn have internet access. Without it,
-            their calls that need it are denied with `not_granted`.
         grant_check: { $ref: "#/components/schemas/GrantCheck" }
         skipped:
           type: object
@@ -5477,12 +5411,6 @@ components:
           type: array
           maxItems: 20
           items: { $ref: "#/components/schemas/TaskGrant" }
-        internet_access:
-          type: boolean
-          description: |
-            The grant of internet access (TSK-004, AGT-034, ADR-0113): the
-            runs of the task's first turn have internet access. Without it,
-            their calls that need it are denied with `not_granted`.
 
     UpdateTaskRequest:
       type: object
@@ -5507,12 +5435,6 @@ components:
           type: array
           maxItems: 20
           items: { $ref: "#/components/schemas/TaskGrant" }
-        internet_access:
-          type: boolean
-          description: |
-            The grant of internet access (TSK-004, AGT-034, ADR-0113): the
-            runs of the task's first turn have internet access. Without it,
-            their calls that need it are denied with `not_granted`.
 
     TaskConversation:
       type: object

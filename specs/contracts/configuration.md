@@ -135,8 +135,16 @@ It is the only privileged container of the instance. Its Docker listens on
 a Unix socket in a volume it shares with the sandbox driver alone, never on
 a network address, and keeps its data, the workspaces among them, in a
 volume of its own. It reads no `SIBILLO_*` variable and runs no project code
-beyond starting Docker and loading the sandbox image when it changed. It
-starts no sandbox by itself: its containers have no restart policy.
+beyond starting Docker and loading the sandbox image when it changed, under
+the name `sibillo/sandbox:engine`, which is the driver's
+`SIBILLO_SANDBOX_IMAGE`. It starts no sandbox by itself: its containers have
+no restart policy, and it removes those a previous run left when it starts.
+It is built with the sandbox image as the named build context
+`sandbox-image`.
+
+The network guard stops with exit code 3 when the engine is no longer in its
+network namespace, as after a restart of the engine; started again, by
+Docker's restart policy in a deployment, it joins the engine's new one.
 
 ## Operator commands
 

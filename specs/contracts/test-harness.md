@@ -318,7 +318,10 @@ these tests fail; they never skip.
 2. Start the sandbox engine: the `engine` image as a privileged container
    named by the test suite, on a network of its own, with a volume for its
    data and a temporary directory of the host for the Unix sockets. Wait
-   until its Docker answers on its socket and holds the sandbox image.
+   until Docker reports it healthy: its Docker answers on its socket and
+   holds the sandbox image, under the name `sibillo/sandbox:engine`. The
+   driver runs as the user of the tests, so the suite opens the engine's
+   socket, and the network guard's, to that user.
 3. Start the network guard: the `netguard` image as a container named by the
    test suite, with the engine's network namespace
    (`--network container:<engine>`), `--cap-add NET_ADMIN`,
@@ -327,8 +330,8 @@ these tests fail; they never skip.
 4. From the repository root, start the sandbox driver,
    `python -m sibillo_sandboxd`, with `SIBILLO_SANDBOXD_HOST` `127.0.0.1`, a
    free port, a random `SIBILLO_SANDBOXD_TOKEN`, `DOCKER_HOST` at the
-   engine's socket, `SIBILLO_SANDBOX_IMAGE` and `SIBILLO_NETGUARD_SOCKET` from
-   the steps above, and limits small enough for tests to reach them. It is
+   engine's socket, `SIBILLO_SANDBOX_IMAGE` `sibillo/sandbox:engine`,
+   `SIBILLO_NETGUARD_SOCKET` from the steps above, and limits small enough for tests to reach them. It is
    ready when `GET /v1/health` with the token answers `200`, within 120
    seconds.
 5. At the end of the session, stop the driver with `SIGTERM`, which detaches
@@ -353,9 +356,14 @@ container to check that sandboxes stop (SBX-015). They reach inside the
 engine through its Docker socket: to start a container with `NET_ADMIN` on a
 sandbox bridge, which stands for a compromised sandbox kernel (SBX-005,
 SBX-024), and to check that a sandbox reaches neither the engine nor its
-Docker (SBX-025). A test restarts the engine to check that no sandbox runs
-before the table is verified, in an engine of its own, so that the session's
-is left alone. A design test checks `deploy/compose.yaml`: no service mounts
+Docker (SBX-025). A test restarts the session's engine to check that no
+sandbox runs before the table is verified: the network guard, left in a
+network namespace the engine is gone from, stops with exit code 3, the
+driver accepts nothing meanwhile, and the test starts the guard again, as
+Docker does in a deployment. After a restart of the engine or of the guard,
+the test suite opens their sockets to its user again. An engine of its own
+for this test would load the sandbox image once more, beyond the time a test
+may take (ADR-0059). A design test checks `deploy/compose.yaml`: no service mounts
 the host's Docker socket, only the engine is privileged, and no service uses
 host networking (SBX-025).
 
