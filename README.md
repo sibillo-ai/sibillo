@@ -51,8 +51,8 @@ is deliberately **not**.
  └──────┬─────────────────────────────┘   │  only)       │  no logs
         │ minimal, authenticated API      └──────────────┘
  ┌──────▼──────┐
- │ sandbox     │  the only component allowed to manage containers
- │ driver      │
+ │ sandbox     │  the only component allowed to manage containers,
+ │ driver      │  in the sandbox engine: a Docker of its own, with gVisor
  └──────┬──────┘
  ┌──────▼──────┐ ┌─────────────┐ ┌─────────────┐
  │ sandbox A   │ │ sandbox B   │ │ sandbox C   │  one per conversation, gVisor,
@@ -71,15 +71,16 @@ Hardware virtualization is not needed (OPS-009).
 
 **Prerequisites**
 
-- Docker Engine with the Compose plugin.
-- gVisor, release `20261026` or newer, installed from
-  [gVisor's official repository](https://gvisor.dev/docs/user_guide/install/)
-  and registered with Docker as the `runsc` runtime (`sudo runsc install`,
-  then reload Docker). Distribution packages are usually far too old.
-- Docker running as root, not rootless, on a host with loop devices, as every
-  common distribution provides: each workspace is a disk of its own, attached
-  to a loop device (ADR-0098).
-- About 3 GB of disk for the images, and internet access to build them.
+- Docker Engine with a recent Compose plugin (2.40 is the one tested).
+  Nothing else is installed on the host: gVisor, which isolates the
+  sandboxes, comes inside Sibillo's own images (ADR-0114).
+- Docker running as root, not rootless, and allowed to run a privileged
+  container, on a host with cgroup v2 and loop devices, as every common
+  distribution provides: the sandboxes run in a Docker of their own inside
+  one privileged container, and each workspace is a disk of its own,
+  attached to a loop device (ADR-0098).
+- About 8 GB of disk for the images and the sandbox engine, and internet
+  access to build them.
 
 **Install**
 
@@ -94,10 +95,13 @@ docker compose run --rm setup
 1. `init` writes `deploy/.env` with fresh random secrets. Keep it private; it
    is never overwritten. There are no default passwords anywhere (AUTH-007).
 2. `up` builds the images and starts the database, the API, the worker, the
-   search service, the backup service, the sandbox driver and the network
-   guard. The guard installs the `nftables`
-   table `inet sibillo` on the host, which keeps sandboxes away from your
-   home network and from the host itself; it removes the table when it stops.
+   search service, the backup service, the sandbox engine, the sandbox
+   driver and the network guard. The engine is a Docker of its own, where
+   the sandboxes run under gVisor; the guard keeps them away from your home
+   network and from the host with a firewall table inside the engine. The
+   host's Docker configuration and firewall are not changed. The first start
+   takes about half a minute longer, while the engine loads the sandbox
+   image.
 3. `setup` asks for the household's name and creates its first administrator,
    with the password you choose. It works only once.
 
@@ -560,15 +564,35 @@ docker compose run --rm restore --workspace alice /backups/sibillo-20261101T0300
 
 ```bash
 cd sibillo/deploy
-docker compose stop sandboxd
-docker ps -aq --filter label=dev.sibillo.sandbox | xargs -r docker rm -f
-docker volume ls -q --filter label=dev.sibillo.sandbox | xargs -r docker volume rm
-docker network rm sibillo-sandboxes
 docker compose down --volumes
 ```
 
-This removes the users' sandboxes and their workspaces, then the deployment;
-`down --volumes` deletes the database, with every account and conversation.
+This deletes the database, with every account and conversation, and the
+sandbox engine, with every sandbox and workspace. Nothing of Sibillo is left
+on the host but the images, which `docker compose down --volumes --rmi all`
+removes too.
+
+**Upgrading an installation that had gVisor on the host**
+
+Earlier versions ran the sandboxes in the host's Docker, with gVisor
+installed on the host. The database stays where it is, but workspaces do not
+move by themselves: make a backup before the upgrade, and bring each user's
+workspaces back from it after.
+
+```bash
+cd sibillo/deploy
+docker compose exec backup python -m sibillo_server backup   # before updating the code
+docker compose down
+docker ps -aq --filter label=dev.sibillo.sandbox | xargs -r docker rm -f
+docker volume ls -q --filter label=dev.sibillo.sandbox | xargs -r docker volume rm
+docker network rm sibillo-sandboxes
+git pull
+docker compose up --detach --build --wait
+docker compose run --rm restore --workspace alice /backups/THE-ARCHIVE-YOU-MADE.tar.age
+```
+
+Run the last command once for each user. gVisor on the host is no longer
+used, and can be removed.
 
 ## How this project is built
 

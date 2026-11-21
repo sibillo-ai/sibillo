@@ -9,8 +9,8 @@ committed.
 
 ## What you need
 
-The same as for the sandbox tests: Docker with gVisor registered as `runsc`
-(see the README). And at least one model: a local server with an
+The same as for the sandbox tests: Docker that may run a privileged
+container (see the README); gVisor comes with the sandbox engine. And at least one model: a local server with an
 OpenAI-compatible API, such as Ollama, or an OpenRouter key.
 
 ## Choose the models
