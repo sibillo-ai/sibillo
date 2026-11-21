@@ -1,13 +1,15 @@
-"""Isolation of sandboxes, checked from inside them (SBX-001 to SBX-015, ADR-0021, ADR-0053).
+"""Isolation of sandboxes, checked from inside them (SBX-001 to SBX-015, SBX-025, ADR-0021, ADR-0053, ADR-0114).
 
 A listener on the host proves that the blocked addresses would be reachable
-without the egress rules: a plain container on Docker's default network
-reaches it, a sandbox does not.
+without the egress rules: a plain container on the default network of the
+sandbox engine's Docker, which the egress table does not match, reaches it,
+a sandbox does not.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import json
 import socket
 import subprocess
 import threading
@@ -23,8 +25,10 @@ from tests.support.sandbox import (
     SANDBOX_NETWORK,
     Driver,
     docker,
-    driver_environment,
     free_port,
+    host_docker,
+    restart_engine,
+    restart_guard,
     start_driver_process,
 )
 
@@ -115,14 +119,9 @@ def host_listener() -> Iterator[int]:
 
 def _reachable_from_a_plain_container(image: str, hosts: list[str], port: int) -> set[str]:
     command = f"{PROBE} {port} {' '.join(hosts)}"
-    result = subprocess.run(  # noqa: S603
-        ["docker", "run", "--rm", image, "sh", "-c", command],  # noqa: S607
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    return {line.split()[1] for line in result.stdout.splitlines() if line.startswith("connected ")}
+    # In the engine, on its Docker's default network, which the egress table does not match.
+    output = docker("run", "--rm", image, "sh", "-c", command, timeout=60, check=False)
+    return {line.split()[1] for line in output.splitlines() if line.startswith("connected ")}
 
 
 @pytest.mark.spec("SBX-002")
@@ -140,8 +139,78 @@ def test_the_host_is_unreachable_from_sandboxes(sandboxes: Driver, host_listener
     addresses = _host_addresses()
     assert addresses
     controls = _reachable_from_a_plain_container(sandboxes.image, addresses, host_listener)
-    assert controls == set(addresses), "negative control: every address is reachable without the egress rules"
+    # Not every address: the default bridge of the engine's Docker has the address of the host's.
+    assert controls, "negative control: the host is reachable without the egress rules"
     assert _reachable(sandboxes, tenant_id, user_id, conversation_id, addresses, host_listener) == set()
+
+
+def _engine_addresses(sandboxes: Driver) -> list[str]:
+    """IPv4 addresses of the sandbox engine: on the instance's network, and the gateways of its own bridges."""
+    output = host_docker("exec", sandboxes.engine, "ip", "-4", "-o", "addr", "show")
+    addresses = [line.split()[3].split("/")[0] for line in output.splitlines()]
+    return [address for address in addresses if not ipaddress.ip_address(address).is_loopback]
+
+
+@pytest.mark.spec("SBX-025", "SBX-005")
+def test_the_engine_is_unreachable_from_sandboxes(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "true")
+    addresses = _engine_addresses(sandboxes)
+    assert len(addresses) >= 3, addresses
+    port = free_port()
+    # A listener in the engine's own network namespace, where its Docker would listen if it listened.
+    listener = f"sibillo-test-listener-{uuid7()}"
+    docker("run", "--detach", "--name", listener, "--network", "host", sandboxes.image,
+           "python3", "-m", "http.server", str(port))  # fmt: skip
+    try:
+        deadline = time.monotonic() + 20
+        controls: set[str] = set()
+        while controls != set(addresses):
+            assert time.monotonic() < deadline, f"negative control: the engine answers at {controls}, not {addresses}"
+            controls = _reachable_from_a_plain_container(sandboxes.image, addresses, port)
+        assert _reachable(sandboxes, tenant_id, user_id, conversation_id, addresses, port) == set()
+    finally:
+        docker("rm", "-f", listener, check=False)
+
+
+@pytest.mark.spec("SBX-025")
+def test_the_engines_docker_listens_on_no_network_address(sandboxes: Driver) -> None:
+    listening = host_docker("exec", sandboxes.engine, "netstat", "-ltn").splitlines()
+    addresses = [line.split()[3] for line in listening if line.startswith(("tcp", "udp"))]
+    # Only the resolver the host's Docker gives every container, on its loopback.
+    assert [address for address in addresses if not address.startswith("127.0.0.11:")] == []
+    sockets = host_docker("exec", sandboxes.engine, "netstat", "-lx")
+    assert "/run/sibillo-engine/docker.sock" in sockets
+
+
+@pytest.mark.spec("SBX-025", "SBX-009")
+def test_sandboxes_and_workspaces_are_the_engines_not_the_hosts(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "echo kept > /workspace/a.txt")
+    label = f"label=dev.sibillo.sandbox.conversation={conversation_id}"
+    assert docker("ps", "-q", "--filter", label).split()
+    assert docker("volume", "ls", "-q", "--filter", label).split()
+    assert host_docker("ps", "-aq", "--filter", label).split() == []
+    assert host_docker("volume", "ls", "-q", "--filter", label).split() == []
+    assert (
+        host_docker("network", "ls", "-q", "--filter", f"name=^{SANDBOX_NETWORK}$").split() == []
+        or docker("network", "ls", "-q", "--filter", f"name=^{SANDBOX_NETWORK}$").split()
+    )
+
+
+@pytest.mark.spec("SBX-025")
+def test_the_network_guard_shares_the_engines_network_namespace_and_nothing_of_the_host(sandboxes: Driver) -> None:
+    guard = cast(list[dict[str, Any]], json.loads(host_docker("inspect", sandboxes.netguard)))[0]
+    engine = cast(list[dict[str, Any]], json.loads(host_docker("inspect", sandboxes.engine)))[0]
+    host = guard["HostConfig"]
+    assert host["NetworkMode"] == f"container:{engine['Id']}"
+    assert host["Privileged"] is False
+    assert [capability.removeprefix("CAP_") for capability in host["CapAdd"]] == ["NET_ADMIN"]
+    assert not any("docker.sock" in mount.get("Source", "") for mount in guard["Mounts"])
+    # The table is where the sandbox bridge is: in the engine's namespace.
+    table = host_docker("exec", sandboxes.netguard, "nft", "list", "table", "inet", "sibillo")
+    assert "sibillosbx0" in table
+    assert "sibillosbx0" in host_docker("exec", sandboxes.engine, "ip", "-o", "link", "show")
 
 
 @pytest.mark.spec("SBX-005", "SBX-013")
@@ -296,9 +365,7 @@ def _refused_the_runtime(health: dict[str, Any] | None) -> bool:
 @pytest.mark.parametrize("runtime", ["runc", "no-such-runtime"])
 def test_the_driver_refuses_sandboxes_without_gvisor(sandboxes: Driver, runtime: str) -> None:
     port = free_port()
-    environment = driver_environment(
-        sandboxes.token, sandboxes.image, sandboxes.netguard, port, SIBILLO_SANDBOX_RUNTIME=runtime
-    )
+    environment = sandboxes.environment(port, SIBILLO_SANDBOX_RUNTIME=runtime)
     process = start_driver_process(environment)
     try:
         # Never ready, while it starts and once it has checked the runtime.
@@ -338,7 +405,7 @@ def test_sandboxes_stop_when_the_egress_rules_disappear(sandboxes: Driver) -> No
     sandboxes.sh(tenant_id, user_id, conversation_id, "true")
     running = [c for c in sandboxes.sandbox_containers() if c["State"]["Running"]]
     assert running
-    docker("exec", sandboxes.netguard, "nft", "delete", "table", "inet", "sibillo")
+    host_docker("exec", sandboxes.netguard, "nft", "delete", "table", "inet", "sibillo")
     deadline = time.monotonic() + 30
     while any(c["State"]["Running"] for c in sandboxes.sandbox_containers()):
         assert time.monotonic() < deadline, "sandboxes kept running without egress rules"
@@ -349,3 +416,34 @@ def test_sandboxes_stop_when_the_egress_rules_disappear(sandboxes: Driver) -> No
     health = sandboxes.wait_until_ready()
     assert health["checks"]["egress_table"]["ok"] is True
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "echo back").stdout == "back\n"
+
+
+@pytest.mark.spec("SBX-025", "SBX-015")
+def test_no_sandbox_runs_after_the_engine_restarts_until_the_table_is_verified(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "echo kept > /workspace/a.txt")
+    assert sandboxes.running(conversation_id)
+    restart_engine(sandboxes)
+    # The engine starts no sandbox by itself, and its new network namespace has no table yet.
+    assert docker("ps", "-q").split() == []
+    # The guard, left in a namespace the engine is gone from, stops instead of guarding nothing.
+    deadline = time.monotonic() + 20
+    while host_docker("inspect", "--format", "{{.State.Running}}", sandboxes.netguard).strip() != "false":
+        assert time.monotonic() < deadline, "the network guard kept running in a namespace the engine left"
+        time.sleep(0.2)
+    assert host_docker("inspect", "--format", "{{.State.ExitCode}}", sandboxes.netguard).strip() == "3"
+    # Without a guard the driver accepts nothing.
+    deadline = time.monotonic() + 20
+    with sandboxes.client() as client:
+        while client.get("/health").status_code != 503:
+            assert time.monotonic() < deadline, "the driver stayed ready without a network guard"
+            time.sleep(0.2)
+        refused = client.post(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure")
+        assert refused.status_code == 503
+    assert docker("ps", "-q").split() == []
+    # Started again, as Docker does in a deployment, the guard joins the engine's new namespace.
+    restart_guard(sandboxes)
+    health = sandboxes.wait_until_ready()
+    assert health["checks"]["egress_table"]["ok"] is True
+    assert health["checks"]["canary"]["ok"] is True
+    assert sandboxes.sh(tenant_id, user_id, conversation_id, "cat /workspace/a.txt").stdout == "kept\n"

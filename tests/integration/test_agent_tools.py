@@ -28,7 +28,7 @@ from tests.support.runs import (
     text_of,
     wait_for_run,
 )
-from tests.support.sandbox import Driver, docker
+from tests.support.sandbox import Driver, host_docker
 from tests.support.server import Server
 
 
@@ -425,7 +425,7 @@ def test_a_run_whose_sandbox_cannot_be_reached_fails_as_such(
 ) -> None:
     conversation = create_conversation(server, token)["id"]
     # Without its egress rules, the driver refuses sandboxes until isolation is verified again (SBX-015).
-    docker("exec", sandboxes.netguard, "nft", "delete", "table", "inet", "sibillo")
+    host_docker("exec", sandboxes.netguard, "nft", "delete", "table", "inet", "sibillo")
     try:
         deadline = time.monotonic() + 20
         while _driver_ready(sandboxes):

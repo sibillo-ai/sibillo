@@ -39,7 +39,7 @@ class Deployment:
     base_url: str
     admin_username: str
     admin_password: str
-    # The operator's own sandboxes, volumes and bridge, there before the deployment: never removed.
+    # Sandboxes, volumes and a sandbox bridge in the host's Docker before the deployment: not its own.
     others: frozenset[str] = frozenset()
 
     @property
@@ -84,28 +84,32 @@ def docker_cli(*args: str) -> str:
 
 
 def sandbox_resources() -> frozenset[str]:
-    """The sandbox containers, workspace volumes and sandbox bridge on this host, whoever made them."""
+    """The sandbox containers, workspace volumes and sandbox bridge in the host's Docker, whoever made them.
+
+    A deployment makes none: its sandboxes are in its sandbox engine (SBX-025, ADR-0114).
+    """
     containers = docker_cli("ps", "-aq", "--no-trunc", "--filter", f"label={SANDBOX_LABEL}").split()
     volumes = docker_cli("volume", "ls", "-q", "--filter", f"label={SANDBOX_LABEL}").split()
     networks = docker_cli("network", "ls", "-q", "--filter", f"name=^{SANDBOX_NETWORK}$").split()
     return frozenset([*containers, *volumes, *(SANDBOX_NETWORK for _ in networks)])
 
 
-def remove_sandboxes(deployment: Deployment) -> None:
-    """Sandboxes are created by the driver, not by Compose: remove the deployment's, their volumes and their bridge.
+def project_resources(project: str) -> list[str]:
+    """The containers, volumes and networks of a Compose project in the host's Docker."""
+    label = f"label=com.docker.compose.project={project}"
+    return [
+        *docker_cli("ps", "-aq", "--filter", label).split(),
+        *docker_cli("volume", "ls", "-q", "--filter", label).split(),
+        *docker_cli("network", "ls", "-q", "--filter", label).split(),
+    ]
 
-    Those of the operator's own installation on the same host stay.
-    """
-    containers = docker_cli("ps", "-aq", "--no-trunc", "--filter", f"label={SANDBOX_LABEL}").split()
-    containers = [container for container in containers if container not in deployment.others]
-    if containers:
-        docker_cli("rm", "-f", *containers)
-    volumes = docker_cli("volume", "ls", "-q", "--filter", f"label={SANDBOX_LABEL}").split()
-    volumes = [volume for volume in volumes if volume not in deployment.others]
-    if volumes:
-        docker_cli("volume", "rm", "-f", *volumes)
-    if SANDBOX_NETWORK not in deployment.others:
-        docker_cli("network", "rm", SANDBOX_NETWORK)
+
+def host_firewall_tables(deployment: Deployment) -> str:
+    """The tables of the host's firewall, listed with `nft` from the deployment's network guard image."""
+    image = docker_cli("inspect", "--format", "{{.Config.Image}}", f"{deployment.project}-netguard-1").strip()
+    return docker_cli(
+        "run", "--rm", "--network", "host", "--cap-add", "NET_ADMIN", "--entrypoint", "nft", image, "list", "tables"
+    )
 
 
 def configure(deployment: Deployment, port: int) -> None:
@@ -170,10 +174,8 @@ def installed(config_dir: Path) -> Generator[Deployment]:
         deployment.compose("run", "--rm", "--no-TTY", "setup", stdin=answers)
         yield deployment
     finally:
-        # The driver's sandboxes first, so that nothing holds the deployment's images.
-        compose(project, config_dir, "stop", "sandboxd", check=False)
-        remove_sandboxes(deployment)
-        compose(project, config_dir, "down", "--volumes", "--rmi", "all", "--timeout", "20", check=False, timeout=600)
+        # Everything of the deployment goes with it: its sandboxes are in its engine (ADR-0114).
+        compose(project, config_dir, "down", "--volumes", "--rmi", "all", "--timeout", "30", check=False, timeout=600)
 
 
 @contextlib.contextmanager

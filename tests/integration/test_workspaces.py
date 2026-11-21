@@ -21,7 +21,6 @@ from tests.support.runs import create_conversation, start_run, wait_for_run
 from tests.support.sandbox import (
     WORKSPACE_QUOTA_BYTES,
     Driver,
-    driver_environment,
     free_port,
     start_driver_process,
 )
@@ -279,7 +278,7 @@ def test_the_driver_removes_every_sandbox_when_it_starts(sandboxes: Driver) -> N
     sandboxes.sh(tenant_id, user_id, conversation_id, "true")
     assert sandboxes.running(conversation_id)
     port = free_port()
-    process = start_driver_process(driver_environment(sandboxes.token, sandboxes.image, sandboxes.netguard, port))
+    process = start_driver_process(sandboxes.environment(port))
     try:
         deadline = time.monotonic() + 60
         while sandboxes.running(conversation_id):

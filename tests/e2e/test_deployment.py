@@ -15,7 +15,14 @@ import httpx
 import pytest
 
 from tests.support.database import uuid7
-from tests.support.deployment import Deployment, admin_token, log_in
+from tests.support.deployment import (
+    Deployment,
+    admin_token,
+    docker_cli,
+    host_firewall_tables,
+    log_in,
+    sandbox_resources,
+)
 from tests.support.model import ModelServer
 from tests.support.runs import parse_events
 
@@ -143,3 +150,22 @@ def test_a_conversation_runs_a_command_in_the_sandbox(deployment: Deployment, re
     assert events[-1].type == "RUN_FINISHED", events[-1]
     text = "".join(str(event.data.get("delta", "")) for event in events if event.type == "TEXT_MESSAGE_CONTENT")
     assert "hello from" in text
+
+
+@pytest.mark.spec("OPS-001", "SBX-025", "SBX-009")
+def test_the_host_keeps_nothing_of_the_sandboxes(deployment: Deployment) -> None:
+    """After a conversation ran a command: its sandbox and workspace are in the engine, not in the host's Docker."""
+    assert sandbox_resources() == deployment.others
+    label = f"label=com.docker.compose.project={deployment.project}"
+    containers = cast(
+        list[dict[str, Any]], json.loads(docker_cli("inspect", *docker_cli("ps", "-q", "--filter", label).split()))
+    )
+    assert containers
+    for container in containers:
+        service = container["Config"]["Labels"]["com.docker.compose.service"]
+        host = container["HostConfig"]
+        assert not any("docker.sock" in mount.get("Source", "") for mount in container["Mounts"]), service
+        assert host["Privileged"] is (service == "engine"), service
+        assert host["NetworkMode"] != "host", service
+    # Nothing of Sibillo in the host's firewall: the egress table is in the engine's network namespace.
+    assert "sibillo" not in host_firewall_tables(deployment)

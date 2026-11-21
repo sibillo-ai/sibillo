@@ -25,7 +25,11 @@ IDENTIFIERS = ("tenant_id", "user_id", "conversation_id")
 
 def _driver_routes() -> list[APIRoute]:
     configuration = load_configuration(
-        {"SIBILLO_SANDBOXD_TOKEN": "t" * 43, "SIBILLO_SANDBOX_IMAGE": "sibillo-test/unused:none"}
+        {
+            "SIBILLO_SANDBOXD_TOKEN": "t" * 43,
+            "SIBILLO_SANDBOX_IMAGE": "sibillo-test/unused:none",
+            "SIBILLO_NETGUARD_SOCKET": "/nonexistent/guard.sock",
+        }
     )
     return [route for route in create_app(configuration).routes if isinstance(route, APIRoute)]
 

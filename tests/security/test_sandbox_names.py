@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from tests.support.database import uuid7
-from tests.support.sandbox import Driver, driver_environment, free_port, start_driver_process
+from tests.support.sandbox import Driver, free_port, start_driver_process
 
 RESOLVER = "9.9.9.9"
 OTHER_RESOLVERS = ("1.1.1.1", "8.8.8.8")
@@ -92,12 +92,8 @@ def test_sandboxes_resolve_names_through_the_instances_resolver(sandboxes: Drive
 def test_the_driver_refuses_a_local_resolver(sandboxes: Driver, resolver: str) -> None:
     port = free_port()
     # Another image, so that the second driver cannot touch the session's sandboxes.
-    environment = driver_environment(
-        sandboxes.token,
-        f"sibillo-test/none-{uuid7()}:refused",
-        sandboxes.netguard,
-        port,
-        SIBILLO_SANDBOX_RESOLVER=resolver,
+    environment = sandboxes.environment(
+        port, SIBILLO_SANDBOX_IMAGE=f"sibillo-test/none-{uuid7()}:refused", SIBILLO_SANDBOX_RESOLVER=resolver
     )
     process = start_driver_process(environment)
     try:
@@ -129,7 +125,7 @@ def test_the_network_guard_refuses_a_local_resolver(sandboxes: Driver) -> None:
         check=True,
         timeout=30,
     ).stdout.strip()
-    # Without host networking or NET_ADMIN, so that it cannot touch the host's table.
+    # In a network namespace of its own and without NET_ADMIN, so that it cannot touch the engine's table.
     result = subprocess.run(  # noqa: S603
         ["docker", "run", "--rm", "--env", "SIBILLO_SANDBOX_RESOLVER=192.168.1.1", image],  # noqa: S607
         capture_output=True,

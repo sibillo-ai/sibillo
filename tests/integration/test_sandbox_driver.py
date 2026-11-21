@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from tests.support.database import uuid7
-from tests.support.sandbox import Driver, driver_environment, free_port, start_driver_process
+from tests.support.sandbox import Driver, free_port, start_driver_process
 
 
 def _sandbox() -> tuple[str, str, str]:
@@ -188,9 +188,7 @@ def _health_of(port: int, token: str) -> dict[str, Any] | None:
 def test_the_driver_refuses_a_gvisor_release_older_than_its_minimum(sandboxes: Driver) -> None:
     port = free_port()
     minimum = "release-29991231.0"
-    environment = driver_environment(
-        sandboxes.token, sandboxes.image, sandboxes.netguard, port, SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE=minimum
-    )
+    environment = sandboxes.environment(port, SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE=minimum)
     process = start_driver_process(environment)
     try:
         health: dict[str, Any] | None = None
@@ -205,7 +203,9 @@ def test_the_driver_refuses_a_gvisor_release_older_than_its_minimum(sandboxes: D
         release = health["checks"]["runtime_version"]
         assert release["ok"] is False
         assert minimum in release["detail"]
-        assert "https://gvisor.dev/docs/user_guide/install/" in release["detail"]
+        # gVisor comes with the sandbox engine: nothing to install on the host (ADR-0114).
+        assert "sandbox engine" in release["detail"]
+        assert "gvisor.dev" not in release["detail"]
         refused = httpx.post(
             f"http://127.0.0.1:{port}/v1/sandboxes/{uuid7()}/{uuid7()}/{uuid7()}/ensure",
             headers={"Authorization": f"Bearer {sandboxes.token}"},
@@ -220,9 +220,7 @@ def test_the_driver_refuses_a_gvisor_release_older_than_its_minimum(sandboxes: D
 @pytest.mark.spec("SBX-017")
 def test_the_gvisor_minimum_cannot_be_lowered(sandboxes: Driver) -> None:
     variable = "SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE"
-    environment = driver_environment(
-        sandboxes.token, sandboxes.image, sandboxes.netguard, free_port(), **{variable: "release-20200101.0"}
-    )
+    environment = sandboxes.environment(free_port(), **{variable: "release-20200101.0"})
     process = start_driver_process(environment)
     try:
         deadline = time.monotonic() + 30
