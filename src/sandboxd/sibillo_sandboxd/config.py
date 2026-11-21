@@ -19,7 +19,7 @@ VARIABLES = frozenset(
         "SIBILLO_SANDBOXD_TOKEN",
         "SIBILLO_SANDBOX_IMAGE",
         "SIBILLO_SANDBOX_RUNTIME",
-        "SIBILLO_NETGUARD_CONTAINER",
+        "SIBILLO_NETGUARD_SOCKET",
         "SIBILLO_SANDBOX_RESOLVER",
         "SIBILLO_SANDBOX_CPUS",
         "SIBILLO_SANDBOX_MEMORY_MB",
@@ -50,7 +50,8 @@ class DriverConfiguration:
     token: str
     image: str
     runtime: str
-    netguard_container: str
+    # The Unix socket of the network guard, which only the two share (ADR-0113, ADR-0114).
+    netguard_socket: str
     resolver: str
     cpus: float
     memory_mb: int
@@ -130,6 +131,14 @@ def _resolver(environment: Mapping[str, str]) -> str:
     return resolver
 
 
+def _socket(environment: Mapping[str, str]) -> str:
+    name = "SIBILLO_NETGUARD_SOCKET"
+    path = _required(environment, name)
+    if not path.startswith("/"):
+        raise ConfigurationError(f"{name} must be an absolute path")
+    return path
+
+
 def _required(environment: Mapping[str, str], name: str) -> str:
     value = environment.get(name, "")
     if not value:
@@ -151,7 +160,7 @@ def load_configuration(environment: Mapping[str, str]) -> DriverConfiguration:
         token=token,
         image=_required(environment, "SIBILLO_SANDBOX_IMAGE"),
         runtime=environment.get("SIBILLO_SANDBOX_RUNTIME", "runsc") or "runsc",
-        netguard_container=environment.get("SIBILLO_NETGUARD_CONTAINER", "sibillo-netguard"),
+        netguard_socket=_socket(environment),
         resolver=resolver,
         cpus=_cpus(environment),
         memory_mb=_integer(environment, "SIBILLO_SANDBOX_MEMORY_MB", 1024, 64, 262144),

@@ -1,0 +1,4 @@
+# Only the engine's own files; the sandbox image comes as a named context.
+*
+!deploy/images/engine/daemon.json
+!deploy/images/engine/sibillo-engine

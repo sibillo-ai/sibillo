@@ -1,0 +1,8 @@
+{
+  "hosts": ["unix:///run/sibillo-engine/docker.sock"],
+  "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } },
+  "live-restore": false,
+  "userland-proxy": false,
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "1m", "max-file": "1" }
+}

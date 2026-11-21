@@ -2,7 +2,9 @@
 
 The driver fails closed (SBX-003): it accepts requests only after the
 canary passed, follows the network guard's health every two seconds, and
-stops every sandbox when the guard is not healthy (SBX-015, ADR-0053).
+stops every sandbox when the guard is not healthy (SBX-015, ADR-0053). The
+runtime is the sandbox engine's, and the guard is asked over the Unix
+socket the two share (SBX-025, ADR-0113, ADR-0114).
 """
 
 # aiodocker leaves some parameters untyped; only those checks are relaxed here.
@@ -19,7 +21,7 @@ import secrets
 import shutil
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import aiodocker
 from aiodocker.exceptions import DockerError
@@ -33,6 +35,7 @@ logger = logging.getLogger("sibillo.sandboxd")
 
 SUPPORTED_ARCHITECTURES = frozenset({"x86_64", "aarch64"})
 MONITOR_INTERVAL_SECONDS = 2.0
+GUARD_TIMEOUT_SECONDS = 5.0
 _RELEASE = re.compile(r"release-(\d{8})\.(\d+)")
 # The canary connects to an address of the host on the sandbox bridge and to
 # a private address: a dropped SYN times out, a reachable host refuses or accepts.
@@ -157,15 +160,20 @@ class Isolation:
             await container.delete(force=True)
 
     async def check_platform(self) -> None:
-        """Linux on x86_64 or arm64; no hardware virtualization needed (OPS-002, OPS-009)."""
+        """Linux on x86_64 or arm64, with cgroup v2; no hardware virtualization needed (OPS-002, OPS-009)."""
         info = await self.docker.system.info()
         system, architecture = str(info.get("OSType", "")), str(info.get("Architecture", ""))
-        if system == "linux" and architecture in SUPPORTED_ARCHITECTURES:
-            self.state.platform = Check(True, f"{system} {architecture}")
-        else:
+        cgroups = str(info.get("CgroupVersion", ""))
+        if system != "linux" or architecture not in SUPPORTED_ARCHITECTURES:
             self.state.platform = Check(
                 False, f"{system or 'unknown'} {architecture or 'unknown'} is not supported: Linux on x86_64 or arm64"
             )
+        elif cgroups != "2":
+            self.state.platform = Check(
+                False, f"cgroup v{cgroups or '?'} is not supported: the host must use cgroup v2 (ADR-0114)"
+            )
+        else:
+            self.state.platform = Check(True, f"{system} {architecture}, cgroup v2")
 
     async def check_runtime(self) -> None:
         path = await self._runtime_path()
@@ -191,23 +199,40 @@ class Isolation:
         if minimum is not None and key < minimum:
             self.state.release = Check(
                 False,
-                f"{self.state.runtime_version} is older than {minimum_release}: install a supported release from "
-                "gVisor's official repository, https://gvisor.dev/docs/user_guide/install/",
+                f"{self.state.runtime_version} is older than {minimum_release}: gVisor comes with the sandbox "
+                "engine's image, so update Sibillo, or lower the configured minimum",
             )
         else:
             self.state.release = Check(True, f"{self.state.runtime_version} >= {minimum_release}")
 
+    async def _ask_guard(self, request: dict[str, Any]) -> dict[str, Any]:
+        """One request to the network guard, on the socket the two share (ADR-0113)."""
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_unix_connection(self.configuration.netguard_socket), GUARD_TIMEOUT_SECONDS
+        )
+        try:
+            writer.write(json.dumps(request).encode() + b"\n")
+            await writer.drain()
+            line = await asyncio.wait_for(reader.readline(), GUARD_TIMEOUT_SECONDS)
+        finally:
+            writer.close()
+        answer = json.loads(line)
+        if not isinstance(answer, dict):
+            raise ValueError("the network guard's answer is not an object")
+        return cast(dict[str, Any], answer)
+
     async def check_egress(self) -> bool:
         try:
-            info = await (await self.docker.containers.get(self.configuration.netguard_container)).show()
-        except DockerError:
-            self.state.egress_table = Check(False, f"no network guard {self.configuration.netguard_container!r}")
+            answer = await self._ask_guard({"op": "status"})
+        except (OSError, TimeoutError, ValueError) as error:
+            self.state.egress_table = Check(
+                False, f"the network guard does not answer: {error or type(error).__name__}"
+            )
             return False
-        health = (info.get("State") or {}).get("Health") or {}
-        if info["State"].get("Running") and health.get("Status") == "healthy":
+        if answer.get("healthy") is True:
             self.state.egress_table = Check(True, "the network guard reports the table in place")
             return True
-        self.state.egress_table = Check(False, f"the network guard is {health.get('Status') or 'not running'}")
+        self.state.egress_table = Check(False, "the network guard reports the table missing")
         return False
 
     async def run_canary(self) -> None:
@@ -252,7 +277,7 @@ class Isolation:
             await self.sandboxes.disks.check()
         except (DockerError, DiskError) as error:
             self.state.disks = Check(
-                False, f"workspace disks cannot be attached: {error}; the host must provide loop devices"
+                False, f"workspace disks cannot be attached: {error}; the sandbox engine must see loop devices"
             )
             return
         self.state.disks = Check(True, "the disk helper found a free loop device")

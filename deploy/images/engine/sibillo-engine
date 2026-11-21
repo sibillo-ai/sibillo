@@ -1,0 +1,67 @@
+#!/bin/sh
+# Starts the sandbox engine's Docker and gives it the sandbox image
+# (SBX-025, ADR-0114). Nothing else runs here: the engine takes requests
+# only on its Unix socket, from the sandbox driver.
+set -eu
+
+SOCKET=/run/sibillo-engine/docker.sock
+READY=/run/sibillo-engine-ready
+IMAGE=sibillo/sandbox:engine
+export DOCKER_HOST="unix://$SOCKET"
+
+rm -f "$READY" "$SOCKET" /var/run/docker.pid
+mkdir -p /run/sibillo-engine
+
+# What the host must offer, said clearly when it does not (OPS-002).
+refuse() {
+    echo "sibillo-engine: $1" >&2
+    exit 1
+}
+[ -f /sys/fs/cgroup/cgroup.controllers ] || refuse "the host uses cgroup v1; Sibillo needs cgroup v2"
+read -r _ outside _ < /proc/self/uid_map
+[ "$outside" = 0 ] || refuse "Docker runs rootless on this host; Sibillo needs Docker running as root"
+[ -w /sys/fs/cgroup ] && [ -c /dev/loop-control ] \
+    || refuse "this container is not privileged; the sandbox engine must be (SBX-025)"
+
+# Workspace disks are loop devices (ADR-0098). A container's /dev holds the
+# devices that existed when it started; the nodes of later ones are made
+# here, so that Docker can mount them.
+number=0
+while [ "$number" -lt 1024 ]; do
+    [ -e "/dev/loop$number" ] || mknod "/dev/loop$number" b 7 "$number"
+    number=$((number + 1))
+done
+
+# `dind` prepares the control groups for a Docker inside a container.
+dind dockerd --config-file /etc/docker/daemon.json &
+dockerd=$!
+trap 'kill -TERM "$dockerd" 2>/dev/null; wait "$dockerd"; exit 0' TERM INT
+
+attempts=0
+until docker info >/dev/null 2>&1; do
+    kill -0 "$dockerd" 2>/dev/null || { echo "sibillo-engine: Docker did not start" >&2; exit 1; }
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 600 ] || { echo "sibillo-engine: Docker did not answer" >&2; exit 1; }
+    sleep 0.1
+done
+
+# The engine never starts a sandbox by itself (SBX-025): whatever a previous
+# run left is removed, before the sandbox driver is told anything.
+leftovers=$(docker ps --all --quiet)
+[ -z "$leftovers" ] || docker rm --force $leftovers >/dev/null
+
+# The sandbox image, loaded when this image brought a new one.
+wanted=$(cat /sandbox/id)
+current=$(docker image inspect --format '{{ index .Config.Labels "dev.sibillo.sandbox.id" }}' "$IMAGE" 2>/dev/null || true)
+if [ "$current" != "$wanted" ]; then
+    set -- --change "LABEL dev.sibillo.sandbox.id=$wanted" --change "WORKDIR $(cat /sandbox/workdir)" \
+        --change 'CMD ["sleep", "infinity"]'
+    while IFS= read -r line; do
+        set -- "$@" --change "ENV ${line%%=*}=\"${line#*=}\""
+    done < /sandbox/environment
+    docker import "$@" /sandbox/rootfs.tar "$IMAGE" >/dev/null
+    docker image prune --force >/dev/null
+fi
+
+touch "$READY"
+wait "$dockerd"

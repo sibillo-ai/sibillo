@@ -1,6 +1,7 @@
-# The network guard (ADR-0021, ADR-0053): installs the egress table on the
-# host. Run with host networking and NET_ADMIN, nothing else. Built from the
-# repository root: `docker build -f deploy/images/netguard/Dockerfile .`
+# The network guard (ADR-0021, ADR-0053, ADR-0114): installs the egress table
+# in the sandbox engine's network namespace. Run in that namespace, with
+# NET_ADMIN and nothing else, never with host networking (SBX-025). Built from
+# the repository root: `docker build -f deploy/images/netguard/Dockerfile .`
 FROM python:3.13.9-slim-trixie
 
 RUN apt-get update \

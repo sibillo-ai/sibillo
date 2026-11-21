@@ -1,5 +1,6 @@
 # The sandbox driver image (ADR-0022, ADR-0054): the only container with the
-# Docker socket. Built from the repository root:
+# sandbox engine's Docker socket, and never the host's (SBX-009, SBX-025).
+# Built from the repository root:
 # `docker build -f deploy/images/sandboxd/Dockerfile .`
 FROM python:3.13.9-slim-trixie
 
@@ -16,5 +17,5 @@ COPY src/sandboxd src/sandboxd
 RUN uv sync --frozen --no-dev --package sibillo-sandboxd --no-editable
 
 ENV PATH=/opt/venv/bin:$PATH
-# The Docker socket is root's; the driver holds it alone (SBX-009).
+# The engine's Docker socket is root's; the driver holds it alone (SBX-009).
 ENTRYPOINT ["python", "-m", "sibillo_sandboxd"]

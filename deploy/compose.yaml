@@ -46,9 +46,17 @@ networks:
   internal: {}
   # The worker and the search service, and nothing else (ADR-0075).
   search: {}
+  # The sandbox engine's way out, and nothing else (SBX-025, ADR-0114).
+  sandboxes: {}
 
 volumes:
   postgres: {}
+  # The sandbox engine's Docker: sandboxes, their images and the workspaces (ADR-0114).
+  engine: {}
+  # The engine's Docker socket, for the sandbox driver alone (SBX-009, SBX-025).
+  engine-socket: {}
+  # The network guard's socket, for the sandbox driver alone (ADR-0113).
+  netguard-socket: {}
 
 services:
   postgres:
@@ -137,8 +145,11 @@ services:
       dockerfile: deploy/images/sandboxd/Dockerfile
     environment:
       SIBILLO_SANDBOXD_TOKEN: ${SIBILLO_SANDBOXD_TOKEN:-}
-      SIBILLO_SANDBOX_IMAGE: sibillo/sandbox:local
-      SIBILLO_NETGUARD_CONTAINER: sibillo-netguard
+      # The engine's Docker, never the host's (SBX-025).
+      DOCKER_HOST: unix:///run/sibillo-engine/docker.sock
+      # The sandbox image as the engine names it.
+      SIBILLO_SANDBOX_IMAGE: sibillo/sandbox:engine
+      SIBILLO_NETGUARD_SOCKET: /run/sibillo-netguard-socket/guard.sock
       SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE: ${SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE:-}
       SIBILLO_SANDBOX_RESOLVER: ${SIBILLO_SANDBOX_RESOLVER:-9.9.9.9}
       SIBILLO_SANDBOX_CPUS: ${SIBILLO_SANDBOX_CPUS:-1}
@@ -149,12 +160,13 @@ services:
       SIBILLO_SANDBOX_IDLE_MINUTES: ${SIBILLO_SANDBOX_IDLE_MINUTES:-5}
       SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB: ${SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB:-2048}
       SIBILLO_SANDBOX_DISK_MB: ${SIBILLO_SANDBOX_DISK_MB:-4096}
-    # The only service with the container runtime (SBX-009).
+    # The only service with the container runtime, the sandbox engine's (SBX-009, SBX-025).
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - engine-socket:/run/sibillo-engine
+      - netguard-socket:/run/sibillo-netguard-socket
     depends_on:
+      engine: { condition: service_healthy }
       netguard: { condition: service_healthy }
-      sandbox: { condition: service_completed_successfully }
     healthcheck:
       test:
         - CMD
@@ -233,17 +245,43 @@ services:
     build:
       context: ..
       dockerfile: deploy/images/netguard/Dockerfile
-    # Host networking and NET_ADMIN, nothing else (ADR-0021).
-    container_name: sibillo-netguard
-    network_mode: host
+    # The sandbox engine's network namespace and NET_ADMIN, nothing else, and
+    # never host networking (ADR-0021, SBX-025). A guard whose engine restarted
+    # stops, and starts again in the engine's new namespace.
+    network_mode: service:engine
     cap_add: [NET_ADMIN]
     # DNS from sandboxes reaches only this resolver, as the driver's (SBX-007, ADR-0098).
     environment:
       SIBILLO_SANDBOX_RESOLVER: ${SIBILLO_SANDBOX_RESOLVER:-9.9.9.9}
+      SIBILLO_NETGUARD_SOCKET: /run/sibillo-netguard-socket/guard.sock
+    volumes:
+      - netguard-socket:/run/sibillo-netguard-socket
+    depends_on:
+      engine: { condition: service_healthy, restart: true }
     stop_grace_period: 15s
     restart: unless-stopped
 
-  # Builds the sandbox image for the driver, then exits.
+  # The sandbox engine (SBX-025, ADR-0114): a Docker Engine of its own with
+  # gVisor in it, where the sandboxes run. The only privileged service; it
+  # listens on its Unix socket only, and the host's Docker socket is mounted
+  # nowhere.
+  engine:
+    image: sibillo/engine:local
+    logging: *logging
+    build:
+      context: ..
+      dockerfile: deploy/images/engine/Dockerfile
+      additional_contexts:
+        sandbox-image: service:sandbox
+    privileged: true
+    volumes:
+      - engine:/var/lib/docker
+      - engine-socket:/run/sibillo-engine
+    networks: [sandboxes]
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # Builds the sandbox image for the engine, then exits.
   sandbox:
     image: sibillo/sandbox:local
     logging: *logging
