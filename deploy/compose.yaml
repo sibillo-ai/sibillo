@@ -277,6 +277,9 @@ services:
     volumes:
       - engine:/var/lib/docker
       - engine-socket:/run/sibillo-engine
+    # The service that builds the sandbox image has ended, as `up --wait` expects of it.
+    depends_on:
+      sandbox: { condition: service_completed_successfully }
     networks: [sandboxes]
     stop_grace_period: 30s
     restart: unless-stopped
