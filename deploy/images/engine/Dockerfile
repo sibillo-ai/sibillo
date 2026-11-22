@@ -46,6 +46,9 @@ FROM docker:29.10.0-dind@sha256:4bbc7223f81db790097c6dea42fb93e05b8fead4f0431fbe
 COPY --from=gvisor /gvisor/usr/bin/runsc /usr/local/bin/runsc
 COPY --from=gvisor /gvisor/usr/bin/gvisor-bin /usr/local/bin/gvisor-bin
 COPY --from=sandbox /.engine /sandbox
+# Docker's own overlay2 store, not containerd's: importing the sandbox image
+# then writes it once rather than twice, and the engine is ready about ten
+# seconds sooner, on every start with an empty volume (ADR-0059).
 COPY deploy/images/engine/daemon.json /etc/docker/daemon.json
 COPY deploy/images/engine/sibillo-engine /usr/local/bin/sibillo-engine
 RUN chmod 0755 /usr/local/bin/sibillo-engine

@@ -1,6 +1,8 @@
 {
   "hosts": ["unix:///run/sibillo-engine/docker.sock"],
   "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } },
+  "storage-driver": "overlay2",
+  "features": { "containerd-snapshotter": false },
   "live-restore": false,
   "userland-proxy": false,
   "log-driver": "json-file",
