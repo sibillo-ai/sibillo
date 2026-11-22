@@ -58,8 +58,9 @@ def web_build() -> Path:
     return WEB / "dist"
 
 
+# The app is built first, while the sandboxes start in the background (ADR-0059).
 @pytest.fixture(scope="session")
-def web_origin(server: Server, web_build: Path) -> Iterator[str]:
+def web_origin(web_build: Path, server: Server) -> Iterator[str]:
     api, origin = server.start_twin_api(SIBILLO_WEB_ROOT=str(web_build))
     yield origin
     api.close()
