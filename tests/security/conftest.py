@@ -10,3 +10,4 @@ from tests.support.fixtures import sandboxes as sandboxes
 from tests.support.fixtures import search_service as search_service
 from tests.support.fixtures import server as server
 from tests.support.fixtures import world as world
+from tests.support.sandbox import pytest_collection_finish as pytest_collection_finish

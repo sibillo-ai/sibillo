@@ -17,6 +17,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -325,16 +326,40 @@ def _cleanup(removed: tuple[str, ...], engine: str, netguard: str, sockets: Path
 
 
 _DRIVER = pytest.StashKey[Driver | BaseException]()
+_STARTING = pytest.StashKey[threading.Thread]()
+
+
+def begin_sandboxes(config: pytest.Config) -> None:
+    """Start the engine, the network guard and the sandbox driver in the background, once per session.
+
+    They take about half a minute to be ready, which the session would otherwise wait for before its
+    first test that needs them; meanwhile it runs other tests or builds the web app (ADR-0059).
+    """
+    if _STARTING in config.stash or _DRIVER in config.stash:
+        return
+    starting = threading.Thread(target=_start_sandboxes, args=(config,), name="sibillo-test-sandboxes", daemon=True)
+    config.stash[_STARTING] = starting
+    starting.start()
 
 
 def start_sandboxes(config: pytest.Config) -> Driver:
-    """Build the images, start the engine, the network guard and the sandbox driver, once per test session."""
-    cached = config.stash.get(_DRIVER, None)
-    if isinstance(cached, BaseException):
-        raise cached
-    if cached is not None:
-        return cached
+    """The session's engine, network guard and sandbox driver, started now unless they already are."""
+    begin_sandboxes(config)
+    config.stash[_STARTING].join()
+    started = config.stash[_DRIVER]
+    if isinstance(started, BaseException):
+        raise started
+    return started
 
+
+def pytest_collection_finish(session: pytest.Session) -> None:
+    """Begin starting the sandboxes once the session knows it will run a test that needs them."""
+    if any("sandboxes" in getattr(item, "fixturenames", ()) for item in session.items):
+        begin_sandboxes(session.config)
+
+
+def _start_sandboxes(config: pytest.Config) -> None:
+    """Build the images, start the engine, the network guard and the sandbox driver, and stash the outcome."""
     suffix = secrets.token_hex(4)
     # Images CI built with its build cache are used as they are, and kept (ADR-0059).
     names = ("TEST_SANDBOX_IMAGE", "TEST_ENGINE_IMAGE", "TEST_NETGUARD_IMAGE")
@@ -347,7 +372,14 @@ def start_sandboxes(config: pytest.Config) -> Driver:
     holder: dict[str, Process] = {}
     built = (sandbox_image, engine_image, guard_image)
     removed = tuple(name for name, given in zip(built, prebuilt, strict=True) if not given)
-    config.add_cleanup(lambda: _cleanup(removed, engine, netguard, sockets, holder.get("driver")))
+    starting = config.stash[_STARTING]
+
+    def cleanup() -> None:
+        # A session that ends while the sandboxes start, interrupted, waits for them to remove them.
+        starting.join()
+        _cleanup(removed, engine, netguard, sockets, holder.get("driver"))
+
+    config.add_cleanup(cleanup)
     try:
         if not prebuilt[0]:
             _build("sandbox", sandbox_image)
@@ -365,11 +397,10 @@ def start_sandboxes(config: pytest.Config) -> Driver:
             engine=engine, docker_socket=docker_socket, guard_socket=guard_socket,
         )  # fmt: skip
         driver.wait_until_ready()
-    except BaseException as exc:
+    except BaseException as exc:  # handed to the first test that needs the sandboxes
         config.stash[_DRIVER] = exc
-        raise
+        return
     config.stash[_DRIVER] = driver
-    return driver
 
 
 def free_port() -> int:
