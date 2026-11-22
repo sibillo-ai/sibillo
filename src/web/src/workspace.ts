@@ -206,6 +206,9 @@ export function useAttachments(conversation: () => Promise<string>) {
   const [items, setItems] = useState<Attachment[]>([]);
   const aborts = useRef(new Map<string, () => void>());
   const owner = useRef<string | null>(null);
+  // Deletions of removed attachments, which later uploads wait for: a file pasted again after its
+  // removal then takes its name back instead of a numbered one (ADR-0079).
+  const deleting = useRef<Promise<unknown>>(Promise.resolve());
 
   const update = useCallback((key: string, change: Partial<Attachment>) => {
     setItems((all) => all.map((item) => (item.key === key ? { ...item, ...change } : item)));
@@ -221,8 +224,8 @@ export function useAttachments(conversation: () => Promise<string>) {
         ...(file.type in IMAGE_TYPES ? { preview: URL.createObjectURL(file) } : {}),
       }));
       setItems((all) => [...all, ...added]);
-      void conversation().then(
-        (conversationId) => {
+      void Promise.all([conversation(), deleting.current]).then(
+        ([conversationId]) => {
           owner.current = conversationId;
           added.forEach((item, index) => {
             const file = files[index];
@@ -252,7 +255,10 @@ export function useAttachments(conversation: () => Promise<string>) {
       setItems((all) => all.filter((candidate) => candidate.key !== key));
       if (item?.preview !== undefined) URL.revokeObjectURL(item.preview);
       aborts.current.get(key)?.();
-      if (item?.path !== undefined && owner.current !== null) void deleteEntry(owner.current, item.path).catch(() => undefined);
+      if (item?.path !== undefined && owner.current !== null) {
+        const deleted = deleteEntry(owner.current, item.path).catch(() => undefined);
+        deleting.current = Promise.all([deleting.current, deleted]);
+      }
     },
     [items],
   );
