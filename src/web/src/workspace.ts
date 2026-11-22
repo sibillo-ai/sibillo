@@ -109,14 +109,22 @@ export function download(url: string): void {
   link.remove();
 }
 
+/** An upload in progress. Once its body is `sent`, aborting no longer stops the server from saving it. */
+export interface Transfer {
+  done: Promise<WorkspaceEntry>;
+  abort: () => void;
+  sent: () => boolean;
+}
+
 /** Upload a file, reporting progress: into `uploads/` under a free name, or to `path` exactly. */
 export function upload(
   conversationId: string,
   file: File,
   onProgress: (fraction: number) => void,
   path?: string,
-): { done: Promise<WorkspaceEntry>; abort: () => void } {
+): Transfer {
   const request = new XMLHttpRequest();
+  let sent = false;
   const url = path === undefined ? `${base(conversationId)}/uploads?name=${encodeURIComponent(file.name)}` : `${base(conversationId)}/file?path=${encodeURIComponent(path)}`;
   const done = new Promise<WorkspaceEntry>((resolve, reject) => {
     request.open(path === undefined ? "POST" : "PUT", url);
@@ -125,6 +133,9 @@ export function upload(
     request.setRequestHeader("Content-Type", "application/octet-stream");
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(event.loaded / event.total);
+    };
+    request.upload.onload = () => {
+      sent = true;
     };
     request.onload = () => {
       if (request.status === 201) {
@@ -143,7 +154,7 @@ export function upload(
     request.onabort = () => reject(new ApiError(0, "aborted"));
     request.send(file);
   });
-  return { done, abort: () => request.abort() };
+  return { done, abort: () => request.abort(), sent: () => sent };
 }
 
 /** A size for people: 24 KB, 3.1 MB. */
@@ -204,7 +215,7 @@ export function languageOf(name: string): string {
 /** The files attached to the message being written: each uploads as soon as it is picked (CNV-017). */
 export function useAttachments(conversation: () => Promise<string>) {
   const [items, setItems] = useState<Attachment[]>([]);
-  const aborts = useRef(new Map<string, () => void>());
+  const transfers = useRef(new Map<string, Transfer>());
   const owner = useRef<string | null>(null);
   // Deletions of removed attachments, which later uploads wait for: a file pasted again after its
   // removal then takes its name back instead of a numbered one (ADR-0079).
@@ -231,12 +242,12 @@ export function useAttachments(conversation: () => Promise<string>) {
             const file = files[index];
             if (file === undefined) return;
             const transfer = upload(conversationId, file, (progress) => update(item.key, { progress }));
-            aborts.current.set(item.key, transfer.abort);
+            transfers.current.set(item.key, transfer);
             transfer.done.then(
               (entry) => update(item.key, { progress: 1, path: entry.path, name: entry.name }),
               (error: unknown) => update(item.key, { error: error instanceof ApiError ? error.code : "internal.error" }),
             );
-            void transfer.done.finally(() => aborts.current.delete(item.key)).catch(() => undefined);
+            void transfer.done.finally(() => transfers.current.delete(item.key)).catch(() => undefined);
           });
         },
         (error: unknown) => {
@@ -248,17 +259,24 @@ export function useAttachments(conversation: () => Promise<string>) {
     [conversation, update],
   );
 
-  /** Removing an attachment before sending stops its upload, or deletes the file. */
+  /**
+   * Removing an attachment before sending deletes its file (CNV-017): an upload whose body is not
+   * sent yet is stopped, and the server keeps nothing of it; one already sent is let finish, since
+   * the server may have saved it, and its file is then deleted.
+   */
   const remove = useCallback(
     (key: string) => {
       const item = items.find((candidate) => candidate.key === key);
       setItems((all) => all.filter((candidate) => candidate.key !== key));
       if (item?.preview !== undefined) URL.revokeObjectURL(item.preview);
-      aborts.current.get(key)?.();
-      if (item?.path !== undefined && owner.current !== null) {
-        const deleted = deleteEntry(owner.current, item.path).catch(() => undefined);
-        deleting.current = Promise.all([deleting.current, deleted]);
-      }
+      const conversationId = owner.current;
+      if (conversationId === null) return;
+      const transfer = transfers.current.get(key);
+      let deleted: Promise<unknown> | undefined;
+      if (transfer !== undefined && !transfer.sent()) transfer.abort();
+      else if (transfer !== undefined) deleted = transfer.done.then((entry) => deleteEntry(conversationId, entry.path));
+      else if (item?.path !== undefined) deleted = deleteEntry(conversationId, item.path);
+      if (deleted !== undefined) deleting.current = Promise.all([deleting.current, deleted.catch(() => undefined)]);
     },
     [items],
   );
