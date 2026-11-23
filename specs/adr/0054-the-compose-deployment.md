@@ -58,7 +58,8 @@ default credentials (AUTH-007), and how unsupported platforms are reported
    returns only that answer.
 6. **The end-to-end test** follows the README on a fresh copy of the
    deployment, as described in the [test harness](../contracts/test-harness.md),
-   locally and in CI.
+   locally and in CI. Amended by ADR-0133: with images of its own tag, beside
+   any deployment on the host.
 
 ## Consequences
 

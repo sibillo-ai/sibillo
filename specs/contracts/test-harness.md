@@ -374,9 +374,9 @@ host networking (SBX-025).
 The end-to-end test follows the README on a fresh deployment (ADR-0054).
 The host it runs on has Docker and no gVisor (OPS-001, ADR-0114). A
 deployment keeps its sandboxes, their bridges and its egress table in its
-own sandbox engine, so the test no longer has to run before the others;
-but it removes the deployment's images when it ends, so it
-must not run on a host where Sibillo is deployed (ADR-0054).
+own sandbox engine, so the test no longer has to run before the others.
+Its images are tagged `e2e-<random>` (`SIBILLO_IMAGE_TAG`), and only those
+are removed when it ends, so it may run beside a deployment (ADR-0133).
 
 1. Run the README's commands on `deploy/compose.yaml`, with a Compose project
    name chosen by the test suite and an env file in a temporary directory, so
@@ -384,8 +384,8 @@ must not run on a host where Sibillo is deployed (ADR-0054).
    `SIBILLO_CONFIG_DIR` set to that directory, then `docker compose up` with
    `--env-file` and `SIBILLO_PUBLISH` set to a free port of `127.0.0.1`, then
    `setup`, with the answers on standard input. When `TEST_DEPLOYMENT_IMAGES`
-   is `built`, CI has built the deployment's images with its build cache, and
-   `up` runs without `--build`.
+   is `built`, CI has built the deployment's images with its build cache,
+   tagged `local`, and `up` runs without `--build`.
 2. Sign in as the first administrator, configure the model the tests serve
    as the instance's default model, at an address of the host that the
    deployment's containers reach, and hold a conversation that runs a command

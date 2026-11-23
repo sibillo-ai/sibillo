@@ -190,6 +190,7 @@ by `SIBILLO_CONFIG_DIR` in the environment of the `docker compose` command,
 | `SIBILLO_BACKUP_KEY` | yes | As above. Keep a copy away from the server: without it, no archive can be restored. |
 | `SIBILLO_BACKUP_DIR` | no | The host folder for archives, relative to `deploy/` or absolute; default `./backups`. |
 | `SIBILLO_PUBLISH` | no | Where the API is published, `HOST:PORT`; default `127.0.0.1:8080`. |
+| `SIBILLO_IMAGE_TAG` | no | The tag of the images the Compose file builds; default `local`. Only the end-to-end tests set it, so that their images are never a deployment's (ADR-0133). |
 | `SIBILLO_TRUSTED_PROXIES`, `SIBILLO_RUN_RETENTION_DAYS`, `SIBILLO_RUN_REQUEST_LIMIT`, `SIBILLO_MCP_CALL_SECONDS`, `SIBILLO_TEMPORARY_SWEEP_SECONDS`, `SIBILLO_TASK_SWEEP_SECONDS`, `SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE`, `SIBILLO_SANDBOX_RESOLVER`, `SIBILLO_SANDBOX_CPUS`, `SIBILLO_SANDBOX_MEMORY_MB`, `SIBILLO_SANDBOX_PROCESSES`, `SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SIBILLO_SANDBOX_MAX_OUTPUT_BYTES`, `SIBILLO_SANDBOX_MAX_RUNNING`, `SIBILLO_SANDBOX_MAX_FILE_CONTAINERS`, `SIBILLO_SANDBOX_IDLE_MINUTES`, `SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB`, `SIBILLO_SANDBOX_DISK_MB`, `SIBILLO_BACKUP_TIME`, `SIBILLO_BACKUP_KEEP`, `SIBILLO_UPLOAD_MAX_MB`, `SIBILLO_PUBLIC_ORIGIN` | no | Passed to the services that read them, with the defaults above. |
 
 ## Migrations
