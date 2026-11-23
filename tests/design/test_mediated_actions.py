@@ -63,6 +63,8 @@ ALLOWED_OWN_TOOLS = {
     "list_tasks",
     "search_conversations",
     "read_conversation",
+    # Hands a brief to a delegated run of the agent itself, which follows the same rules (AGT-035, ADR-0136).
+    "delegate",
     # Looks at an image of the workspace, read through the sandbox driver and never decoded (CNV-020, ADR-0110).
     "view_image",
 }

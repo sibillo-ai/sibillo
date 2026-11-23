@@ -396,6 +396,7 @@ TOOLS = frozenset(
         "list_tasks",
         "search_conversations",
         "read_conversation",
+        "delegate",
         # Offered while a skill is on, as the built-in skills are by default; it has no switch (ADR-0096).
         "load_capability",
     }

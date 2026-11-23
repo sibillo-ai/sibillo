@@ -75,6 +75,8 @@ DECLARED: dict[str, tuple[set[str], str]] = {
     "list_tasks": ({"reads_private_data"}, "allow"),
     "search_conversations": ({"reads_private_data"}, "allow"),
     "read_conversation": ({"reads_private_data"}, "allow"),
+    # Hands a brief to a delegated run: private data, untrusted by what the delegated run read (ADR-0136).
+    "delegate": ({"reads_private_data"}, "allow"),
 }
 
 
