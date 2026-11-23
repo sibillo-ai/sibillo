@@ -34,6 +34,7 @@ fetches anything remote unless the case is explicitly allowed.
    |---|---|---|
    | A household's connections | a tenant admin (ADR-0069) | model requests, model lists and connection tests |
    | A household's remote MCP servers | a tenant admin (ADR-0064) | tool calls, once AGT-019 is implemented |
+   | The authorization servers of those servers | the server's metadata (ADR-0100, ADR-0128) | sign-ins, registration and tokens, through the checking transport unless on the server's own origin |
    | Browser vendors' push services | the user's browser (ADR-0039) | content-free notifications, once UX-004 is implemented |
    | The instance's search service (ADR-0075) | the system | web search queries, once AGT-020 is implemented; the service itself queries the search engines its settings enable |
 

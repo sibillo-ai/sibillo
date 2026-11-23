@@ -111,7 +111,9 @@ is made and not only when the address is saved, and MUST NOT follow
 redirects, unless the connection's address was set by a user who is the
 instance admin. A tenant admin can choose the address, and the request leaves
 from the control plane, so anything else would let them reach the
-household's network (ADR-0061, ADR-0069).
+household's network (ADR-0061, ADR-0069). Every response MUST be bounded in
+size and in total time, and a connection test MUST show resolved addresses
+and excerpts of an answer only to the instance admin (ADR-0128).
 
 ## MOD-010: Where inference runs
 
@@ -127,7 +129,8 @@ model's name, a house or a cloud, that is also given in words, to assistive
 technologies and as a tooltip, with the connection of a remote model. The sign
 of a remote model is the warning that the conversation's data leaves the
 household. The data egress policy (MOD-003) relies on the same statement
-(ADR-0066, ADR-0069).
+(ADR-0066, ADR-0069), so only a connection whose address the instance admin
+set MAY be stated as local (ADR-0128).
 
 ## MOD-007: Live usage reporting
 

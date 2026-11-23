@@ -154,6 +154,10 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **One key for every secret.** Connection keys, credentials, client
+  secrets and the notification key all come from one key, without a
+  version; a leak of it exposes all of them, and rotating it needs every
+  secret encrypted again (ADR-0128).
 - **What runs on after untrusted content arrives.** A command started
   before a run held untrusted content keeps running, and may run files
   written under injection, such as a server that reloads its code; a

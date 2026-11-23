@@ -308,9 +308,11 @@ them; their tools MUST be available to the users of that tenant (AGT-029) and
 to no other tenant. A server MUST need either no credential or a credential
 of each user (AGT-030); no credential MAY be shared between users. Only a
 tenant admin who is also the instance admin MAY use a
-private or local address; other tenant admins MUST use public `https`
-addresses, checked at connection time, without following redirects
-(ADR-0061). The control plane MUST only call a server's tools, never start a
+private or local address, for that address's origin only: an address an
+OAuth flow finds elsewhere MUST be checked as any other; other tenant admins
+MUST use public `https` addresses, checked at connection time, without
+following redirects off the server's origin (ADR-0061, ADR-0128). Every
+response MUST be bounded in size and in total time. The control plane MUST only call a server's tools, never start a
 program, and MUST NOT give the model the server's instructions, resources or
 prompts. A server's tools MUST be offered under names prefixed with the
 server's prefix, which no tool of Sibillo or of another server can take.
@@ -467,8 +469,10 @@ tool that changed, or a new one, MUST NOT be offered until a tenant admin
 accepts it again, and an approved call to a tool that is no longer offered
 as accepted MUST NOT run. An acceptance MUST be refused when the server's
 listing changed after the admin saw it, and a new address MUST clear a
-server's acceptances. Accepted descriptions MUST NOT by themselves make a run
-have untrusted content (ADR-0099).
+server's acceptances. A tool whose name, title or description holds
+invisible or bidirectional control characters MUST NOT be accepted.
+Accepted descriptions MUST NOT by themselves make a run have untrusted
+content (ADR-0099, ADR-0128).
 
 Rationale: tool descriptions reach the model in every run, and the server
 can change them at any time (T-29).
@@ -508,7 +512,8 @@ credential, or whose credential the server refuses or that cannot be
 renewed, MUST NOT be offered the server's tools, and the run's instructions
 MUST say that their account is not connected. A new address, authentication
 or OAuth client of a server MUST make every credential given for it before
-unusable (ADR-0099).
+unusable (ADR-0099), and a new address MUST NOT receive the client secret
+a tenant admin gave for the old one (ADR-0128).
 
 Rationale: most services know each person; a shared credential would let
 one user act on a service as another (T-37).
