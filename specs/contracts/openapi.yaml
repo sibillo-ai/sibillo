@@ -1115,7 +1115,11 @@ paths:
       description: |
         A new address or API key is tested first, as when adding a
         connection. A new address set by a user who is not the instance admin
-        must be public (MOD-009).
+        must be public (MOD-009). A new address of a connection that has an
+        API key needs `api_key` too, a new key or `null` to remove it;
+        without it the change is refused with `request.validation_failed`
+        at `/api_key`, code `required_with_new_address`, and the stored key
+        is never sent to the new address (ADR-0117).
       x-requirements: [MOD-008, MOD-002, MOD-009, MOD-013, TEN-006]
       requestBody:
         required: true

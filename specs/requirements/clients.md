@@ -446,7 +446,9 @@ connection to the household's own server its address, where it runs and its
 context window, which they MUST also let admins set when they add one. A new
 API key replaces the old one, which clients MUST NOT show; leaving the key
 empty keeps it, and admins MUST be able to remove the key of a connection to
-their own server. A change that fails its test is not saved, and clients MUST
+their own server. When an admin changes the address of a connection that has
+a key, clients MUST ask for the key again unless the admin removes it, and
+MUST say why (ADR-0117). A change that fails its test is not saved, and clients MUST
 show its test as when adding a connection (UX-016).
 
 Rationale: an admin who raises the window of their own server, or moves it

@@ -94,7 +94,9 @@ A tenant admin MUST be able to manage the connections of their tenant through
 the public API, and choose the tenant's default model among the models they
 offer. The instance MUST NOT have models of its own. Credentials of a
 connection MUST be write-only in the API and stored only encrypted (MOD-002,
-ADR-0069).
+ADR-0069), and MUST be sent only to the address they were given for: a
+change of address of a connection with a key MUST give a new key or remove
+it, and MUST be refused otherwise, before any request is made (ADR-0117).
 
 ## MOD-009: Connections reach only public addresses
 
