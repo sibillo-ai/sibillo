@@ -2,7 +2,7 @@
 # (ADR-0028, ADR-0054). Built from the repository root:
 # `docker build -f deploy/images/server/Dockerfile .`
 # The web app (ADR-0067), built with Node, which the running image does not need.
-FROM node:24.14.1-trixie-slim AS web
+FROM node:24.14.1-trixie-slim@sha256:9707cd4542f400df5078df04f9652a272429112f15202d22b5b8bdd148df494f AS web
 WORKDIR /build/src/web
 RUN corepack enable
 COPY specs/contracts/openapi.yaml /build/specs/contracts/openapi.yaml
@@ -11,7 +11,7 @@ RUN COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile
 COPY src/web ./
 RUN pnpm build
 
-FROM python:3.13.9-slim-trixie
+FROM python:3.13.9-slim-trixie@sha256:326df678c20c78d465db501563f3492d17c42a4afe33a1f2bf5406a1d56b0e86
 
 # Backups dump and restore the database and encrypt their archives (ADR-0077).
 RUN apt-get update \

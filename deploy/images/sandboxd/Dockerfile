@@ -2,7 +2,7 @@
 # sandbox engine's Docker socket, and never the host's (SBX-009, SBX-025).
 # Built from the repository root:
 # `docker build -f deploy/images/sandboxd/Dockerfile .`
-FROM python:3.13.9-slim-trixie
+FROM python:3.13.9-slim-trixie@sha256:326df678c20c78d465db501563f3492d17c42a4afe33a1f2bf5406a1d56b0e86
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv PYTHONDONTWRITEBYTECODE=1

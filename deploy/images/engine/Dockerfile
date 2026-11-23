@@ -11,7 +11,7 @@
 
 # gVisor, one release from its official repository, pinned and verified by
 # checksum (SBX-017). The package holds `runsc` and the programs it runs with.
-FROM debian:13.2-slim AS gvisor
+FROM debian:13.2-slim@sha256:4bcb9db66237237d03b55b969271728dd3d955eaaa254b9db8a3db94550b1885 AS gvisor
 ARG TARGETARCH
 ARG GVISOR_RELEASE=20261116.0
 ARG GVISOR_SHA256_AMD64=495796a56d811a43ea218bd0af3d89ea471df1cbd684edcb21c4a00356caeb1e

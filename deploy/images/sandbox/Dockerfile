@@ -1,7 +1,7 @@
 # The sandbox image (ADR-0053): where the agent's commands run, under gVisor.
 # It holds no credentials (SBX-008) and runs nothing until the driver execs
 # commands in it.
-FROM debian:13.2-slim
+FROM debian:13.2-slim@sha256:4bcb9db66237237d03b55b969271728dd3d955eaaa254b9db8a3db94550b1885
 
 # Nothing a sandbox uses is left out (ADR-0080): package documentation, and
 # the GPU drivers that Debian's ffmpeg depends on but loads only with a GPU,
