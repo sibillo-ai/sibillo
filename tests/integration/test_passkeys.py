@@ -207,7 +207,7 @@ def test_the_passkey_step_can_deliver_the_session_as_a_cookie(
     assert response.status_code == 201, response.text
     assert "token" not in body(response)
     cookie = response.headers["set-cookie"]
-    assert cookie.startswith("sibillo_session=")
+    assert cookie.startswith("__Host-sibillo_session=")
     assert "HttpOnly" in cookie
 
 

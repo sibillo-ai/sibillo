@@ -18,7 +18,7 @@ from tests.support.contract import response_hook
 from tests.support.database import Database
 from tests.support.server import Server, fresh_source
 
-COOKIE = "sibillo_session"
+COOKIE = "__Host-sibillo_session"
 REQUEST_HEADER = "X-Sibillo-Request"
 
 
