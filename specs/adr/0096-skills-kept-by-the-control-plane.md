@@ -99,7 +99,8 @@ Several forces shape the rest:
    saves it. Its declaration has no capability classes and asks for
    approval by default (AGT-005): unlike a memory item, a skill carries
    scripts and pages of instructions, and the approval shows the user the
-   skill's name and description before it reaches later conversations. It
+   skill's name and description before it reaches later conversations. Amended by ADR-0124: the folder is read when the
+   approval is asked, and saved only unchanged. It
    is not offered in temporary conversations, as memory is not (ADR-0082),
    and clients list it in a group of its own, Skills, with its switch
    (ADR-0087).

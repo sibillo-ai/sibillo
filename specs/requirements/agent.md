@@ -422,8 +422,11 @@ skill is on, loaded or not.
 The assistant MUST be able to save a folder of its sandbox as one of the
 user's skills only through a mediated tool, `save_skill`, which creates the
 skill or replaces the user's skill of the same name, never a built-in skill,
-and which asks for approval by default. It MUST NOT be offered in temporary
-conversations (CNV-011, ADR-0096).
+and which asks for approval by default. Its approval request MUST show the
+skill's name, description and files, and whether it replaces one, as read
+when the request is made; a folder that changed after the approval MUST NOT
+be saved, and replacing an untrusted skill MUST leave it untrusted. It MUST
+NOT be offered in temporary conversations (CNV-011, ADR-0096, ADR-0124).
 
 Rationale: the assistant turns work it did into a skill the user can reuse.
 

@@ -4878,6 +4878,18 @@ components:
             For `task_proposal`, whether the run holds untrusted content, so
             that the proposal may come from injected instructions (TSK-006);
             absent otherwise.
+        skill:
+          type: object
+          description: |
+            For `save_skill`, the skill the call saves, as its folder was read
+            when the request was made; a folder that changed since is not
+            saved (AGT-026, ADR-0124). Absent otherwise.
+          required: [name, description, files, replaces]
+          properties:
+            name: { type: string }
+            description: { type: string }
+            files: { type: array, items: { type: string }, description: "The paths of its files." }
+            replaces: { type: boolean, description: "Whether it replaces one of the user's skills." }
         scopes:
           type: array
           description: The scopes the user may approve with, `once` first.
