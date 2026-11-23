@@ -31,7 +31,7 @@ export function App() {
             <Route path="c/:conversationId" element={<ConversationView />} />
             <Route path="settings" element={<Settings me={me} />} />
             {/* Where a sign-in to a remote MCP server comes back (ADR-0100). */}
-            <Route path="mcp-sign-in" element={<McpSignIn />} />
+            <Route path="mcp-sign-in/:serverId" element={<McpSignIn />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

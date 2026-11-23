@@ -881,7 +881,7 @@
         "oauth": "Each person signs in to the service with their own account."
       },
       "clientId": "Client ID (optional)",
-      "clientIdHint": "Usually leave it empty: the service reads Sibillo's own description, as Home Assistant does, or Sibillo registers itself. Some services, such as GitHub, need an OAuth app created there, with this site's address followed by /mcp-sign-in as its callback.",
+      "clientIdHint": "Usually leave it empty: the service reads Sibillo's own description, as Home Assistant does, or Sibillo registers itself. Some services, such as GitHub, need an OAuth app created there, with any callback for now: once the service is added, its own callback is shown here, to set in the app.",
       "clientSecret": "Client secret (optional)",
       "addButton": "Add",
       "connecting": "Connecting to the server…",
@@ -890,6 +890,7 @@
       "accepted": "{{accepted}} of {{total}} tools accepted",
       "changedCount": "Tools changed since accepted: {{count}}",
       "connectToList": "Connect your own account under Services to list its tools.",
+      "callback": "Callback to register at the service:",
       "off": "Off for everyone",
       "review": "Review tools",
       "reviewLabel": "Review the tools of {{name}}",

@@ -45,6 +45,7 @@ from sibillo_server.mcp_oauth import (
     client_metadata_url,
     exchange,
     new_verifier,
+    redirect_uri,
     renew,
     same_address,
     settings_for,
@@ -419,7 +420,7 @@ async def _list_events(target: Target, token: str | None) -> list[EventType] | N
         return None
 
 
-async def _view(connection: AsyncConnection, server: Server) -> schemas.McpServer:
+async def _view(connection: AsyncConnection, server: Server, origin: str | None) -> schemas.McpServer:
     oauth = server.oauth
     return schemas.McpServer(
         id=server.id,
@@ -435,6 +436,8 @@ async def _view(connection: AsyncConnection, server: Server) -> schemas.McpServe
             client_registration=cast(Any, oauth.client_registration),
             has_client_secret=server.client_secret_ciphertext is not None,
             scope=oauth.scope,
+            # To register with the service for a given client (ADR-0122).
+            redirect_uri=redirect_uri(origin or "", server.id),
         ),
         credential=await credential_state(connection, server),
         private_network=server.private_network,
@@ -531,13 +534,18 @@ async def _list(target: Target, token: str | None) -> Listing:
 
 
 async def _oauth_settings(
-    request: Request, url: str, private_network: bool, client_id: str | None, client_secret: str | None
+    request: Request,
+    server_id: uuid.UUID,
+    url: str,
+    private_network: bool,
+    client_id: str | None,
+    client_secret: str | None,
 ) -> tuple[OAuthSettings, str | None]:
     origin = _public_origin(request)
     if origin is None:
         raise _oauth_unsupported("SIBILLO_PUBLIC_ORIGIN is not set, so sign-ins cannot come back")
     try:
-        return await settings_for(url, private_network, origin, client_id, client_secret)
+        return await settings_for(url, private_network, origin, server_id, client_id, client_secret)
     except OAuthError as error:
         raise _oauth_unsupported(str(error)) from None
 
@@ -575,6 +583,8 @@ async def create_mcp_server(
     events: list[EventType] | None = None
     oauth: OAuthSettings | None = None
     client_secret: str | None = None
+    # Known before discovery: the server's redirect address and client document name it (ADR-0122).
+    server_id = uuid7()
     if body.auth == "none":
         _LIMIT.take(identity.tenant_id)
         listing = await _list(target, None)
@@ -582,9 +592,8 @@ async def create_mcp_server(
     elif body.auth == "oauth":
         _LIMIT.take(identity.tenant_id)
         oauth, client_secret = await _oauth_settings(
-            request, url, target.private_network, body.oauth_client_id, body.oauth_client_secret
+            request, server_id, url, target.private_network, body.oauth_client_id, body.oauth_client_secret
         )
-    server_id = uuid7()
     try:
         async with transaction(engine, identity) as connection:
             await connection.execute(
@@ -613,7 +622,7 @@ async def create_mcp_server(
                 server = await find_server(connection, server_id)
             if events is not None:
                 await store_event_types(connection, server, identity.tenant_id, events)
-            return await _view(connection, server)
+            return await _view(connection, server, _public_origin(request))
     except DBAPIError as error:
         if (refusal := _unique(error)) is not None:
             raise refusal from None
@@ -621,17 +630,22 @@ async def create_mcp_server(
 
 
 @router.get("/tenant/mcp-servers", response_model=schemas.McpServerList)
-async def list_mcp_servers(identity: Authenticated, engine: Engine) -> schemas.McpServerList:
+async def list_mcp_servers(request: Request, identity: Authenticated, engine: Engine) -> schemas.McpServerList:
     _check_admin(identity)
+    origin = _public_origin(request)
     async with transaction(engine, identity) as connection:
-        return schemas.McpServerList(items=[await _view(connection, server) for server in await servers_of(connection)])
+        return schemas.McpServerList(
+            items=[await _view(connection, server, origin) for server in await servers_of(connection)]
+        )
 
 
 @router.get("/tenant/mcp-servers/{server_id}", response_model=schemas.McpServer)
-async def get_mcp_server(server_id: uuid.UUID, identity: Authenticated, engine: Engine) -> schemas.McpServer:
+async def get_mcp_server(
+    server_id: uuid.UUID, request: Request, identity: Authenticated, engine: Engine
+) -> schemas.McpServer:
     _check_admin(identity)
     async with transaction(engine, identity) as connection:
-        return await _view(connection, await find_server(connection, server_id))
+        return await _view(connection, await find_server(connection, server_id), _public_origin(request))
 
 
 @router.patch("/tenant/mcp-servers/{server_id}", response_model=schemas.McpServer)
@@ -680,7 +694,7 @@ async def update_mcp_server(
         if client_id is None:
             secret = None
         _LIMIT.take(identity.tenant_id)
-        oauth, plain = await _oauth_settings(request, url, target.private_network, client_id, secret)
+        oauth, plain = await _oauth_settings(request, server_id, url, target.private_network, client_id, secret)
         client_secret_ciphertext = None if plain is None else encrypt(key, server_id, plain)
     if auth != "oauth":
         oauth, client_secret_ciphertext = None, None
@@ -736,7 +750,7 @@ async def update_mcp_server(
                 server = await find_server(connection, server_id)
             if events is not None:
                 await store_event_types(connection, server, identity.tenant_id, events)
-            return await _view(connection, server)
+            return await _view(connection, server, _public_origin(request))
     except DBAPIError as error:
         if (refusal := _unique(error)) is not None:
             raise refusal from None
@@ -757,7 +771,7 @@ async def delete_mcp_server(server_id: uuid.UUID, identity: Authenticated, engin
 
 @router.post("/tenant/mcp-servers/{server_id}/refresh", response_model=schemas.McpServer)
 async def refresh_mcp_server(
-    server_id: uuid.UUID, identity: Authenticated, engine: Engine, key: SecretKey
+    server_id: uuid.UUID, request: Request, identity: Authenticated, engine: Engine, key: SecretKey
 ) -> schemas.McpServer:
     _check_admin(identity)
     async with transaction(engine, identity) as connection:
@@ -784,12 +798,16 @@ async def refresh_mcp_server(
         await store_listing(connection, server, identity.tenant_id, listing)
         if events is not None:
             await store_event_types(connection, server, identity.tenant_id, events)
-        return await _view(connection, await find_server(connection, server_id))
+        return await _view(connection, await find_server(connection, server_id), _public_origin(request))
 
 
 @router.put("/tenant/mcp-servers/{server_id}/accepted-tools", response_model=schemas.McpServer)
 async def set_accepted_mcp_tools(
-    server_id: uuid.UUID, body: schemas.AcceptedMcpToolsRequest, identity: Authenticated, engine: Engine
+    server_id: uuid.UUID,
+    body: schemas.AcceptedMcpToolsRequest,
+    request: Request,
+    identity: Authenticated,
+    engine: Engine,
 ) -> schemas.McpServer:
     _check_admin(identity)
     names = [item.name for item in body.tools]
@@ -827,12 +845,16 @@ async def set_accepted_mcp_tools(
             text("DELETE FROM mcp_server_tools WHERE server_id = :id AND listed IS NULL AND accepted IS NULL"),
             {"id": server_id},
         )
-        return await _view(connection, server)
+        return await _view(connection, server, _public_origin(request))
 
 
 @router.put("/tenant/mcp-servers/{server_id}/accepted-event-types", response_model=schemas.McpServer)
 async def set_accepted_mcp_event_types(
-    server_id: uuid.UUID, body: schemas.AcceptedMcpEventTypesRequest, identity: Authenticated, engine: Engine
+    server_id: uuid.UUID,
+    body: schemas.AcceptedMcpEventTypesRequest,
+    request: Request,
+    identity: Authenticated,
+    engine: Engine,
 ) -> schemas.McpServer:
     _check_admin(identity)
     names = [item.name for item in body.event_types]
@@ -870,7 +892,7 @@ async def set_accepted_mcp_event_types(
             text("DELETE FROM mcp_server_events WHERE server_id = :id AND listed IS NULL AND accepted IS NULL"),
             {"id": server_id},
         )
-        return await _view(connection, server)
+        return await _view(connection, server, _public_origin(request))
 
 
 # --- The household's servers, for each user (AGT-029 to AGT-031) ---
@@ -979,13 +1001,14 @@ async def delete_mcp_credential(server_id: uuid.UUID, identity: Authenticated, e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/mcp-client", response_model=schemas.McpClientMetadata)
-async def get_mcp_client_metadata(request: Request) -> schemas.McpClientMetadata:
-    """Sibillo's Client ID Metadata Document, without authentication: it holds nothing secret (ADR-0100)."""
+@router.get("/mcp-client/{server_id}", response_model=schemas.McpClientMetadata)
+async def get_mcp_client_metadata(server_id: uuid.UUID, request: Request) -> schemas.McpClientMetadata:
+    """Sibillo's Client ID Metadata Document for one server, without authentication and without looking the
+    server up: it holds nothing secret, and names that server's redirect address alone (ADR-0100, ADR-0122)."""
     origin = _public_origin(request)
-    if origin is None or client_metadata_url(origin) is None:
+    if origin is None or client_metadata_url(origin, server_id) is None:
         raise errors.not_found()
-    return schemas.McpClientMetadata.model_validate(client_metadata(origin))
+    return schemas.McpClientMetadata.model_validate(client_metadata(origin, server_id))
 
 
 def _state_hash(state: str) -> bytes:
@@ -1023,7 +1046,8 @@ async def start_mcp_sign_in(
             )
         ).scalar_one()
     return schemas.McpSignInStarted(
-        authorization_url=authorization_url(server.oauth, server.url, origin, state, verifier), expires_at=expires_at
+        authorization_url=authorization_url(server.oauth, server.url, origin, server.id, state, verifier),
+        expires_at=expires_at,
     )
 
 
@@ -1046,6 +1070,9 @@ async def complete_mcp_sign_in(
         server = None if found is None else await find_server(connection, found.server_id)
     if found is None or server is None or not found.pending:
         raise _sign_in_failed("no pending sign-in of yours has this state")
+    # The redirect came back at the address of the server the sign-in was for, or it is a mix-up (ADR-0122).
+    if found.server_id != body.server_id:
+        raise _sign_in_failed("the redirect came back at another server's address")
     if server.generation != found.server_generation or server.oauth is None or origin is None:
         raise _sign_in_failed("the server changed since the sign-in started")
     if body.error is not None or body.code is None:
@@ -1062,6 +1089,7 @@ async def complete_mcp_sign_in(
             server.url,
             server.private_network,
             origin,
+            server.id,
             body.code,
             found.code_verifier,
         )

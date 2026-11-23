@@ -949,6 +949,7 @@ class McpOAuth(Response):
     client_registration: Literal["given", "metadata_document", "dynamic"]
     has_client_secret: bool
     scope: str | None
+    redirect_uri: str
 
 
 class McpToolDefinition(Response):
@@ -1101,6 +1102,7 @@ class McpSignInStarted(Response):
 
 
 class CompleteMcpSignInRequest(Request):
+    server_id: uuid.UUID
     state: Annotated[str, Field(min_length=1, max_length=200)]
     code: Annotated[str, Field(min_length=1, max_length=4000)] | None = None
     iss: Annotated[str, Field(max_length=2000)] | None = None

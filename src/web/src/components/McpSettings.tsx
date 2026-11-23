@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plug, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import { api, ApiError, ok, unwrap, type Schemas } from "../api/client";
 import { HOUSEHOLD_MCP_SERVERS, MCP_SERVERS, useHouseholdMcpServers, useMcpServers, type McpServer, type McpServerAuth, type McpServerSummary, type McpServerTool } from "../mcp";
@@ -120,6 +120,12 @@ export function McpServersSection() {
                           {changedTools > 0 && <span className="font-semibold text-danger"> · {t("mcp.admin.changedCount", { count: changedTools })}</span>}
                         </span>
                         {server.auth !== "none" && server.credential !== "valid" && <span className="block">{t("mcp.admin.connectToList")}</span>}
+                        {/* A client given by hand is registered at the service with this server's own callback (ADR-0122). */}
+                        {server.oauth?.client_registration === "given" && (
+                          <span className="block">
+                            {t("mcp.admin.callback")} <code className="font-mono break-all">{server.oauth.redirect_uri}</code>
+                          </span>
+                        )}
                       </>
                     }
                     below={
@@ -510,6 +516,8 @@ function Service({ server }: { server: McpServerSummary }) {
 export function McpSignIn() {
   const { t } = useTranslation();
   const [search] = useSearchParams();
+  // Each server has its own redirect address; the API checks the sign-in was for it (ADR-0122).
+  const { serverId } = useParams();
   const navigate = useNavigate();
   const queries = useQueryClient();
   const notify = useNotify();
@@ -523,9 +531,9 @@ export function McpSignIn() {
     const state = search.get("state");
     void (async () => {
       try {
-        if (!state) throw new Error("no state");
-        // What the redirect carried, as it carried it (ADR-0100, point 5).
-        const body: Schemas["CompleteMcpSignInRequest"] = { state };
+        if (!state || !serverId) throw new Error("no state");
+        // What the redirect carried, as it carried it, and where it came back (ADR-0100, point 5, ADR-0122).
+        const body: Schemas["CompleteMcpSignInRequest"] = { server_id: serverId, state };
         for (const name of ["code", "iss", "error", "error_description"] as const) {
           const found = search.get(name);
           if (found) body[name] = found;
@@ -538,7 +546,7 @@ export function McpSignIn() {
         setFailed(problemText(error, t("mcp.services.signInFailed")));
       }
     })();
-  }, [search, navigate, queries, notify, t]);
+  }, [search, serverId, navigate, queries, notify, t]);
 
   const back = () => void navigate("/settings?section=services", { replace: true });
   return (

@@ -16,7 +16,8 @@ import base64
 import hashlib
 import re
 import secrets
-from dataclasses import asdict, dataclass
+import uuid
+from dataclasses import asdict, dataclass, replace
 from typing import Any, cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -112,29 +113,39 @@ def contains(resource: str, url: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
 
 
-def redirect_uri(public_origin: str) -> str:
-    return public_origin.rstrip("/") + REDIRECT_PATH
+def redirect_uri(public_origin: str, server_id: uuid.UUID) -> str:
+    """The redirect address of one server's sign-ins: each server has its own (ADR-0122)."""
+    return f"{public_origin.rstrip('/')}{REDIRECT_PATH}/{server_id}"
 
 
-def client_metadata_url(public_origin: str) -> str | None:
-    """The address of Sibillo's Client ID Metadata Document, which is its client ID; none without `https`."""
+def client_metadata_url(public_origin: str, server_id: uuid.UUID) -> str | None:
+    """The address of Sibillo's Client ID Metadata Document for one server, which is its client ID there; none
+    without `https` (ADR-0122)."""
     if urlsplit(public_origin).scheme != "https":
         return None
-    return public_origin.rstrip("/") + CLIENT_METADATA_PATH
+    return f"{public_origin.rstrip('/')}{CLIENT_METADATA_PATH}/{server_id}"
 
 
-def client_metadata(public_origin: str) -> dict[str, Any]:
-    """Sibillo as an OAuth client (RFC 7591): what registration sends, and what its document says."""
+def client_metadata(public_origin: str, server_id: uuid.UUID) -> dict[str, Any]:
+    """Sibillo as the OAuth client of one server (RFC 7591): what registration sends, and what its document says,
+    naming that server's redirect address alone (ADR-0122)."""
     metadata: dict[str, Any] = {
         "client_name": CLIENT_NAME,
         "client_uri": public_origin.rstrip("/"),
-        "redirect_uris": [redirect_uri(public_origin)],
+        "redirect_uris": [redirect_uri(public_origin, server_id)],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",
     }
-    document = client_metadata_url(public_origin)
+    document = client_metadata_url(public_origin, server_id)
     return metadata if document is None else {"client_id": document, **metadata}
+
+
+def sign_in_client_id(settings: OAuthSettings, public_origin: str, server_id: uuid.UUID) -> str:
+    """The client ID of a new sign-in: for Sibillo's documents, the document of the server's ID now (ADR-0122)."""
+    if settings.client_registration == "metadata_document":
+        return client_metadata_url(public_origin, server_id) or settings.client_id
+    return settings.client_id
 
 
 def challenge_of(verifier: str) -> str:
@@ -278,6 +289,7 @@ async def settings_for(
     url: str,
     private_network: bool,
     public_origin: str,
+    server_id: uuid.UUID,
     client_id: str | None,
     client_secret: str | None,
 ) -> tuple[OAuthSettings, str | None]:
@@ -291,13 +303,15 @@ async def settings_for(
         else:
             method = "client_secret_post"
         registration, secret = "given", client_secret
-    elif found.metadata_documents and (document := client_metadata_url(public_origin)) is not None:
+    elif found.metadata_documents and (document := client_metadata_url(public_origin, server_id)) is not None:
         # The authorization server fetches Sibillo's document: nothing to register (ADR-0100, point 3).
         client_id, secret, method, registration = document, None, "none", "metadata_document"
     else:
         if found.registration_endpoint is None:
             raise OAuthError("register", "the authorization server registers no clients: give a client ID")
-        client_id, secret, method = await _register(found.registration_endpoint, private_network, public_origin)
+        client_id, secret, method = await _register(
+            found.registration_endpoint, private_network, public_origin, server_id
+        )
         registration = "dynamic"
     settings = OAuthSettings(
         issuer=found.issuer,
@@ -313,13 +327,19 @@ async def settings_for(
     return settings, secret
 
 
-async def _register(endpoint: str, private_network: bool, public_origin: str) -> tuple[str, str | None, str]:
+async def _register(
+    endpoint: str, private_network: bool, public_origin: str, server_id: uuid.UUID
+) -> tuple[str, str | None, str]:
     """Register Sibillo as a client, dynamically (RFC 7591)."""
     async with mcp_http_client(private_network=private_network, timeout=SECONDS) as client:
         try:
             response = await client.post(
                 endpoint,
-                json={name: value for name, value in client_metadata(public_origin).items() if name != "client_id"},
+                json={
+                    name: value
+                    for name, value in client_metadata(public_origin, server_id).items()
+                    if name != "client_id"
+                },
             )
         except httpx2.HTTPError as error:
             raise OAuthError("register", str(error)[:DETAIL_CHARS]) from None
@@ -338,12 +358,14 @@ async def _register(endpoint: str, private_network: bool, public_origin: str) ->
     return str(registered["client_id"]), secret, method
 
 
-def authorization_url(settings: OAuthSettings, url: str, public_origin: str, state: str, verifier: str) -> str:
+def authorization_url(
+    settings: OAuthSettings, url: str, public_origin: str, server_id: uuid.UUID, state: str, verifier: str
+) -> str:
     """The service's sign-in page for one sign-in (ADR-0100, point 5)."""
     query = {
         "response_type": "code",
-        "client_id": settings.client_id,
-        "redirect_uri": redirect_uri(public_origin),
+        "client_id": sign_in_client_id(settings, public_origin, server_id),
+        "redirect_uri": redirect_uri(public_origin, server_id),
         "state": state,
         "code_challenge": challenge_of(verifier),
         "code_challenge_method": "S256",
@@ -398,19 +420,20 @@ async def exchange(
     url: str,
     private_network: bool,
     public_origin: str,
+    server_id: uuid.UUID,
     code: str,
     verifier: str,
 ) -> Tokens:
-    """Exchange an authorization code for the server's tokens."""
+    """Exchange an authorization code for the server's tokens, as the client the sign-in named (ADR-0122)."""
     return await _token_request(
-        settings,
+        replace(settings, client_id=sign_in_client_id(settings, public_origin, server_id)),
         secret,
         private_network,
         {
             "grant_type": "authorization_code",
             "code": code,
             "code_verifier": verifier,
-            "redirect_uri": redirect_uri(public_origin),
+            "redirect_uri": redirect_uri(public_origin, server_id),
             "resource": settings.resource or url,
         },
         "exchange",
