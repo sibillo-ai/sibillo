@@ -24,7 +24,8 @@ windows in which a sandbox runs without it:
 - **The guard checks only names.** It reports the table in place when the
   set and the two chains exist, so a table emptied of its rules passes. The
   canary counts a probe that times out as blocked, which an address nobody
-  answers gives without any rule.
+  answers gives without any rule; its probe of the gateway, though, is
+  refused without the table.
 
 ## Decision
 
@@ -43,11 +44,11 @@ windows in which a sandbox runs without it:
 3. **The guard compares the whole table.** When it installs the table it
    keeps what `nft` lists of it, without the set's elements. The table is in
    place only while that listing is unchanged.
-4. **The canary has something to reach.** The guard listens on TCP port
-   9000 of its namespace and closes every connection it accepts. The canary
-   probes that port at its bridge's gateway, with and without network: the
-   probe must time out, as the input chain drops it; a connection, or a
-   refusal, means the chain is not in place.
+4. **The canary's probe of its gateway is its positive control.** Nothing
+   listens on the gateway's port 9 in the engine's namespace, which listens
+   on no network address (SBX-025): without the table the probe is refused
+   at once, which the canary reports as reachable; only the table's drop
+   makes it time out. No listener is added for it.
 5. **The driver stops sandboxes at every failed check.** While the guard
    reports the table missing or does not answer, every check of the monitor,
    every two seconds, stops every sandbox that runs, not only the first.
@@ -62,8 +63,6 @@ windows in which a sandbox runs without it:
   table; one that finds it gone, or a driver that finds the guard silent,
   stops them.
 - A sandbox starts one round trip to the guard later.
-- The guard holds one more listener, in the engine's namespace only, which
-  answers nothing.
 - An operator who wants the table gone while the engine runs removes it by
   hand, with the engine's sandboxes stopped.
 
