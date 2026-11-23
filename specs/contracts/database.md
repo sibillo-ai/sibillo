@@ -81,6 +81,7 @@ minimum needed and nothing else.
 | `auth_find_session(token_hash bytea)` | `session_id, user_id, tenant_id, role, instance_admin, password_change_required, expires_at, revoked` | Token verification on every request (AUTH-004); no row for a session of a disabled account (AUTH-009, ADR-0105) |
 | `auth_touch_session(session_id uuid)` | — | Sets `last_used_at` to now and `expires_at` to 90 days later, for a session that is neither revoked nor expired (ADR-0049) |
 | `auth_record_login_attempt(username text, source inet, success boolean)` | `allowed boolean, retry_after_seconds integer` | Rate limiting (AUTH-006), by the rules below |
+| `auth_check_login_attempt(username text, source inet)` | `allowed boolean, retry_after_seconds integer` | Whether an attempt would be refused now, by the same rules, recording and deleting nothing; called before a password is checked (AUTH-006, ADR-0118) |
 | `default_model_configured()` | `boolean` | Whether any tenant has a default model, for `/health` before any sign-in (OPS-002, ADR-0054, ADR-0069) |
 | `expired_temporary_conversations(hours integer)` | `conversation_id, tenant_id, owner_id` for every temporary conversation whose `updated_at` is more than `hours` hours ago and that has no `queued` or `running` run | Deletion of temporary conversations (CNV-011, ADR-0082): only identifiers, so the worker can delete each one under its owner's request context |
 | `expired_approvals()` | `conversation_id, tenant_id, owner_id` for every conversation whose `approvals_expire_at` has passed and that has no `queued` or `running` run | Expiry of approval requests (AGT-007, ADR-0090): only identifiers, so the worker can deny them under the owner's request context |
@@ -104,6 +105,12 @@ the time, rounded up to whole seconds, until the oldest failure counted toward
 a reached limit leaves the window (the longer, when both are reached); when
 allowed, it is 0. Each call deletes attempts older than the window.
 
+Before verifying a password, the server calls `auth_check_login_attempt`
+with the same username and source. It answers as `auth_record_login_attempt`
+would for that attempt, but records and deletes nothing. When it refuses,
+the password is not verified and the attempt is answered as refused
+(ADR-0118).
+
 The passkey step of a sign-in calls `auth_record_login_attempt` too, after
 `auth_take_sign_in` and the check of the assertion, with the sign-in's
 username, or an empty username when the token is unknown, so that it counts
@@ -119,7 +126,7 @@ these are the only policies for that role:
 | `tenants` | `SELECT`, `INSERT` | `bootstrap_instance` |
 | `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys`, and the task functions, for the account's state |
 | `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_disabled_user` |
-| `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window |
+| `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window, and `auth_check_login_attempt`, which only reads |
 | `passkey_challenges` | `SELECT`, `DELETE` | `auth_take_sign_in` |
 | `passkeys` | `SELECT`, `DELETE` | `remove_passkeys` |
 | `runs` | `SELECT` | `retention_expired_runs`, `expired_temporary_conversations`, `expired_approvals` |

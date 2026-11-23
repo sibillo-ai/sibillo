@@ -63,7 +63,10 @@ set.
 - **Phase:** 0
 - **Verification:** integration
 
-Login attempts MUST be rate-limited per account and per source address.
+Login attempts MUST be rate-limited per account and per source address. An
+attempt over a limit MUST be refused before its password is checked, and the
+server MUST check a bounded number of passwords at a time (ADR-0047,
+ADR-0118).
 
 ## AUTH-007: First administrator without default credentials
 
