@@ -3974,12 +3974,14 @@ components:
             it; `null` when gone.
         problem:
           type: [string, "null"]
-          enum: [name, description_too_long, schema_too_large, too_many_tools, requires_tasks, null]
+          enum: [name, description_too_long, schema_too_large, too_many_tools, requires_tasks, hidden_characters, null]
           description: |
             Why it cannot be accepted: its prefixed name does not fit
             `^[A-Za-z0-9_-]{1,64}$`, its description is longer than 4,000
             characters, its input schema larger than 16 KiB, the server has
-            more than 100 tools, or it requires task execution.
+            more than 100 tools, of which only 100 are kept, it requires task
+            execution, or its name, title or description holds invisible or
+            bidirectional control characters (ADR-0128).
         accepted_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
 
     McpServerEventType:
