@@ -40,8 +40,15 @@ class DcoProblemTest(unittest.TestCase):
     def test_merge_commits_are_skipped(self) -> None:
         self.assertIsNone(problem(commit("Merge branch 'x'\n", parents=2)))
 
-    def test_bots_are_exempt(self) -> None:
-        self.assertIsNone(problem(commit("chore: bump\n", name="dependabot[bot]", email="bot@example.org")))
+    def test_dependabots_commits_in_its_own_pull_requests_are_exempt(self) -> None:
+        bump = commit("chore: bump\n", name="dependabot[bot]", email="bot@example.org")
+        self.assertIsNone(problem(bump, pr_author="dependabot[bot]"))
+
+    def test_a_bot_name_is_no_exemption_by_itself(self) -> None:
+        # Anyone can name a commit's author; only GitHub says who opened the pull request (ADR-0121).
+        for name, opener in (("x[bot]", "dependabot[bot]"), ("dependabot[bot]", "mallory"), ("dependabot[bot]", None)):
+            with self.subTest(name=name, opener=opener):
+                self.assertIsNotNone(problem(commit("chore: bump\n", name=name), pr_author=opener))
 
 
 @mark.spec("REPO-002")

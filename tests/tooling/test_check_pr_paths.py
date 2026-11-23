@@ -68,10 +68,27 @@ class PullRequestPathsTest(unittest.TestCase):
         self.assertRejected("docs/x", "docs-old/page.md")
         self.assertRejected("impl/x", "srcx/app.py")
 
-    def test_dependabot_may_update_workflows_and_manifests(self) -> None:
-        self.assertAllowed("dependabot/github_actions/actions/checkout-7.1.0", ".github/workflows/ci.yml")
-        self.assertAllowed("dependabot/pip/pydantic-2.12", "pyproject.toml", "uv.lock")
-        self.assertRejected("dependabot/github_actions/x", "tools/check_dco.py")
+    def test_dependabot_may_update_workflows_manifests_and_images(self) -> None:
+        bot = "dependabot[bot]"
+        allowed = {
+            "dependabot/github_actions/actions/checkout-7.1.0": (".github/workflows/ci.yml",),
+            "dependabot/pip/pydantic-2.12": ("pyproject.toml", "uv.lock"),
+            "dependabot/npm_and_yarn/src/web/react-19.3": ("src/web/package.json", "src/web/package-lock.json"),
+            "dependabot/docker/deploy/python-3.13.10": ("deploy/images/server/Dockerfile", "deploy/compose.yaml"),
+        }
+        for branch, paths in allowed.items():
+            with self.subTest(branch=branch):
+                self.assertEqual(violations(branch, list(paths), author=bot), [])
+        self.assertNotEqual(violations("dependabot/github_actions/x", ["tools/check_dco.py"], author=bot), [])
+        # Of deploy/, only the Dockerfiles of the images and the compose file (ADR-0121).
+        self.assertNotEqual(violations("dependabot/docker/x", ["deploy/.env.example"], author=bot), [])
+        self.assertNotEqual(violations("dependabot/docker/x", ["deploy/images/server/entrypoint.sh"], author=bot), [])
+
+    def test_the_dependabot_type_is_only_for_pull_requests_that_dependabot_opened(self) -> None:
+        # A branch named like Dependabot's, from anyone else, gets no type at all (ADR-0121).
+        for author in (None, "mallory", "dependabot"):
+            with self.subTest(author=author):
+                self.assertNotEqual(violations("dependabot/pip/x", ["uv.lock"], author=author), [])
 
     def test_empty_change_is_allowed(self) -> None:
         self.assertAllowed("spec/nothing")
@@ -124,12 +141,12 @@ class MilestonePullRequestTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def git(self, *args: str) -> str:
+    def git(self, *args: str, check: bool = True) -> str:
         result = subprocess.run(
             ["git", "-c", "commit.gpgsign=false", *args],
             cwd=self.repo,
             env=self.env,
-            check=True,
+            check=check,
             capture_output=True,
             text=True,
         )
@@ -181,6 +198,38 @@ class MilestonePullRequestTest(unittest.TestCase):
         self.git("checkout", "-q", "milestone/x")
         self.git("merge", "-q", "--no-ff", "-m", "Merge branch 'master' into milestone/x", "master")
         self.assertEqual(self.problems(), [])
+
+    def test_a_merge_that_changes_more_than_its_parents_is_rejected(self) -> None:
+        self.commit("impl: the code", "src/x.py")
+        self.commit("docs: on master", "README.md", branch="master")
+        self.git("checkout", "-q", "milestone/x")
+        self.git("merge", "-q", "--no-ff", "--no-commit", "master")
+        # Amended into the merge: a change to the tools, which no parent has (ADR-0121).
+        (self.repo / "tools").mkdir(exist_ok=True)
+        (self.repo / "tools" / "check_x.py").write_text("accept everything\n")
+        self.git("add", "tools/check_x.py")
+        self.git("commit", "-q", "-m", "Merge branch 'master' into milestone/x")
+        problems = self.problems()
+        self.assertTrue(any("tools/check_x.py" in problem for problem in problems), problems)
+
+    def test_a_merge_may_resolve_conflicts_outside_the_rules(self) -> None:
+        self.commit("impl: the code", "src/x.py")
+        self.commit("impl: on master too", "src/x.py", branch="master")
+        self.git("checkout", "-q", "milestone/x")
+        self.git("merge", "-q", "master", check=False)
+        (self.repo / "src" / "x.py").write_text("resolved\n")
+        self.git("add", "src/x.py")
+        self.git("commit", "-q", "-m", "Merge branch 'master' into milestone/x")
+        self.assertEqual(self.problems(), [])
+
+    def test_a_commit_without_parents_is_rejected(self) -> None:
+        self.git("checkout", "-q", "--orphan", "orphan")
+        self.git("rm", "-q", "-r", "--cached", ".", check=False)
+        self.commit("impl: from nowhere", "tools/check_x.py", branch="orphan")
+        self.git("checkout", "-q", "milestone/x")
+        self.git("merge", "-q", "--allow-unrelated-histories", "-m", "Merge branch 'master'", "orphan")
+        problems = self.problems()
+        self.assertTrue(any("no parent" in problem for problem in problems), problems)
 
     def test_other_merges_are_rejected(self) -> None:
         self.git("checkout", "-q", "-b", "side", "milestone/x")

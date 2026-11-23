@@ -66,7 +66,17 @@ class PendingGateTest(unittest.TestCase):
     def run_pytest(self, test_source: str) -> subprocess.CompletedProcess[str]:
         self.write("tests/test_example.py", "import pytest\n\n" + test_source)
         return subprocess.run(
-            [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rxX", "-W", "ignore::pytest.PytestUnknownMarkWarning", "tests"],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-p",
+                "no:cacheprovider",
+                "-rxX",
+                "-W",
+                "ignore::pytest.PytestUnknownMarkWarning",
+                "tests",
+            ],
             cwd=self.root,
             capture_output=True,
             text=True,

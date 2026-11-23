@@ -121,7 +121,7 @@ class TraceabilityTest(unittest.TestCase):
         self.assertTrue(any("must be string literals" in error for error in errors), errors)
 
     def test_marker_without_ids_fails(self) -> None:
-        self.write("tests/test_a.py", 'import pytest\n\n@pytest.mark.spec()\ndef test_a(): ...\n')
+        self.write("tests/test_a.py", "import pytest\n\n@pytest.mark.spec()\ndef test_a(): ...\n")
         errors = check_traceability.check(self.root).errors
         self.assertTrue(any("without requirement IDs" in error for error in errors), errors)
 
