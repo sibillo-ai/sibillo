@@ -47,6 +47,8 @@ def test_components_hold_no_user_facing_text() -> None:
 @pytest.mark.spec("I18N-001")
 def test_every_string_the_app_uses_is_translated() -> None:
     english = _keys(json.loads(ENGLISH.read_text()))
+    # A key with plural forms is used by its name, and i18next picks the form (I18N-006, ADR-0135).
+    english |= {key.removesuffix("_other") for key in english if key.endswith("_other")}
     used = {key for path in [*SOURCES.rglob("*.ts"), *_components()] for key in KEY.findall(path.read_text())}
     assert used, "no translated strings found: the pattern no longer matches the app"
     assert sorted(used - english) == []

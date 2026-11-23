@@ -81,6 +81,8 @@ def browser(playwright: Playwright) -> Iterator[Browser]:
             "--use-fake-device-for-media-stream",
             "--use-fake-ui-for-media-stream",
             "--autoplay-policy=no-user-gesture-required",
+            # The interface follows the browser's language (I18N-004): English, whatever the host's.
+            "--lang=en-US",
         ]
     )
     yield chromium
@@ -89,7 +91,7 @@ def browser(playwright: Playwright) -> Iterator[Browser]:
 
 @pytest.fixture
 def page(browser: Browser, web_origin: str) -> Iterator[Page]:
-    context = browser.new_context(base_url=web_origin)
+    context = browser.new_context(base_url=web_origin, locale="en-US")
     page = context.new_page()
     page.set_default_timeout(15_000)
     yield page

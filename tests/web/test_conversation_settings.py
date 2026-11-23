@@ -95,15 +95,16 @@ def test_my_preferred_language_reaches_every_chat(page: Page, member: Account, d
     expect(language).to_have_value("")
     # Each language is named in its own language and in the interface's.
     expect(language.locator("option[value='it']")).to_have_text(re.compile("italiano.*Italian", re.IGNORECASE))
+    # English, so that the interface, which follows the preferred language (I18N-004), stays as the test reads it.
     with page.expect_response(_saved):
-        language.select_option("it")
+        language.select_option("en")
     assert accessibility_violations(page) == []
     page.reload()
-    expect(page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True)).to_have_value("it")
+    expect(page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True)).to_have_value("en")
     # The chat started before uses it from its next answer.
     page.go_back()
     expect(page.get_by_role("main")).to_contain_text(f"Echo: before {mark}", timeout=30_000)
-    assert "`it`" in _request(page, default_model, f"after {mark}").system_text()
+    assert "`en`" in _request(page, default_model, f"after {mark}").system_text()
     page.get_by_role("link", name="Settings").click()
     with page.expect_response(_saved):
         page.get_by_role("region", name="Assistant").get_by_label("Language", exact=True).select_option("")
