@@ -618,6 +618,8 @@ TABLES = [
       -- What its user allowed by answering approval requests (AGT-004, AGT-006, ADR-0090).
       allowed_internet_access boolean NOT NULL DEFAULT false,
       allowed_tools text[] NOT NULL DEFAULT '{{}}' CHECK (allowed_tools <@ {TOOL_NAMES}),
+      -- A rewind deleted untrusted content, which its task list and workspace may still carry (ADR-0123).
+      leftovers_untrusted boolean NOT NULL DEFAULT false,
       base_instructions text,
       additional_instructions text,
       -- Folders, pins and forks (CNV-005, CNV-007, CNV-008, ADR-0073).

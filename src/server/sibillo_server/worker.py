@@ -535,7 +535,10 @@ async def run_workflow(serialized_input: str) -> None:
         )
         allowed = (
             await connection.execute(
-                text("SELECT allowed_internet_access, allowed_tools FROM conversations WHERE id = :id"),
+                text(
+                    "SELECT allowed_internet_access, allowed_tools, leftovers_untrusted FROM conversations"
+                    " WHERE id = :id"
+                ),
                 {"id": conversation_id},
             )
         ).one()
@@ -576,8 +579,12 @@ async def run_workflow(serialized_input: str) -> None:
             turn_denied_internet_access=attribution.turn_denied_internet_access,
         ),
         # An untrusted memory item, or an untrusted skill offered by its description, makes the run untrusted
-        # from its start (MEM-008, AGT-025, ADR-0095, ADR-0116).
-        untrusted=untrusted or any(item.untrusted for item in memory or ()) or any(skill.untrusted for skill in skills),
+        # from its start (MEM-008, AGT-025, ADR-0095, ADR-0116), and so does what a rewind left behind of
+        # deleted untrusted content (ADR-0123).
+        untrusted=untrusted
+        or allowed.leftovers_untrusted
+        or any(item.untrusted for item in memory or ())
+        or any(skill.untrusted for skill in skills),
         memory=memory,
         skills=skills,
         temporary=run.temporary,

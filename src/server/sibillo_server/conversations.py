@@ -35,7 +35,7 @@ from sibillo_server.plans import CONVERSATION_PLAN, copy_plan, plan_steps
 from sibillo_server.questions import interrupts
 from sibillo_server.sandbox import SandboxDriver, withdraw_network, workspace_request
 from sibillo_server.settings import new_conversation
-from sibillo_server.tool_policy import denies_internet_access
+from sibillo_server.tool_policy import denies_internet_access, has_untrusted_content
 
 router = APIRouter()
 
@@ -47,7 +47,8 @@ TURN_INTERNET_ACCESS = (
 CONVERSATION_COLUMNS = (
     "id, title, archived_at IS NOT NULL AS archived, temporary, task_id, task_name, active_run_id, connection_id,"
     " model, reasoning,"
-    " disabled_tools, disabled_skills, disabled_servers, allowed_internet_access, allowed_tools, base_instructions,"
+    " disabled_tools, disabled_skills, disabled_servers, allowed_internet_access, allowed_tools, leftovers_untrusted,"
+    " base_instructions,"
     " additional_instructions, folder_id,"
     " pinned_at IS NOT NULL AS pinned, forked_from_conversation_id, forked_from_run_id, last_message_at,"
     f" pending_interrupts, approvals_expire_at, {CONVERSATION_PLAN}, created_at, updated_at, {CONVERSATION_COST},"
@@ -326,9 +327,19 @@ async def update_conversation(
 
 @router.post("/conversations/{conversation_id}/rewind", response_model=schemas.Conversation)
 async def rewind_conversation(
-    conversation_id: uuid.UUID, body: schemas.RewindRequest, identity: Authenticated, engine: Engine, durable: Durable
+    conversation_id: uuid.UUID,
+    body: schemas.RewindRequest,
+    identity: Authenticated,
+    engine: Engine,
+    durable: Durable,
+    request: Request,
 ) -> schemas.Conversation:
-    """Make a run the last of the conversation, deleting the runs after it (CNV-004, ADR-0068)."""
+    """Make a run the last of the conversation, deleting the runs after it (CNV-004, ADR-0068).
+
+    Deleting untrusted content marks the conversation and withdraws its allowances: its task list and its
+    workspace may still carry that content (ADR-0123).
+    """
+    untrusted = False
     async with transaction(engine, identity) as connection:
         await find_conversation(connection, conversation_id, lock=True)
         await _refuse_while_active(connection, conversation_id)
@@ -370,6 +381,7 @@ async def rewind_conversation(
                     {"first": following.id},
                 )
             ]
+            untrusted = await runs_hold_untrusted_content(connection, [uuid.UUID(run_id) for run_id in deleted])
             # The workflows hold the runs' content without row-level security, so
             # they go first; their IDs come from the row-level-secured runs (TEN-009).
             await durable.delete_workflows_async(deleted)
@@ -378,13 +390,27 @@ async def rewind_conversation(
         row = (
             await connection.execute(
                 text(
-                    "UPDATE conversations SET active_run_id = CAST(:run AS uuid), updated_at = now()"  # noqa: S608
+                    "UPDATE conversations SET active_run_id = CAST(:run AS uuid), updated_at = now(),"  # noqa: S608
+                    " leftovers_untrusted = leftovers_untrusted OR :untrusted,"
+                    " allowed_internet_access = allowed_internet_access AND NOT :untrusted,"
+                    " allowed_tools = CASE WHEN :untrusted THEN '{}' ELSE allowed_tools END"
                     f" WHERE id = :id RETURNING {CONVERSATION_COLUMNS}"
                 ),
-                {"run": body.run_id, "id": conversation_id},
+                {"run": body.run_id, "id": conversation_id, "untrusted": untrusted},
             )
         ).one()
+    if untrusted:
+        # The allowances go with what may have asked for them: the sandbox loses its network at once (AGT-034).
+        await withdraw_network(_driver(request), identity, conversation_id)
     return conversation_response(row)
+
+
+async def runs_hold_untrusted_content(connection: AsyncConnection, run_ids: Sequence[uuid.UUID]) -> bool:
+    """Whether the messages of any of the runs hold untrusted content (AGT-003)."""
+    stored = await stored_messages(connection, run_ids)
+    return any(
+        has_untrusted_content(ModelMessagesTypeAdapter.validate_python(messages)) for messages in stored.values()
+    )
 
 
 async def _owns_folder(connection: AsyncConnection, folder_id: uuid.UUID) -> bool:
@@ -456,12 +482,21 @@ async def fork_conversation(
                     {"new": new_ids[run.id], "fork": fork_id, "old": run.id},
                 )
         await copy_plan(connection, conversation_id, fork_id)
+        # It copies the workspace as it is now: untrusted when anything of its conversation is (ADR-0123).
+        everything = [
+            row.id
+            for row in await connection.execute(
+                text("SELECT id FROM runs WHERE conversation_id = :id"), {"id": conversation_id}
+            )
+        ]
+        untrusted = original.leftovers_untrusted or await runs_hold_untrusted_content(connection, everything)
         row = (
             await connection.execute(
                 text(
-                    f"UPDATE conversations SET active_run_id = :last WHERE id = :fork RETURNING {CONVERSATION_COLUMNS}"  # noqa: S608
+                    "UPDATE conversations SET active_run_id = :last, leftovers_untrusted = :untrusted"  # noqa: S608
+                    f" WHERE id = :fork RETURNING {CONVERSATION_COLUMNS}"
                 ),
-                {"last": new_ids[path[-1].id], "fork": fork_id},
+                {"last": new_ids[path[-1].id], "fork": fork_id, "untrusted": untrusted},
             )
         ).one()
         source = {"from_conversation_id": str(conversation_id)}
