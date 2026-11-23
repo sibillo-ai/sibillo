@@ -4237,7 +4237,8 @@ components:
       type: object
       description: |
         What the user allowed in this conversation by answering approval
-        requests (AGT-006, ADR-0090, ADR-0113). Never copied into a fork.
+        requests, or by turning internet access on (AGT-006, ADR-0090,
+        ADR-0113, ADR-0115). Never copied into a fork.
       required: [internet_access, tools]
       properties:
         internet_access:
@@ -4246,6 +4247,13 @@ components:
             Whether the conversation has internet access (AGT-034): `web_search`
             and `read_page` run, and its sandbox has network. An allowance
             for the turn only is not shown here.
+        turn_internet_access:
+          type: boolean
+          readOnly: true
+          description: |
+            Whether the turn that is going on has internet access for the
+            turn only, until its last run ends (UX-042, ADR-0115). Always
+            in a response; ignored in a request.
         tools:
           type: array
           description: The tools whose approval, by default or by a tool permission, is lifted in this conversation.
@@ -4853,6 +4861,14 @@ components:
           type: boolean
           default: false
           description: Start a temporary conversation, which stays temporary (CNV-011, ADR-0082).
+        internet_access:
+          type: boolean
+          default: false
+          description: |
+            Start the conversation with internet access, as its user turned
+            it on on the new-chat screen (AGT-034, UX-042, ADR-0115); refused
+            with `request.validation_failed` when the user's permissions deny
+            it.
 
     UpdateConversationRequest:
       type: object
@@ -4879,12 +4895,15 @@ components:
         allowances:
           allOf: [{ $ref: "#/components/schemas/Allowances" }]
           description: |
-            Withdraws allowances: `internet_access` may only become false,
-            which takes the network from the conversation's sandbox at once
-            (AGT-034), and `tools` may only lose tools. An allowance it
-            would add is refused with `request.validation_failed`;
-            allowances are created only by answering approval requests
-            (AGT-006, AGT-012).
+            Turns internet access on or off, and withdraws allowances.
+            `internet_access` true gives the conversation internet access, as
+            its user turning it on (UX-042, ADR-0115), refused with
+            `request.validation_failed` when the user's permissions deny it;
+            false withdraws it, for the conversation and for the turn that is
+            going on, and takes the network from the conversation's sandbox at
+            once (AGT-034). `tools` may only lose tools: a tool it would add is
+            refused with `request.validation_failed`, since tools are allowed
+            only by answering approval requests (AGT-006, AGT-012).
         base_instructions:
           allOf: [{ $ref: "#/components/schemas/Instructions" }]
           description: Its own base instructions, or `null` to restore its user's defaults (CNV-014).

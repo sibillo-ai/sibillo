@@ -589,9 +589,12 @@ When it is allowed, the waiting calls MUST run. When it is denied or expires
 (AGT-007), every waiting call MUST be denied, the model MUST be told, and
 any later call that needs internet access in the same turn MUST be denied
 without asking. Internet access MUST be an allowance as AGT-006 defines
-them: created only by answering an approval request, shown with the
-conversation, withdrawable by its user, and never copied into a fork;
-withdrawing it MUST take the network from a running sandbox at once. There
+them: created only by answering an approval request, or by its user turning
+it on for that conversation (UX-042), shown with the conversation,
+withdrawable by its user, and never copied into a fork; withdrawing it MUST
+take the network from a running sandbox at once, and from the turn that is
+going on. A run MUST read the conversation's internet access again before
+each call that needs it (ADR-0115). There
 MUST NOT be internet access that outlasts its conversation, other than a
 task grant (TSK-004), nor a setting that gives it to new conversations. The
 agent's instructions MUST say that the sandbox has no network and the web

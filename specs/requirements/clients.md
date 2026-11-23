@@ -768,3 +768,26 @@ any other, with its sounds, and its answer MUST be read aloud (ADR-0113).
 Rationale: journey J9; a request that nobody hears stops the conversation
 of someone who is driving, and a request answered by a sound the microphone
 caught would be no approval at all.
+
+## UX-042: A switch for internet access
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** e2e
+
+A conversation's top bar (UX-039) MUST hold a switch for internet access
+(AGT-034) on every size of screen, and the new-chat screen MUST hold one
+whose position the conversation gets when it is created. The switch MUST be
+on while the conversation has internet access, for the conversation or for
+the turn that is going on, and off otherwise: answering a request for the
+turn MUST turn it on until the turn ends. Turning it on MUST give the
+conversation internet access, and MUST answer a request for internet access
+that waits as "Allow in this chat" does; turning it off MUST withdraw it,
+for the conversation and for the turn. Its label MUST say what internet
+access lets the assistant do. A user whose permissions deny internet access
+MUST NOT see it. No setting MAY turn it on for new conversations (ADR-0115).
+
+Rationale: whether the assistant can reach the internet is worth seeing at
+a glance, and giving it before the work starts saves a request, in
+hands-free mode above all.
