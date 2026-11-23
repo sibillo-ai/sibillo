@@ -317,7 +317,7 @@ host needs attention.
 
 ## SBX-024: No network without internet access
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** integration, security
