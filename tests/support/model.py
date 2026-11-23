@@ -25,6 +25,9 @@ last user message:
 - `chain:<name> <arguments> >>> <name> <arguments> …` calls each tool in
   turn, one per answer, each once the result of the one before has arrived,
   then answers `Tool said: <last result>` (ADR-0090);
+- `calls:<name> <arguments> ||| <name> <arguments> …` calls every tool at
+  once, in one answer, then, once their results have arrived, answers
+  `Tool said: <results>`, each result on a line of its own (AGT-034);
 - `images?`, at the start of the message, answers `Saw N image(s): <hashes>`:
   how many images the request holds and the SHA-256 of the bytes of each, in
   their order (CNV-020);
@@ -481,6 +484,9 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 name, _, arguments = call.partition(" ")
                 self._named_tool_turn(body, name, arguments or "{}", said)
                 return
+            if last.startswith("calls:"):
+                self._parallel_turn(body, last.removeprefix("calls:").split(" ||| "))
+                return
             if last.startswith("chain:"):
                 self._chained_turns(body, last.removeprefix("chain:").split(" >>> "))
                 return
@@ -614,6 +620,42 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 return
             name, _, arguments = calls[done].partition(" ")
             self._call(body, name, arguments or "{}")
+
+        def _parallel_turn(self, body: dict[str, Any], calls: list[str]) -> None:
+            messages = cast(list[dict[str, Any]], body.get("messages", []))
+            if messages and messages[-1].get("role") == "tool":
+                users = [index for index, message in enumerate(messages) if message.get("role") == "user"]
+                results = [
+                    str(message.get("content", ""))[:1000]
+                    for message in messages[(users[-1] if users else -1) + 1 :]
+                    if message.get("role") == "tool"
+                ]
+                self._answer(body, [("Tool said: " + "\n".join(results), 0.0)])
+                return
+            parsed = [(name, arguments or "{}") for name, _, arguments in (call.partition(" ") for call in calls)]
+            tool_calls = [
+                {
+                    "id": f"call-{len(messages)}-{index}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": args},
+                }
+                for index, (name, args) in enumerate(parsed)
+            ]
+            if not body.get("stream"):
+                completion = self._completion(body, "")
+                completion["choices"][0] = {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": None, "tool_calls": tool_calls},
+                    "finish_reason": "tool_calls",
+                }
+                self._json(200, completion)
+                return
+            self._start_stream()
+            base = self._chunk_base(body)
+            for index, call in enumerate(tool_calls):
+                delta = {"role": "assistant", "tool_calls": [call | {"index": index}]}
+                self._event(base | {"choices": [self._choice(delta, None)]})
+            self._finish(base, "tool_calls")
 
         def _named_tool_turn(self, body: dict[str, Any], name: str, arguments: str, said: str = "") -> None:
             messages = cast(list[dict[str, Any]], body.get("messages", []))

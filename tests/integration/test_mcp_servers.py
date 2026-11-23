@@ -23,19 +23,17 @@ import pytest
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
 from tests.support.approvals import (
     activity,
-    approval_of,
     approve,
     asked,
     completed,
-    fresh_query,
+    holds_untrusted_content,
     interrupts,
     resumed,
-    search,
 )
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.mcp import SERVER_INSTRUCTIONS, McpServer, McpService, Result, follow_sign_in, tool
-from tests.support.runs import create_conversation, start_run, text_of, wait_for_run
+from tests.support.runs import create_conversation, text_of, wait_for_run
 from tests.support.server import MCP_CALL_SECONDS, Server
 
 
@@ -742,8 +740,9 @@ def test_every_call_is_approved_once_reaches_the_server_with_the_users_token_and
     token = mcp.new_token()
     give_token(server, household.member_token, added["id"], token)
     conversation_id = create_conversation(server, household.member_token)["id"]
-    # Offering the server's reviewed tools asks nothing about the web (ADR-0099).
-    completed(server, household.member_token, conversation_id, search(fresh_query("before")))
+    # Offering the server's reviewed tools makes nothing untrusted (ADR-0099).
+    assert holds_untrusted_content(server, household.member_token, conversation_id) is False
+    conversation_id = create_conversation(server, household.member_token)["id"]
     _, request = asked(server, household.member_token, conversation_id, call(added["prefix"], "turn_on"))
     approval = request["metadata"]["approval"]
     assert approval["tool"] == f"{added['prefix']}__turn_on"
@@ -763,10 +762,8 @@ def test_every_call_is_approved_once_reaches_the_server_with_the_users_token_and
     assert sent.headers["authorization"] == f"Bearer {token}"
     events_of_call = activity(server, household.member_token, tool=f"{added['prefix']}__turn_on")
     assert [event["outcome"] for event in events_of_call] == ["approved"]
-    # Its result is untrusted content: the web is asked from then on.
-    run_id, events = start_run(server, household.member_token, conversation_id, search(fresh_query("after")))
-    wait_for_run(server, household.member_token, run_id)
-    assert approval_of(events)["metadata"]["approval"]["reason"] == "untrusted_content"
+    # Its result is untrusted content, as the next request for internet access says.
+    assert holds_untrusted_content(server, household.member_token, conversation_id) is True
 
 
 @pytest.mark.spec("AGT-019", "AGT-028")

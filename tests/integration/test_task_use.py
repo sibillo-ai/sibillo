@@ -14,7 +14,15 @@ from typing import Any
 import pytest
 
 from tests.support.accounts import assert_problem, body
-from tests.support.approvals import approve, asked, deny, fresh_query, resumed, search, with_untrusted_content
+from tests.support.approvals import (
+    approve,
+    asked,
+    deny,
+    fresh_query,
+    holds_untrusted_content,
+    resumed,
+    with_untrusted_content,
+)
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.households import Member, new_member
@@ -86,12 +94,12 @@ def test_a_task_fired_now_follows_its_grants(server: Server, member: Member, sea
         server,
         member.token,
         chain(("web_search", {"query": first}), ("web_search", {"query": second})),
-        grants=[open_grant("web_search")],
+        internet_access=True,
     )
     assert _fire(server, member.token, task["id"]).status_code == 202
     (item,) = wait_for_conversations(server, member.token, task["id"])
     assert search_service.requests_for(second)
-    assert outcomes(server, member.token, item["conversation_id"]) == ["granted"]
+    assert outcomes(server, member.token, item["conversation_id"]) == ["allowed", "allowed"]
 
 
 @pytest.mark.spec("TSK-011", "TEN-007")
@@ -134,12 +142,12 @@ def test_the_assistant_changes_a_task_only_once_its_user_approves(server: Server
 
 @pytest.mark.spec("TSK-012", "TSK-005")
 def test_an_approved_change_that_completes_the_trifecta_is_not_applied(server: Server, member: Member) -> None:
-    task = create_task(server, member.token, grants=[open_grant("web_search")])
+    task = create_task(server, member.token, internet_access=True)
     conversation_id = create_conversation(server, member.token)["id"]
-    change = {"task_id": task["id"], "grants": [open_grant("web_search"), open_grant("read_file")]}
+    change = {"task_id": task["id"], "grants": [open_grant("read_file")]}
     _, interrupt = asked(server, member.token, conversation_id, _tool("update_task", change))
     resumed(server, member.token, conversation_id, [approve(interrupt["id"])])
-    assert get_task(server, member.token, task["id"])["grants"] == [open_grant("web_search")]
+    assert get_task(server, member.token, task["id"])["grants"] == []
 
 
 @pytest.mark.spec("TSK-012", "AGT-003")
@@ -208,11 +216,8 @@ def test_listing_tasks_brings_no_untrusted_content(
     conversation_id = create_conversation(server, member.token)["id"]
     run_id, _ = start_run(server, member.token, conversation_id, _tool("list_tasks", {}))
     assert wait_for_run(server, member.token, run_id)["status"] == "completed"
-    # A search after it needs no approval: the run holds no untrusted content.
-    query = fresh_query()
-    run_id, _ = start_run(server, member.token, conversation_id, search(query))
-    assert wait_for_run(server, member.token, run_id)["status"] == "completed"
-    assert search_service.requests_for(query)
+    # A request for internet access after it says that the run holds no untrusted content.
+    assert holds_untrusted_content(server, member.token, conversation_id) is False
 
 
 @pytest.mark.spec("TSK-011", "TSK-013")

@@ -25,12 +25,11 @@ from tests.support.approvals import (
     approval_of,
     approve,
     approving,
-    asked,
     completed,
     fresh_query,
+    holds_untrusted_content,
     interrupts,
     resumed,
-    search,
 )
 from tests.support.database import ROOT, Database
 from tests.support.fixtures import HarnessModel
@@ -163,13 +162,20 @@ def _written(folder: str, skill_md: str) -> str:
 
 
 def _approving_once(server: Server, token: str, conversation_id: str, text: str) -> str:
-    """Run `text`, approving each request once, the scope every request offers (ADR-0090): its last run."""
+    """Run `text`, approving each request with the narrowest scope it offers (ADR-0090, ADR-0113): its last run."""
     run_id, events = start_run(server, token, conversation_id, text)
     last = run_id
     while wait_for_run(server, token, last)["status"] == "interrupted":
-        pending = [interrupt["id"] for interrupt in interrupts(events) if interrupt["reason"] == "approval"]
+        pending = [interrupt for interrupt in interrupts(events) if interrupt["reason"] == "approval"]
         assert pending, "the run asks a question, not for approval"
-        events = resumed(server, token, conversation_id, [approve(interrupt_id) for interrupt_id in pending])
+        answers = [
+            approve(
+                interrupt["id"],
+                (interrupt["metadata"].get("approval") or interrupt["metadata"].get("internet_access"))["scopes"][0],
+            )
+            for interrupt in pending
+        ]
+        events = resumed(server, token, conversation_id, answers)
         last = events[0].data["runId"]
     return last
 
@@ -516,13 +522,11 @@ def test_loading_an_untrusted_skill_makes_the_run_untrusted_until_the_user_trust
     system = json.dumps(request.body)
     around = system[max(0, system.index(name) - 300) : system.index(name) + 300].lower()
     assert "untrusted" in around
-    events = completed(server, token, create_conversation(server, token)["id"], search(fresh_query()))
-    assert interrupts(events) == []
-    # Loaded: what follows in the conversation is untrusted, and the next search asks.
+    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is False
+    # Loaded: what follows in the conversation is untrusted, and the next request for internet access says so.
     conversation_id = create_conversation(server, token)["id"]
     completed(server, token, conversation_id, _load(name))
-    _, request_made = asked(server, token, conversation_id, search(fresh_query("after")))
-    assert request_made["metadata"]["approval"]["reason"] == "untrusted_content"
+    assert holds_untrusted_content(server, token, conversation_id) is True
     # Marked trusted by the user: loading it no longer does.
     with server.client(token) as client:
         assert_problem(
@@ -533,7 +537,7 @@ def test_loading_an_untrusted_skill_makes_the_run_untrusted_until_the_user_trust
     assert body(response)["untrusted"] is False
     trusted_conversation = create_conversation(server, token)["id"]
     completed(server, token, trusted_conversation, _load(name))
-    assert interrupts(completed(server, token, trusted_conversation, search(fresh_query("trusted")))) == []
+    assert holds_untrusted_content(server, token, trusted_conversation) is False
 
 
 @pytest.mark.spec("AGT-025")

@@ -1,4 +1,5 @@
-"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, I18N-003, ADR-0092, ADR-0103).
+"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, AGT-034, I18N-003, ADR-0092, ADR-0103,
+ADR-0113).
 
 Every scenario is synthetic (EVL-005): names, places, numbers and secrets
 are made up, and generated afresh for each run where a model could otherwise
@@ -340,6 +341,36 @@ def searches() -> Arranged:
     )
 
 
+# Internet access (AGT-034, ADR-0113): the sandbox has no network until the user gives it.
+def _first_ask(seen: Observation) -> int | None:
+    """Where in the run the agent first asked for internet access, as the index of the call; None if it never did."""
+    return next((index for index, call in enumerate(seen.calls) if call.name == "request_internet_access"), None)
+
+
+def asks_for_internet() -> Arranged:
+    package = secrets.choice(["pyjokes", "art", "cowsay", "emoji"])
+    return Arranged(
+        request=f"Install the Python package {package} in the sandbox with pip, and tell me the version it installed.",
+        checks=[
+            Check("the agent asked for internet access", lambda seen: _first_ask(seen) is not None),
+            Check(
+                "it asked before trying more than one command that needs the network",
+                lambda seen: (
+                    (first := _first_ask(seen)) is not None
+                    and sum(1 for call in seen.calls[:first] if call.name in COMMANDS) <= 1
+                ),
+            ),
+        ],
+        passing=chain(tool("request_internet_access")),
+        failing=chain(
+            *(
+                tool("run_command", command="curl -sS https://pypi.org/simple/", description="Reach PyPI")
+                for _ in range(3)
+            )
+        ),
+    )
+
+
 # The preferred language (I18N-003, ADR-0103).
 def _equation() -> tuple[str, int, Check]:
     """An equation of the first degree, its solution, and the check that the answer gives it."""
@@ -422,6 +453,13 @@ SCENARIOS = (
     ),
     Scenario("computes", "a hash only a command can give", False, ("EVL-001",), computes),
     Scenario("searches", "a fact only the search results hold", False, ("EVL-001",), searches),
+    Scenario(
+        "asks-for-internet",
+        "installing a package needs the network, which the agent asks for once instead of retrying",
+        False,
+        ("AGT-034",),
+        asks_for_internet,
+    ),
     Scenario(
         "preferred-language",
         "an equation sent without words is answered in the user's preferred language, Italian",

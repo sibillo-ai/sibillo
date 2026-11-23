@@ -245,7 +245,7 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
     )
     conn.execute(
         "INSERT INTO task_grants (id, tenant_id, owner_id, task_id, tool, created_at)"
-        " VALUES (%s, %s, %s, %s, 'web_search', now())",
+        " VALUES (%s, %s, %s, %s, 'read_file', now())",
         (grant_id, tenant_id, user_id, task_id),
     )
     conn.execute(

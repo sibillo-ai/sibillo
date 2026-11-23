@@ -1,8 +1,9 @@
-"""Approval requests, and how tests answer them (AGT-004, AGT-006, AGT-007, AGT-012, ADR-0090).
+"""Approval requests, and how tests answer them (AGT-004, AGT-006, AGT-007, AGT-012, AGT-034, ADR-0090, ADR-0113).
 
 The model the tests serve calls a tool by name when the user's message is
 `tool:<name> <arguments>` (tests/support/model.py). Searches reach the search
-service the tests serve, whose results are untrusted content.
+service the tests serve, whose results are untrusted content. The web tools
+need internet access, which a conversation has only once its user gives it.
 """
 
 from __future__ import annotations
@@ -18,12 +19,15 @@ from tests.support.database import uuid7
 from tests.support.runs import Event, create_conversation, parse_events, start_run, wait_for_run
 from tests.support.server import Server
 
-# The classes and approval defaults of ADR-0090.
+# The classes and approval defaults of ADR-0090, as ADR-0113 amends them.
 DECLARED: dict[str, tuple[set[str], str]] = {
     "web_search": ({"ingests_untrusted", "external_communication"}, "allow"),
     "read_page": ({"ingests_untrusted", "external_communication"}, "allow"),
-    "run_command": ({"reads_private_data", "ingests_untrusted", "external_communication"}, "allow"),
-    "start_command": ({"reads_private_data", "ingests_untrusted", "external_communication"}, "allow"),
+    # Asks for internet access, and does nothing else (AGT-034).
+    "request_internet_access": (set[str](), "allow"),
+    # A command's only way out is the sandbox's network, which internet access governs (ADR-0113).
+    "run_command": ({"reads_private_data", "ingests_untrusted"}, "allow"),
+    "start_command": ({"reads_private_data", "ingests_untrusted"}, "allow"),
     **{
         name: ({"reads_private_data", "ingests_untrusted"}, "allow")
         for name in (
@@ -95,6 +99,13 @@ def approval_of(events: list[Event]) -> dict[str, Any]:
     return interrupt
 
 
+def internet_request(events: list[Event]) -> dict[str, Any]:
+    """The one request for internet access the run ended with (AGT-034)."""
+    interrupt = approval_of(events)
+    assert interrupt["id"].startswith("apr-internet-"), interrupt
+    return interrupt
+
+
 def approve(interrupt_id: str, scope: str = "once") -> dict[str, Any]:
     return {"interruptId": interrupt_id, "status": "resolved", "payload": {"approved": True, "scope": scope}}
 
@@ -132,10 +143,20 @@ def completed(server: Server, token: str, conversation_id: str, text: str) -> li
 
 
 def with_untrusted_content(server: Server, token: str) -> str:
-    """A new conversation whose first turn searched the web: it has untrusted content from then on."""
+    """A new conversation whose first turn searched the web, with internet access for that turn only: it has
+    untrusted content from then on, and no internet access."""
     conversation_id = create_conversation(server, token)["id"]
-    completed(server, token, conversation_id, search(fresh_query("first")))
+    approving(server, token, conversation_id, search(fresh_query("first")))
     return conversation_id
+
+
+def holds_untrusted_content(server: Server, token: str, conversation_id: str) -> bool:
+    """Whether a run in the conversation, which has no internet access, now holds untrusted content: what the
+    request for internet access of a search says (AGT-003, AGT-034). The request is left pending."""
+    run_id, events = start_run(server, token, conversation_id, search(fresh_query("probe")))
+    assert wait_for_run(server, token, run_id)["status"] == "interrupted"
+    untrusted: bool = internet_request(events)["metadata"]["internet_access"]["untrusted_content"]
+    return untrusted
 
 
 def asked(server: Server, token: str, conversation_id: str, text: str) -> tuple[str, dict[str, Any]]:
@@ -157,8 +178,7 @@ def activity(server: Server, token: str, **params: str) -> list[dict[str, Any]]:
 def approving(server: Server, token: str, conversation_id: str, text: str) -> tuple[str, list[Event], str]:
     """Run `text`, approving for the turn every request it makes (ADR-0090): its first run, every event, its last run.
 
-    For tests of other things that need more than one command or search in a conversation, which,
-    from the second on, ask for approval.
+    For tests of other things that search the web or read pages, which ask for internet access (AGT-034).
     """
     run_id, events = start_run(server, token, conversation_id, text)
     seen = list(events)

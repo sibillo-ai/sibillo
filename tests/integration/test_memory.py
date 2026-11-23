@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
-from tests.support.approvals import asked, completed, fresh_query, interrupts, search
+from tests.support.approvals import approving, asked, completed, fresh_query, holds_untrusted_content, search
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.model import ModelRequest
@@ -254,8 +254,8 @@ def test_items_written_after_untrusted_content_are_untrusted_until_the_user_save
     conversation_id = create_conversation(server, token)["id"]
     planted = _fact("planted")
     query = fresh_query("garden")
-    # The first search needs no approval; what it returns is untrusted, and so is what follows.
-    completed(
+    # What the search returns is untrusted, and so is what follows.
+    approving(
         server,
         token,
         conversation_id,
@@ -263,19 +263,19 @@ def test_items_written_after_untrusted_content_are_untrusted_until_the_user_save
     )
     (item,) = _items(server, token)
     assert (item["text"], item["origin"], item["untrusted"]) == (planted, "assistant", True)
-    # A new conversation is given it labeled as untrusted, and is untrusted from its start: its first search asks.
+    # A new conversation is given it labeled as untrusted, and is untrusted from its start: its first request
+    # for internet access says so.
     fresh = create_conversation(server, token)["id"]
     text = search(fresh_query("first"))
     _, request = asked(server, token, fresh, text)
-    assert request["metadata"]["approval"]["reason"] == "untrusted_content"
+    assert request["metadata"]["internet_access"]["untrusted_content"] is True
     system = default_model.endpoint.requests_with(text)[0].system_text()
     assert planted in system
     assert "untrusted" in system[system.index(item["id"]) - 200 : system.index(planted) + 200].lower()
     # Saved by the user, unchanged: confirmed, trusted, and runs are trusted again.
     saved = _edit(server, token, item["id"], planted)
     assert (saved["origin"], saved["untrusted"], saved["conversation"]) == ("user", False, None)
-    events = completed(server, token, create_conversation(server, token)["id"], search(fresh_query("again")))
-    assert interrupts(events) == []
+    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is False
 
 
 @pytest.mark.spec("MEM-008")
@@ -285,7 +285,7 @@ def test_an_item_updated_after_untrusted_content_becomes_untrusted(
     item = _add(server, token, _fact())
     conversation_id = create_conversation(server, token)["id"]
     changed = _fact("changed")
-    completed(
+    approving(
         server,
         token,
         conversation_id,
@@ -302,8 +302,7 @@ def test_items_written_without_untrusted_content_do_not_make_runs_untrusted(
 ) -> None:
     completed(server, token, create_conversation(server, token)["id"], _tool("remember", text=_fact()))
     assert _items(server, token)[0]["untrusted"] is False
-    events = completed(server, token, create_conversation(server, token)["id"], search(fresh_query()))
-    assert interrupts(events) == []
+    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is False
 
 
 @pytest.mark.spec("MEM-006", "MEM-007")

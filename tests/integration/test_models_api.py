@@ -366,6 +366,7 @@ TOOLS = frozenset(
     {
         "web_search",
         "read_page",
+        "request_internet_access",
         "run_command",
         "start_command",
         "check_command",

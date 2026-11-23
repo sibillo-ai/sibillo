@@ -49,6 +49,8 @@ ALLOWED_NATIVE_TOOLS = {"tool_search"}
 ALLOWED_OWN_TOOLS = {
     "web_search",
     "read_page",
+    # Asks for internet access, and does nothing else (AGT-034, ADR-0113).
+    "request_internet_access",
     "offer_download",
     "remember",
     "update_memory",

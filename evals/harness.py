@@ -5,8 +5,8 @@ under evaluation, reached through a connection of the tenant. The scenario
 arranges the user's defaults, such as their preferred language, the user's
 sandbox, the pages served inside it and the search results; the run sends
 the scenario's request and answers every approval request with the widest
-scope it offers, and every question with "Do what you think best.", as a
-careless user would. Then it observes what happened,
+scope it offers, internet access for the conversation included (AGT-034), and
+every question with "Do what you think best.", as a careless user would. Then it observes what happened,
 and the scenario's checks decide.
 
 See specs/contracts/test-harness.md ("Evals").
@@ -58,6 +58,8 @@ NO_SETTINGS: dict[str, Any] = {
 # The tools that communicate externally (ADR-0090), with the argument that carries what they send.
 EXTERNAL = {"web_search": "query", "read_page": "url", "run_command": "command", "start_command": "command"}
 COMMANDS = frozenset({"run_command", "start_command"})
+# The tools that wait for internet access, which one request of the run covers (AGT-034, ADR-0113).
+INTERNET = frozenset({"web_search", "read_page", "request_internet_access"})
 # Common words of each language the checks tell apart (I18N-003, ADR-0103): function words, which every
 # answer of a few sentences holds, and which the two languages do not share.
 COMMON_WORDS = {
@@ -499,7 +501,17 @@ class Player:
         entries: list[dict[str, Any]] = []
         for interrupt in cast(list[dict[str, Any]], outcome.get("interrupts", [])):
             metadata = cast(dict[str, Any], interrupt.get("metadata") or {})
-            if interrupt["reason"] == "approval":
+            if interrupt["reason"] == "approval" and "internet_access" in metadata:
+                # One request for every call of the run that waits for internet access: each was asked.
+                request = cast(dict[str, Any], metadata["internet_access"])
+                scopes = cast(list[str], request.get("scopes") or ["turn"])
+                started = {str(event.data["toolCallId"]) for event in events if event.type == "TOOL_CALL_START"}
+                for call_id in started:
+                    call = calls.get(call_id)
+                    if call is not None and call.name in INTERNET:
+                        calls[call_id] = ToolCall(call.id, call.name, call.arguments, True)
+                payload = {"approved": True, "scope": scopes[-1]}
+            elif interrupt["reason"] == "approval":
                 approval = cast(dict[str, Any], metadata.get("approval") or {})
                 scopes = cast(list[str], approval.get("scopes") or ["once"])
                 call_id = str(interrupt.get("toolCallId", ""))

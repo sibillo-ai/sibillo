@@ -91,6 +91,11 @@ def test_a_fact_needs_a_search(player: Player, scripted: ModelUnderEvaluation) -
     _check("searches", player, scripted)
 
 
+@pytest.mark.spec("EVL-006", "AGT-034")
+def test_the_agent_asks_for_internet_access_instead_of_retrying(player: Player, scripted: ModelUnderEvaluation) -> None:
+    _check("asks-for-internet", player, scripted)
+
+
 @pytest.mark.spec("EVL-006", "I18N-003")
 def test_an_equation_without_words_is_answered_in_the_preferred_language(
     player: Player, scripted: ModelUnderEvaluation

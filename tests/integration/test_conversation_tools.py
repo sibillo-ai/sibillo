@@ -15,7 +15,14 @@ from typing import Any
 
 import pytest
 
-from tests.support.approvals import completed, fresh_query, search, with_untrusted_content
+from tests.support.approvals import (
+    approving,
+    completed,
+    fresh_query,
+    holds_untrusted_content,
+    search,
+    with_untrusted_content,
+)
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.households import Member, new_member
@@ -52,9 +59,8 @@ def _with_words(server: Server, token: str, *, temporary: bool = False) -> tuple
 
 
 def _asks_before_searching(server: Server, token: str, conversation_id: str) -> bool:
-    """Whether a search in the conversation now asks for approval: whether it holds untrusted content."""
-    run_id, _ = start_run(server, token, conversation_id, search(fresh_query()))
-    return wait_for_run(server, token, run_id)["status"] == "interrupted"
+    """Whether the conversation holds untrusted content, as its request for internet access says (AGT-034)."""
+    return holds_untrusted_content(server, token, conversation_id)
 
 
 # --- AGT-032: searching the user's conversations ---
@@ -119,7 +125,7 @@ def test_the_assistant_reads_another_conversation_without_its_tool_results(
 ) -> None:
     read_id, words = _with_words(server, member.token)
     query = fresh_query("hidden")
-    completed(server, member.token, read_id, search(query))
+    approving(server, member.token, read_id, search(query))
     conversation_id = create_conversation(server, member.token)["id"]
     said = _said(server, member.token, conversation_id, _tool("read_conversation", {"conversation_id": read_id}))
     assert words in said

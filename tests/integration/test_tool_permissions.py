@@ -1,5 +1,5 @@
 """Tool permissions: what a household's admin allows, asks or denies to each user (AGT-002, AGT-005, AGT-006,
-CNV-013, ADR-0090).
+AGT-034, CNV-013, ADR-0090, ADR-0113).
 
 The model the tests serve answers `No tool <name>` when the request does not
 offer the tool it is asked to call (tests/support/model.py).
@@ -21,6 +21,7 @@ from tests.support.approvals import (
     completed,
     conversation_of,
     fresh_query,
+    interrupts,
     resumed,
     search,
     with_untrusted_content,
@@ -31,7 +32,8 @@ from tests.support.fixtures import HarnessModel
 from tests.support.runs import create_conversation, start_run, text_of, wait_for_run
 from tests.support.server import Server
 
-WEB_AND_COMMANDS = {"web_search", "read_page", "run_command", "start_command"}
+INTERNET_TOOLS = {"web_search", "read_page", "request_internet_access"}
+COMMANDS = {"run_command", "start_command"}
 
 
 @pytest.fixture
@@ -150,17 +152,15 @@ def test_a_tools_setting_wins_over_its_classes_and_the_strictest_class_wins(
     server: Server, household: tuple[str, Account, str], default_model: HarnessModel
 ) -> None:
     admin_token, member, member_token = household
-    set_permissions(server, admin_token, member, classes={"external_communication": "deny"})
-    assert not WEB_AND_COMMANDS & offered(server, member_token, default_model)
-    assert "read_file" in offered(server, member_token, default_model)
-    set_permissions(
-        server, admin_token, member, tools={"web_search": "allow"}, classes={"external_communication": "deny"}
-    )
-    tools = tools_of(server, member_token)
-    assert tools["web_search"]["effective"] == "allow"
-    assert tools["read_page"]["permission"] == {"setting": "deny", "subject": "external_communication"}
+    set_permissions(server, admin_token, member, classes={"reads_private_data": "deny"})
+    assert not {"read_file", "write_file"} & offered(server, member_token, default_model)
     assert "web_search" in offered(server, member_token, default_model)
-    assert "read_page" not in offered(server, member_token, default_model)
+    set_permissions(server, admin_token, member, tools={"read_file": "allow"}, classes={"reads_private_data": "deny"})
+    tools = tools_of(server, member_token)
+    assert tools["read_file"]["effective"] == "allow"
+    assert tools["write_file"]["permission"] == {"setting": "deny", "subject": "reads_private_data"}
+    assert "read_file" in offered(server, member_token, default_model)
+    assert "write_file" not in offered(server, member_token, default_model)
     set_permissions(
         server, admin_token, member, classes={"external_communication": "allow", "ingests_untrusted": "ask"}
     )
@@ -178,28 +178,49 @@ def test_an_asked_tool_asks_on_every_call_unless_allowed_in_the_conversation(
     set_permissions(server, admin_token, member, tools={"web_search": "ask"})
     conversation_id = create_conversation(server, member_token)["id"]
     # Asked even without untrusted content, for its permission; not for a turn.
+    # Internet access first, then the tool's own permission, which internet access does not lift (AGT-034).
     _, interrupt = asked(server, member_token, conversation_id, search(fresh_query()))
-    request = interrupt["metadata"]["approval"]
+    assert "internet_access" in interrupt["metadata"]
+    (asking,) = interrupts(resumed(server, member_token, conversation_id, [approve(interrupt["id"], "turn")]))
+    request = asking["metadata"]["approval"]
     assert (request["reason"], request["scopes"]) == ("permission", ["once", "conversation"])
-    resumed(server, member_token, conversation_id, [approve(interrupt["id"], "conversation")])
+    resumed(server, member_token, conversation_id, [approve(asking["id"], "conversation")])
     assert conversation_of(server, member_token, conversation_id)["allowances"] == {
-        "web_and_commands": False,
+        "internet_access": False,
         "tools": ["web_search"],
     }
-    # Its permission is satisfied in this conversation, but the trifecta rule still asks.
+    # Its permission is satisfied in this conversation, but internet access is still asked for.
     _, interrupt = asked(server, member_token, conversation_id, search(fresh_query("after")))
-    assert interrupt["metadata"]["approval"]["reason"] == "untrusted_content"
+    assert interrupt["metadata"]["internet_access"]["untrusted_content"] is True
 
 
-@pytest.mark.spec("AGT-002", "AGT-004")
-def test_an_allowed_tool_still_asks_after_untrusted_content(
+@pytest.mark.spec("AGT-002", "AGT-004", "AGT-034")
+def test_no_permission_gives_internet_access(
     server: Server, household: tuple[str, Account, str], default_model: HarnessModel
 ) -> None:
     admin_token, member, member_token = household
     set_permissions(server, admin_token, member, tools={"web_search": "allow", "read_page": "allow"})
     conversation_id = with_untrusted_content(server, member_token)
     _, interrupt = asked(server, member_token, conversation_id, search(fresh_query()))
-    assert interrupt["metadata"]["approval"]["reason"] == "untrusted_content"
+    assert interrupt["metadata"]["internet_access"]["untrusted_content"] is True
+
+
+@pytest.mark.spec("AGT-002", "AGT-034")
+def test_denying_external_communication_denies_internet_access(
+    server: Server, household: tuple[str, Account, str], default_model: HarnessModel
+) -> None:
+    admin_token, member, member_token = household
+    # Whatever the web tools' own settings: no internet access is ever asked for or given.
+    set_permissions(
+        server, admin_token, member, tools={"web_search": "allow"}, classes={"external_communication": "deny"}
+    )
+    tools = tools_of(server, member_token)
+    for name in INTERNET_TOOLS:
+        assert tools[name]["effective"] == "deny", name
+    on = offered(server, member_token, default_model)
+    assert not INTERNET_TOOLS & on
+    # Commands no longer communicate externally: they stay, without network.
+    assert on >= COMMANDS
 
 
 @pytest.mark.spec("AGT-002")

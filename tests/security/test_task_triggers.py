@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from tests.support.accounts import assert_problem, body
-from tests.support.approvals import fresh_query, search
+from tests.support.approvals import fresh_query, internet_request, search
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.households import Member, new_member
@@ -74,9 +74,10 @@ def test_a_request_to_a_webhook_trigger_fires_its_task_with_the_body_as_untruste
     assert item["trigger_kind"] == "webhook"
     assert _reached_model(default_model, marker)
 
-    # The event is untrusted content: a later search in the conversation asks first (AGT-004).
-    run_id, _ = start_run(server, member.token, item["conversation_id"], search(fresh_query()))
+    # The event is untrusted content: a later request for internet access says so (AGT-003, AGT-034).
+    run_id, events = start_run(server, member.token, item["conversation_id"], search(fresh_query()))
     assert wait_for_run(server, member.token, run_id)["status"] == "interrupted"
+    assert internet_request(events)["metadata"]["internet_access"]["untrusted_content"] is True
 
 
 @pytest.mark.spec("TSK-007")

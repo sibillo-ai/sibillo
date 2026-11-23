@@ -15,9 +15,10 @@ import shlex
 import pytest
 
 from tests.support.accounts import Account, create_account, create_tenant, login
+from tests.support.approvals import approving
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
-from tests.support.runs import create_conversation, start_run, text_of, wait_for_run
+from tests.support.runs import create_conversation, get_run, text_of
 from tests.support.sandbox import Driver
 from tests.support.search import MANY_RESULTS, SearchServer, result
 from tests.support.server import Server
@@ -69,8 +70,9 @@ def _tool_result(model: HarnessModel, text: str) -> str:
 def _completed(server: Server, token: str, text: str, conversation_id: str | None = None) -> str:
     """Run `text` in the conversation, or a new one; the run's answer, once completed."""
     conversation = conversation_id or create_conversation(server, token)["id"]
-    run_id, events = start_run(server, token, conversation, text)
-    assert wait_for_run(server, token, run_id)["status"] == "completed"
+    # With internet access for the turn (AGT-034).
+    _, events, last = approving(server, token, conversation, text)
+    assert get_run(server, token, last)["status"] == "completed"
     return text_of(events)
 
 
