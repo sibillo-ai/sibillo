@@ -340,11 +340,14 @@ def deliver(
 
 
 def follow_sign_in(authorization_url: str) -> dict[str, str]:
-    """Open a sign-in page as a browser would, and return the query of the redirect it answers with."""
+    """Open a sign-in page as a browser would, and return what the web app's page at the redirect address sends:
+    the server of that address, `/mcp-sign-in/{server_id}`, and the query the redirect carried (ADR-0122)."""
     response = httpx.get(authorization_url, follow_redirects=False, timeout=SIGN_IN_SECONDS)
     assert response.status_code == 302, response.text
-    location = response.headers["location"]
-    return {name: values[0] for name, values in parse_qs(urlsplit(location).query).items()}
+    location = urlsplit(response.headers["location"])
+    assert location.path.startswith("/mcp-sign-in/"), location.path
+    query = {name: values[0] for name, values in parse_qs(location.query).items()}
+    return {"server_id": location.path.removeprefix("/mcp-sign-in/"), **query}
 
 
 def _challenge(verifier: str) -> str:

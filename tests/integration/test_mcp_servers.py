@@ -30,7 +30,7 @@ from tests.support.approvals import (
     interrupts,
     resumed,
 )
-from tests.support.database import Database
+from tests.support.database import Database, uuid7
 from tests.support.fixtures import HarnessModel
 from tests.support.mcp import SERVER_INSTRUCTIONS, McpServer, McpService, Result, follow_sign_in, tool
 from tests.support.runs import create_conversation, text_of, wait_for_run
@@ -521,7 +521,9 @@ def test_an_oauth_server_finds_its_authorization_server_and_registers(
     assert added["oauth"]["has_client_secret"] is False
     assert added["oauth"]["scope"] == "tools.read tools.call"
     (registered,) = mcp.clients.values()
-    assert registered.redirect_uris == [f"{server.public_origin}/mcp-sign-in"]
+    # Registered for this server's redirect address alone (ADR-0122).
+    assert registered.redirect_uris == [f"{server.public_origin}/mcp-sign-in/{added['id']}"]
+    assert added["oauth"]["redirect_uri"] == f"{server.public_origin}/mcp-sign-in/{added['id']}"
     client_secret = secrets.token_hex(8)
     given_id = mcp.register_client(secret=client_secret)
     given = add(server, household.admin, mcp, oauth_client_id=given_id, oauth_client_secret=client_secret)
@@ -620,17 +622,6 @@ def test_a_service_that_reads_client_metadata_documents_needs_no_client(
     server: Server, household: Household, mcp_service: McpService, https_origin: tuple[str, str]
 ) -> None:
     origin, api = https_origin
-    document = httpx.get(f"{api}/mcp-client", timeout=10)
-    assert document.status_code == 200, document.text
-    assert body(document) == {
-        "client_id": f"{origin}/v1/mcp-client",
-        "client_name": "Sibillo",
-        "client_uri": origin,
-        "redirect_uris": [f"{origin}/mcp-sign-in"],
-        "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"],
-        "token_endpoint_auth_method": "none",
-    }
     mcp = mcp_service.new(auth="oauth")
     mcp.client_documents = api.removesuffix("/v1")
     with server.client(household.admin) as client:
@@ -641,9 +632,24 @@ def test_a_service_that_reads_client_metadata_documents_needs_no_client(
         assert response.status_code == 201, response.text
         added = body(response)
         assert added["oauth"]["client_registration"] == "metadata_document"
-        assert added["oauth"]["client_id"] == f"{origin}/v1/mcp-client"
+        # A document of this server's own, naming its redirect address alone (ADR-0122).
+        document_url = f"{origin}/v1/mcp-client/{added['id']}"
+        assert added["oauth"]["client_id"] == document_url
         # Nothing was registered: the service fetches the document when someone signs in.
         assert mcp.clients == {}
+    document = httpx.get(f"{api}/mcp-client/{added['id']}", timeout=10)
+    assert document.status_code == 200, document.text
+    assert body(document) == {
+        "client_id": document_url,
+        "client_name": "Sibillo",
+        "client_uri": origin,
+        "redirect_uris": [f"{origin}/mcp-sign-in/{added['id']}"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+    }
+    # The shared document of earlier versions is gone.
+    assert httpx.get(f"{api}/mcp-client", timeout=10).status_code == 404
     with server.client(household.member_token) as client:
         client.base_url = httpx.URL(api)
         started = client.post(f"/mcp-servers/{added['id']}/sign-in")
@@ -652,7 +658,7 @@ def test_a_service_that_reads_client_metadata_documents_needs_no_client(
         signed_in = client.post("/mcp-sign-in", json=redirect)
         assert signed_in.status_code == 200, signed_in.text
         assert body(signed_in)["credential"] == "valid"
-    assert [found["client_id"] for found in mcp.documents] == [f"{origin}/v1/mcp-client"]
+    assert [found["client_id"] for found in mcp.documents] == [document_url]
 
 
 @pytest.mark.spec("AGT-031")
@@ -661,7 +667,7 @@ def test_without_an_https_origin_a_client_is_registered_instead(
 ) -> None:
     # The harness's public origin is `http://localhost`: no client ID can be its document's address.
     with server.client() as client:
-        assert_problem(client.get("/mcp-client"), 404, "resource.not_found")
+        assert_problem(client.get(f"/mcp-client/{uuid7()}"), 404, "resource.not_found")
     mcp = mcp_service.new(auth="oauth")
     mcp.client_documents = mcp_service.url
     added = add(server, household.admin, mcp)
@@ -683,7 +689,7 @@ def test_a_user_signs_in_with_pkce_for_this_server_alone(
     assert query["response_type"] == "code"
     assert query["code_challenge_method"] == "S256"
     assert query["resource"] == mcp.url
-    assert query["redirect_uri"] == f"{server.public_origin}/mcp-sign-in"
+    assert query["redirect_uri"] == f"{server.public_origin}/mcp-sign-in/{added['id']}"
     assert query["client_id"] == added["oauth"]["client_id"]
     assert query["scope"] == "tools.read tools.call"
     assert len(query["state"]) >= 32
@@ -694,7 +700,7 @@ def test_a_user_signs_in_with_pkce_for_this_server_alone(
     (exchange,) = mcp.token_requests
     assert exchange["grant_type"] == "authorization_code"
     assert exchange["resource"] == mcp.url
-    assert exchange["redirect_uri"] == f"{server.public_origin}/mcp-sign-in"
+    assert exchange["redirect_uri"] == f"{server.public_origin}/mcp-sign-in/{added['id']}"
     # The tokens were tried by listing the server's tools.
     assert mcp.methods()[-1] == "tools/list"
     assert mcp.requests[-1].headers["authorization"].startswith("Bearer access-")
@@ -715,7 +721,11 @@ def test_a_sign_in_is_bound_to_its_user_used_once_and_checked(
     # A redirect that carries an error, or another issuer, ends it.
     failed = _sign_in(server, household.member_token, added["id"])
     assert_problem(
-        _complete(server, household.member_token, {"state": failed["state"], "error": "access_denied"}),
+        _complete(
+            server,
+            household.member_token,
+            {"server_id": failed["server_id"], "state": failed["state"], "error": "access_denied"},
+        ),
         422,
         "mcp_server.sign_in_failed",
     )
@@ -725,6 +735,23 @@ def test_a_sign_in_is_bound_to_its_user_used_once_and_checked(
         422,
         "mcp_server.sign_in_failed",
     )
+
+
+@pytest.mark.spec("AGT-031")
+def test_a_sign_in_completes_only_at_its_own_servers_address(
+    server: Server, household: Household, mcp_service: McpService
+) -> None:
+    # A mix-up: the redirect of a sign-in to one server arrives at another's address (ADR-0122, RFC 9700).
+    one, other = mcp_service.new(auth="oauth"), mcp_service.new(auth="oauth")
+    first, second = add(server, household.admin, one), add(server, household.admin, other)
+    redirect = _sign_in(server, household.member_token, first["id"])
+    assert redirect["server_id"] == first["id"]
+    misplaced = {**redirect, "server_id": second["id"]}
+    assert_problem(_complete(server, household.member_token, misplaced), 422, "mcp_server.sign_in_failed")
+    # Refused before any code reached a token endpoint, and the sign-in is used up.
+    assert one.token_requests == []
+    assert other.token_requests == []
+    assert_problem(_complete(server, household.member_token, redirect), 422, "mcp_server.sign_in_failed")
 
 
 # --- Calls in runs (AGT-018, AGT-019, AGT-028 to AGT-031) ---
