@@ -257,7 +257,9 @@ Tests of the web client (ADR-0067) use this procedure once per test session,
 before starting the API:
 
 1. From `src/web/`, install its dependencies from the lock file and build the
-   app.
+   app, unless `TEST_WEB_BUILD` names a directory that holds a build of it
+   already, as `tools/run_ci_parts.py` gives every session it runs at once
+   (ADR-0137); that build is used as it is, and never changed.
 2. Start the API with `SIBILLO_WEB_ROOT` set to the build's directory, as for the
    other tests; the app is served at `http://127.0.0.1:PORT/`.
 3. Drive Chromium with Playwright against that address, signing in through the
