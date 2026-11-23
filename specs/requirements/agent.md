@@ -403,11 +403,14 @@ imported skills MUST be untrusted, and so MUST a skill saved by the
 assistant in a run that has untrusted content when it calls the tool
 (AGT-003). Editing a skill MUST NOT change whether it is trusted; only the
 user, explicitly, MUST be able to mark an untrusted skill trusted. The
-catalog MUST mark untrusted skills as from an untrusted source, and loading
-one MUST make the run have untrusted content from then on (AGT-004). The
-scripts of every skill MUST run only in the sandbox (ADR-0096).
+catalog MUST mark untrusted skills as from an untrusted source, and a run
+offered any untrusted skill MUST count as having untrusted content from its
+start (AGT-004); loading one MUST mark what it brings in as untrusted
+content. The scripts of every skill MUST run only in the sandbox (ADR-0096,
+ADR-0116).
 
-Rationale: threats T-25 and T-36.
+Rationale: threats T-25 and T-36. A description reaches every run where its
+skill is on, loaded or not.
 
 ## AGT-026: The assistant saves skills
 

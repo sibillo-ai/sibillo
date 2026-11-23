@@ -122,7 +122,8 @@ Several forces shape the rest:
    being shown its files, and that is the only way one becomes trusted.
    - The catalog marks untrusted skills, and their descriptions, as from an
      untrusted source: descriptions are short and bounded, so they do not
-     make a run untrusted.
+     make a run untrusted. Amended by ADR-0116: a run offered an untrusted
+     skill has untrusted content from its start.
    - Loading an untrusted skill makes the run have untrusted content from
      that tool result on, so the trifecta rule applies (AGT-004): the
      loaded body is marked, as attachments are, and `has_untrusted_content`
@@ -194,7 +195,8 @@ not copied into a workspace. ADR-0044 stays in force otherwise.
   only to declared destinations (ADR-0072).
 - **Treating untrusted skills as untrusted from the start of every run,** as
   memory items are: a user with one imported skill would be asked to approve
-  the first search of every conversation, used or not.
+  the first search of every conversation, used or not. Chosen by ADR-0116,
+  once ADR-0113 made searches follow internet access instead.
 - **Trusting a skill when the user edits it,** as saving a memory item does:
   an edit to `SKILL.md` says nothing of the scripts beside it.
 - **Scanning skills for injected instructions** with the harness's artifact
