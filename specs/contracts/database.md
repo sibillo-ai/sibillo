@@ -85,7 +85,7 @@ minimum needed and nothing else.
 | `default_model_configured()` | `boolean` | Whether any tenant has a default model, for `/health` before any sign-in (OPS-002, ADR-0054, ADR-0069) |
 | `expired_temporary_conversations(hours integer)` | `conversation_id, tenant_id, owner_id` for every temporary conversation whose `updated_at` is more than `hours` hours ago and that has no `queued` or `running` run | Deletion of temporary conversations (CNV-011, ADR-0082): only identifiers, so the worker can delete each one under its owner's request context |
 | `expired_approvals()` | `conversation_id, tenant_id, owner_id` for every conversation whose `approvals_expire_at` has passed and that has no `queued` or `running` run | Expiry of approval requests (AGT-007, ADR-0090): only identifiers, so the worker can deny them under the owner's request context |
-| `abandoned_runs(hours integer)` | `run_id, tenant_id, owner_id` for every run `queued` or `running` created more than `hours` hours ago | Failing runs a crash left active, so that backups and the conversation go on (OPS-006, ADR-0130): only identifiers, so the worker fails each under its owner's request context |
+| `abandoned_runs(hours integer)` | `run_id, tenant_id, owner_id` for every run `queued` or `running` created more than `hours` hours ago, or cancelled without `finished_at` that long ago | Failing runs a crash left active, so that backups and the conversation go on (OPS-006, ADR-0130): only identifiers, so the worker fails each under its owner's request context |
 | `retention_expired_runs(days integer)` | `run_id` for every run whose `finished_at` is more than `days` days ago | Retention of durable workflows (TEN-009, ADR-0052): only identifiers, so the worker can delete their workflows across tenants |
 | `auth_take_sign_in(token_hash bytea)` | `user_id, tenant_id, username, role, instance_admin, disabled, challenge, expires_at`, or no row | The passkey step of a sign-in (AUTH-010, ADR-0094): deletes the `sign_in` challenge with that token hash and returns it with its user, so that a token is used once whatever the outcome; also deletes every expired challenge |
 | `due_task_triggers()` | `trigger_id, task_id, tenant_id, owner_id, work` for every trigger with work due, of a task that is not paused and whose owner's account is not disabled: `fire` for a schedule whose `next_fire_at` has passed, `poll` for an `mcp_event` trigger polled whose `next_poll_at` has passed, `renew` for an `mcp_event` trigger delivered by webhook whose `refresh_before` is less than 10 minutes away | Firing schedules and following event subscriptions (TSK-003, TSK-008, ADR-0106): only identifiers, so the worker does the work under the owner's request context |
@@ -481,7 +481,7 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `connection_id` | uuid | the connection that answered; (`tenant_id`, `connection_id`) references `connections` on delete set null (`connection_id`) |
 | `model_provider`, `model_name` | text | set when known (MOD-005) |
 | `last_event_seq` | integer | sequence number of the last event written to the run's stream |
-| `created_at`, `started_at`, `finished_at` | timestamptz | |
+| `created_at`, `started_at`, `finished_at` | timestamptz | `finished_at` of a cancelled run that had started is set when its workflow has ended, not when it is cancelled: until then a rewind or a deletion of its conversation waits (ADR-0132) |
 
 Constraints:
 
