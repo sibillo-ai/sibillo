@@ -96,6 +96,7 @@ paths:
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/PasskeysUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /auth/login/passkey:
     post:
@@ -129,6 +130,7 @@ paths:
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/PasskeysUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /auth/logout:
     post:
@@ -182,6 +184,7 @@ paths:
         "403": { $ref: "#/components/responses/WrongPassword" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/settings:
     get:
@@ -224,6 +227,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/egress-policy:
     get:
@@ -265,6 +269,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/memory:
     get:
@@ -305,6 +310,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/memory/items:
     post:
@@ -327,6 +333,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/MemoryFull" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [memory]
       operationId: deleteAllMemoryItems
@@ -364,6 +371,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/MemoryFull" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [memory]
       operationId: deleteMemoryItem
@@ -515,6 +523,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/skills/builtin/{skill_name}/file:
     parameters:
@@ -576,6 +585,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [skills]
       operationId: deleteSkill
@@ -732,6 +742,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/NotificationEndpointRefused" }
         "503": { $ref: "#/components/responses/NotificationsUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [auth]
       operationId: unsubscribeFromNotifications
@@ -795,6 +806,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/PasskeyRejected" }
         "503": { $ref: "#/components/responses/PasskeysUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/passkeys/registrations:
     post:
@@ -822,6 +834,7 @@ paths:
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/PasskeysUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/passkeys/{passkey_id}/remove:
     parameters:
@@ -847,6 +860,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /instance/tenants:
     post:
@@ -869,6 +883,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [administration]
       operationId: listTenants
@@ -907,6 +922,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [administration]
       operationId: listUsers
@@ -995,6 +1011,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/users/{user_id}/egress-policy:
     parameters:
@@ -1038,6 +1055,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/egress-policy:
     put:
@@ -1063,6 +1081,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/connections:
     post:
@@ -1090,6 +1109,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ConnectionRefused" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [models]
       operationId: listConnections
@@ -1142,6 +1162,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ConnectionRefused" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [models]
       operationId: deleteConnection
@@ -1199,6 +1220,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/mcp-servers:
     post:
@@ -1235,6 +1257,7 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/McpServerRefused" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [administration]
       operationId: listMcpServers
@@ -1301,6 +1324,7 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/McpServerRefused" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [administration]
       operationId: deleteMcpServer
@@ -1375,6 +1399,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/mcp-servers/{server_id}/accepted-event-types:
     parameters:
@@ -1407,6 +1432,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tenant/default-model:
     put:
@@ -1428,6 +1454,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /models:
     get:
@@ -1486,6 +1513,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /speech/transcriptions:
     post:
@@ -1590,6 +1618,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /conversations:
     post:
@@ -1611,6 +1640,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [conversations]
       operationId: listConversations
@@ -1673,6 +1703,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/TemporaryConversation" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [conversations]
       operationId: deleteConversation
@@ -1719,6 +1750,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/RunInProgress" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /conversations/{conversation_id}/workspace:
     parameters:
@@ -1954,6 +1986,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/SandboxUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /conversations/{conversation_id}/workspace/move:
     parameters:
@@ -1980,6 +2013,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/SandboxUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /conversations/{conversation_id}/fork:
     parameters:
@@ -2016,6 +2050,7 @@ paths:
         "409": { $ref: "#/components/responses/TemporaryConversation" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/SandboxUnavailable" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /conversation-list:
     get:
@@ -2061,6 +2096,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /folders/{folder_id}:
     parameters:
@@ -2085,6 +2121,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [folders]
       operationId: deleteFolder
@@ -2231,6 +2268,7 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/McpServerRefused" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [conversations]
       operationId: deleteMcpCredential
@@ -2325,6 +2363,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "422": { $ref: "#/components/responses/McpServerRefused" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /me/activity:
     get:
@@ -2438,6 +2477,7 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /runs/{run_id}:
     parameters:
@@ -2548,6 +2588,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/TaskRefused" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     get:
       tags: [tasks]
       operationId: listTasks
@@ -2611,6 +2652,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/TaskRefused" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
     delete:
       tags: [tasks]
       operationId: deleteTask
@@ -2716,6 +2758,7 @@ paths:
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/TaskRefused" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
 
   /tasks/{task_id}/triggers/{trigger_id}:
     parameters:
