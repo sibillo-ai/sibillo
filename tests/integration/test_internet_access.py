@@ -1,5 +1,5 @@
-"""Internet access: one permission of a conversation for the web, asked once for every call of a run
-(AGT-034, ADR-0113).
+"""Internet access: one permission of a conversation for the web, asked once for every call of a run, or turned on
+and off by its user (AGT-034, ADR-0113, ADR-0115).
 
 The model the tests serve calls a tool by name when the user's message is
 `tool:<name> <arguments>`, several tools in turn with `chain:`, and several at
@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -38,7 +40,10 @@ from tests.support.search import SearchServer
 from tests.support.server import Server
 
 PAGE = "ftp://example.org/file"
-NO_ACCESS: dict[str, object] = {"internet_access": False, "tools": []}
+NO_ACCESS: dict[str, object] = {"internet_access": False, "turn_internet_access": False, "tools": []}
+# What a client sends to turn internet access off.
+WITHDRAW: dict[str, object] = {"internet_access": False, "tools": []}
+WAIT = f"run_command {json.dumps({'command': 'sleep 4', 'description': 'Wait a little'})}"
 
 
 @pytest.fixture
@@ -144,24 +149,28 @@ def test_internet_access_in_a_conversation_until_withdrawn(
     conversation_id = create_conversation(server, token)["id"]
     run_id, interrupt = asked_for_access(server, token, conversation_id, search(fresh_query()))
     resumed(server, token, conversation_id, [approve(interrupt["id"], "conversation")])
-    assert conversation_of(server, token, conversation_id)["allowances"] == {"internet_access": True, "tools": []}
+    assert conversation_of(server, token, conversation_id)["allowances"] == {
+        "internet_access": True,
+        "turn_internet_access": False,
+        "tools": [],
+    }
     # Later turns ask nothing: neither a search, nor a page, after untrusted content.
     later = fresh_query("later")
     completed(server, token, conversation_id, search(later))
     assert search_service.queries().count(later) == 1
     completed(server, token, conversation_id, f"tool:read_page {json.dumps({'url': PAGE})}")
     with server.client(token) as client:
-        # A fork does not copy it, and no setting can give it.
+        # A fork does not copy it, and no tool is allowed but by answering a request.
         response = client.post(f"/conversations/{conversation_id}/fork", json={"run_id": run_id})
         assert response.status_code == 201, response.text
         fork = body(response)
         assert fork["allowances"] == NO_ACCESS
         added = client.patch(
-            f"/conversations/{fork['id']}", json={"allowances": {"internet_access": True, "tools": []}}
+            f"/conversations/{fork['id']}", json={"allowances": {"internet_access": False, "tools": ["web_search"]}}
         )
         assert_problem(added, 422, "request.validation_failed")
         # Its user withdraws it, and the web asks again.
-        withdrawn = client.patch(f"/conversations/{conversation_id}", json={"allowances": NO_ACCESS})
+        withdrawn = client.patch(f"/conversations/{conversation_id}", json={"allowances": WITHDRAW})
         assert withdrawn.status_code == 200, withdrawn.text
         assert body(withdrawn)["allowances"] == NO_ACCESS
     asked_for_access(server, token, conversation_id, search(fresh_query("again")))
@@ -281,3 +290,141 @@ def test_the_instructions_say_that_the_sandbox_has_no_network(
     )
     assert "request_internet_access" in instructions
     assert "no network" in instructions.lower()
+
+
+# --- The switch of internet access (UX-042, ADR-0115) ---
+
+
+def switch(server: Server, token: str, conversation_id: str, on: bool) -> Any:
+    with server.client(token) as client:
+        return client.patch(
+            f"/conversations/{conversation_id}", json={"allowances": {"internet_access": on, "tools": []}}
+        )
+
+
+def turn_access(server: Server, token: str, conversation_id: str) -> bool:
+    allowed: bool = conversation_of(server, token, conversation_id)["allowances"]["turn_internet_access"]
+    return allowed
+
+
+def in_background(work: Callable[[], object]) -> threading.Thread:
+    """Start a run whose events stream until it ends, without waiting for it."""
+    thread = threading.Thread(target=work, daemon=True)
+    thread.start()
+    return thread
+
+
+def while_running(server: Server, token: str, conversation_id: str) -> None:
+    """Wait until the conversation's active run is running its command."""
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        active = conversation_of(server, token, conversation_id)["active_run_id"]
+        if active and get_run(server, token, active)["status"] == "running":
+            time.sleep(1)
+            return
+        time.sleep(0.2)
+    raise AssertionError("the run did not start")
+
+
+@pytest.mark.spec("AGT-034")
+def test_its_user_turns_internet_access_on_and_off(
+    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    on = switch(server, token, conversation_id, True)
+    assert on.status_code == 200, on.text
+    assert body(on)["allowances"] == {"internet_access": True, "turn_internet_access": False, "tools": []}
+    # The web runs without asking.
+    query = fresh_query("switched")
+    completed(server, token, conversation_id, search(query))
+    assert search_service.queries().count(query) == 1
+    # Turned off, it asks again.
+    off = switch(server, token, conversation_id, False)
+    assert off.status_code == 200, off.text
+    assert body(off)["allowances"] == NO_ACCESS
+    asked_for_access(server, token, conversation_id, search(fresh_query("off")))
+
+
+@pytest.mark.spec("AGT-034")
+def test_a_conversation_starts_with_internet_access_its_user_gave(
+    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    with server.client(token) as client:
+        response = client.post("/conversations", json={"internet_access": True})
+    assert response.status_code == 201, response.text
+    conversation = body(response)
+    assert conversation["allowances"]["internet_access"] is True
+    query = fresh_query("from the start")
+    completed(server, token, conversation["id"], search(query))
+    assert search_service.queries().count(query) == 1
+    # Without it, as by default, it has none.
+    assert create_conversation(server, token)["allowances"] == NO_ACCESS
+
+
+@pytest.mark.spec("AGT-034", "AGT-002")
+def test_a_user_denied_external_communication_cannot_turn_it_on(
+    database: Database, server: Server, account: Account, token: str, default_model: HarnessModel
+) -> None:
+    admin = login(server, create_account(database, account.tenant_id, "tenant_admin"))
+    with server.client(admin) as client:
+        response = client.put(
+            f"/tenant/users/{account.id}/tool-permissions",
+            json={"tools": {}, "classes": {"external_communication": "deny"}},
+        )
+    assert response.status_code == 200, response.text
+    conversation_id = create_conversation(server, token)["id"]
+    assert_problem(switch(server, token, conversation_id, True), 422, "request.validation_failed")
+    with server.client(token) as client:
+        created = client.post("/conversations", json={"internet_access": True})
+    assert_problem(created, 422, "request.validation_failed")
+
+
+@pytest.mark.spec("AGT-034")
+def test_the_turn_s_internet_access_lasts_until_the_turn_ends(
+    server: Server, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    text = f"chain:web_search {json.dumps({'query': fresh_query('turn')})} >>> {WAIT}"
+    _, interrupt = asked_for_access(server, token, conversation_id, text)
+    in_background(lambda: resume(server, token, conversation_id, [approve(interrupt["id"], "turn")]))
+    while_running(server, token, conversation_id)
+    assert turn_access(server, token, conversation_id) is True
+    active = conversation_of(server, token, conversation_id)["active_run_id"]
+    assert wait_for_run(server, token, active)["status"] == "completed"
+    assert conversation_of(server, token, conversation_id)["allowances"] == NO_ACCESS
+
+
+@pytest.mark.spec("AGT-034")
+def test_turned_off_during_a_turn_the_turn_asks_again(
+    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    later = fresh_query("after the switch")
+    text = (
+        f"chain:web_search {json.dumps({'query': fresh_query('before')})} >>> {WAIT}"
+        f" >>> web_search {json.dumps({'query': later})}"
+    )
+    _, interrupt = asked_for_access(server, token, conversation_id, text)
+    in_background(lambda: resume(server, token, conversation_id, [approve(interrupt["id"], "turn")]))
+    while_running(server, token, conversation_id)
+    assert switch(server, token, conversation_id, False).status_code == 200
+    assert turn_access(server, token, conversation_id) is False
+    active = conversation_of(server, token, conversation_id)["active_run_id"]
+    assert wait_for_run(server, token, active)["status"] == "interrupted"
+    assert "internet_access" in conversation_of(server, token, conversation_id)["interrupts"][0]["metadata"]
+    assert search_service.queries().count(later) == 0
+
+
+@pytest.mark.spec("AGT-034")
+def test_turned_on_during_a_turn_the_turn_has_it(
+    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    later = fresh_query("switched on")
+    text = f"chain:{WAIT} >>> web_search {json.dumps({'query': later})}"
+    in_background(lambda: start_run(server, token, conversation_id, text))
+    while_running(server, token, conversation_id)
+    assert switch(server, token, conversation_id, True).status_code == 200
+    run_id = conversation_of(server, token, conversation_id)["active_run_id"]
+    assert wait_for_run(server, token, run_id)["status"] == "completed"
+    assert search_service.queries().count(later) == 1

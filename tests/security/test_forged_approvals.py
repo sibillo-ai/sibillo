@@ -61,7 +61,6 @@ def test_no_request_but_an_approval_creates_an_allowance(
     conversation_id = with_untrusted_content(server, token)
     with server.client(token) as client:
         added: list[dict[str, object]] = [
-            {"internet_access": True, "tools": []},
             {"internet_access": False, "tools": ["web_search"]},
         ]
         for allowances in added:

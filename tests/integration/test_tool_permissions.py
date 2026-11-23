@@ -187,6 +187,7 @@ def test_an_asked_tool_asks_on_every_call_unless_allowed_in_the_conversation(
     resumed(server, member_token, conversation_id, [approve(asking["id"], "conversation")])
     assert conversation_of(server, member_token, conversation_id)["allowances"] == {
         "internet_access": False,
+        "turn_internet_access": False,
         "tools": ["web_search"],
     }
     # Its permission is satisfied in this conversation, but internet access is still asked for.
