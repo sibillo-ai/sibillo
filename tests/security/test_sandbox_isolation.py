@@ -506,7 +506,8 @@ def test_the_table_stays_when_the_guard_stops_and_sandboxes_stop_until_it_answer
         # the first: here one started behind its back, as a request past its own check would.
         _wait_until_no_sandbox_runs(sandboxes, "sandboxes kept running without a network guard")
         late = f"sibillo-late-{uuid7().hex[:8]}"
-        docker("run", "--detach", "--name", late, "--label", "dev.sibillo.sandbox=sandbox", sandboxes.image,
+        docker("run", "--detach", "--name", late, "--label", "dev.sibillo.sandbox=sandbox",
+               "--label", f"dev.sibillo.sandbox.image={sandboxes.image}", sandboxes.image,
                "sleep", "600")  # fmt: skip
         _wait_until_no_sandbox_runs(sandboxes, "a sandbox started during the outage kept running")
     finally:
