@@ -474,6 +474,58 @@ def test_sandboxes_stop_when_the_egress_rules_disappear(sandboxes: Driver) -> No
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "echo back").stdout == "back\n"
 
 
+def _table_in_engine(driver: Driver) -> str:
+    """The egress table as the engine's network namespace holds it, read without the guard; empty when missing."""
+    image = host_docker("inspect", "--format", "{{.Config.Image}}", driver.netguard).strip()
+    return host_docker(
+        "run", "--rm", f"--network=container:{driver.engine}", "--cap-add=NET_ADMIN", image,
+        "nft", "list", "table", "inet", "sibillo", check=False,
+    )  # fmt: skip
+
+
+def _wait_until_no_sandbox_runs(driver: Driver, what: str, timeout: float = 30) -> None:
+    deadline = time.monotonic() + timeout
+    while any(c["State"]["Running"] for c in driver.sandbox_containers()):
+        assert time.monotonic() < deadline, what
+        time.sleep(0.5)
+
+
+@pytest.mark.spec("SBX-015")
+def test_the_table_stays_when_the_guard_stops_and_sandboxes_stop_until_it_answers(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "true")
+    assert "chain forward" in _table_in_engine(sandboxes)
+    host_docker("stop", "--time", "10", sandboxes.netguard)
+    try:
+        # Stopped, the guard left the table in place (ADR-0120).
+        assert "chain forward" in _table_in_engine(sandboxes)
+        # Without a guard that answers, the driver stops every sandbox at every check, even one started after
+        # the first: here one started behind its back, as a request past its own check would.
+        _wait_until_no_sandbox_runs(sandboxes, "sandboxes kept running without a network guard")
+        late = f"sibillo-late-{uuid7().hex[:8]}"
+        docker("run", "--detach", "--name", late, "--label", "dev.sibillo.sandbox=sandbox", sandboxes.image,
+               "sleep", "600")  # fmt: skip
+        _wait_until_no_sandbox_runs(sandboxes, "a sandbox started during the outage kept running")
+    finally:
+        restart_guard(sandboxes)
+    health = sandboxes.wait_until_ready()
+    assert health["checks"]["canary"]["ok"] is True
+    assert sandboxes.sh(tenant_id, user_id, conversation_id, "echo back").stdout == "back\n"
+
+
+@pytest.mark.spec("SBX-015")
+def test_a_table_emptied_of_its_rules_counts_as_missing(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "true")
+    # Its chains and set remain, without a rule in them.
+    host_docker("exec", sandboxes.netguard, "nft", "flush", "table", "inet", "sibillo")
+    _wait_until_no_sandbox_runs(sandboxes, "sandboxes kept running with an empty table")
+    health = sandboxes.wait_until_ready()
+    assert health["checks"]["egress_table"]["ok"] is True
+    table = host_docker("exec", sandboxes.netguard, "nft", "list", "table", "inet", "sibillo")
+    assert "drop" in table
+
+
 @pytest.mark.spec("SBX-025", "SBX-015")
 def test_no_sandbox_runs_after_the_engine_restarts_until_the_table_is_verified(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
