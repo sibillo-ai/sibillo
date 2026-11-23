@@ -16,7 +16,6 @@ from tests.support.server import Server
 from tests.support.tasks import (
     create_task,
     fire_schedule,
-    open_grant,
     schedule,
     trigger_of,
     wait_for_conversations,
@@ -48,7 +47,10 @@ def test_a_user_creates_a_scheduled_task_and_sees_when_it_fires(page: Page, memb
     dialog.get_by_label("Repeats").fill("RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR")
     # The schedule is said in words before it is saved (ADR-0109).
     expect(dialog).to_contain_text("At 07:00, Monday to Friday")
-    dialog.get_by_role("group", name="Grants").get_by_role("checkbox", name="Search the web").check()
+    # The web follows the task's internet access, which no grant of a tool gives (ADR-0113).
+    grants = dialog.get_by_role("group", name="Grants")
+    expect(grants.get_by_role("checkbox", name="Search the web")).to_have_count(0)
+    grants.get_by_role("checkbox", name="Internet access").check()
     assert accessibility_violations(page) == []
     dialog.get_by_role("button", name="Save").click()
     expect(dialog).to_be_hidden()
@@ -95,7 +97,7 @@ def test_a_webhook_address_is_shown_once_and_can_be_replaced(page: Page, member:
     assert replaced.get_by_label("Address").input_value() != address
 
 
-@pytest.mark.spec("UX-031", "TSK-005")
+@pytest.mark.spec("UX-031", "TSK-005", "AGT-034")
 def test_grants_that_complete_the_lethal_trifecta_are_shown_with_what_to_remove(page: Page, member: Account) -> None:
     sign_in(page, member)
     _tasks_page(page)
@@ -107,12 +109,12 @@ def test_grants_that_complete_the_lethal_trifecta_are_shown_with_what_to_remove(
     dialog.get_by_label("Starts").fill("2026-12-01T07:00")
     dialog.get_by_label("Repeats").fill("RRULE:FREQ=DAILY")
     grants = dialog.get_by_role("group", name="Grants")
-    grants.get_by_role("checkbox", name="Search the web").check()
+    grants.get_by_role("checkbox", name="Internet access").check()
     grants.get_by_role("checkbox", name="Read files").check()
     dialog.get_by_role("button", name="Save").click()
     alert = dialog.get_by_role("alert")
     expect(alert).to_contain_text("could send your data out")
-    expect(alert).to_contain_text("Search the web")
+    expect(alert).to_contain_text("Internet access")
     expect(alert).to_contain_text("Read files")
     expect(dialog).to_be_visible()
 
@@ -131,7 +133,7 @@ def test_a_task_lists_its_conversations_which_show_its_name(
     )
     fire_schedule(database, trigger_of(task, "schedule")["id"])
     wait_for_conversations(server, token, task["id"])
-    granted = create_task(server, token, "Say hello.", name="Granted", grants=[open_grant("web_search")])
+    granted = create_task(server, token, "Say hello.", name="Granted", internet_access=True)
     assert granted["grant_check"]["passes"] is True
 
     sign_in(page, member)

@@ -1,4 +1,5 @@
-"""Voice turns in the web client: dictation, reading aloud and hands-free mode (UX-005, ADR-0088).
+"""Voice turns in the web client: dictation, reading aloud, hands-free mode and its approval requests (UX-005,
+UX-041, ADR-0088, ADR-0113).
 
 The model the tests serve transcribes any recording as `Heard <bytes> bytes of
 <format>` and speaks silence; Chromium records a tone from a fake microphone
@@ -297,3 +298,108 @@ def test_hands_free_mode_fills_a_phones_screen(
     assert box["height"] >= 844 * 0.35
     assert box["y"] >= 844 * 0.4
     assert accessibility_violations(page) == []
+
+
+def _transcribed_as(page: Page, text: str) -> None:
+    """Every recording is heard as `text`, so that a spoken turn calls a tool (tests/support/model.py)."""
+    page.route(
+        "**/v1/speech/transcriptions",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"text": text})),
+    )
+
+
+def _spoken(household: HouseholdModel, before: int) -> list[str]:
+    """What the client asked the speech model to say since `before` requests."""
+    return [str(request.body["input"]) for request in household.endpoint.speech("/audio/speech")[before:]]
+
+
+def _asked_hands_free(page: Page, household: HouseholdModel, text: str) -> tuple[Locator, int]:
+    """Say a turn hands-free that ends with an approval request: the request, and the speech requests before it."""
+    _transcribed_as(page, text)
+    page.evaluate(WATCH_CUES)
+    button = _hands_free(page)
+    before = len(household.endpoint.speech("/audio/speech"))
+    button.click()
+    expect(button).to_have_attribute("data-voice-state", "listening")
+    page.wait_for_timeout(600)
+    button.click()
+    request = page.get_by_role("region", name="Hands-free").get_by_role("group", name="Approval needed")
+    expect(request).to_be_visible(timeout=30_000)
+    return request, before
+
+
+@pytest.mark.spec("UX-041", "AGT-034", "UX-007")
+def test_a_request_for_internet_access_is_heard_and_answered_only_by_its_buttons(
+    page: Page, server: Server, member: Account, default_model: HarnessModel
+) -> None:
+    household = default_model.connect(member.tenant_id)
+    _speech(server, household)
+    page.set_viewport_size({"width": 390, "height": 844})
+    sign_in(page, member)
+    request, before = _asked_hands_free(page, household, "tool:request_internet_access {}")
+    # In place of the large button: one large button for each answer, Deny first, none chosen.
+    expect(page.locator("[data-voice-state]")).to_have_attribute("data-voice-state", "asking")
+    buttons = request.get_by_role("button")
+    expect(buttons).to_have_text(["Deny", "Allow for this turn", "Allow in this chat"])
+    for index in range(3):
+        box = buttons.nth(index).bounding_box()
+        assert box is not None
+        assert box["height"] >= 64
+        assert box["width"] >= 300
+        assert box["y"] >= 844 * 0.4
+    focused = page.evaluate("document.activeElement?.closest('[data-voice-request]') !== null")
+    assert focused is False
+    assert accessibility_violations(page) == []
+    # A sound of its own, and a sentence of the client's said aloud, nothing the model wrote.
+    expect(page.locator("[data-voice-cue]")).to_have_attribute("data-voice-cue", "request", timeout=10_000)
+    spoken: list[str] = []
+    for _ in range(50):
+        spoken = _spoken(household, before)
+        if spoken:
+            break
+        page.wait_for_timeout(200)
+    assert spoken == ["The assistant asks to access the internet. Answer on the screen."], spoken
+    cues: list[str] = page.evaluate("window.__cues")
+    assert "request" in cues
+    # The microphone stays closed: a media button says the request again, and starts no turn.
+    transcriptions = len(household.endpoint.speech("/audio/transcriptions"))
+    page.keyboard.press("MediaTrackNext")
+    for _ in range(50):
+        if len(_spoken(household, before)) >= 2:
+            break
+        page.wait_for_timeout(200)
+    assert _spoken(household, before)[1:2] == [spoken[0]]
+    expect(page.locator("[data-voice-state]")).to_have_attribute("data-voice-state", "asking")
+    assert len(household.endpoint.speech("/audio/transcriptions")) == transcriptions
+    # Answered by its button: the turn goes on, its answer is read aloud, and the next turn starts.
+    buttons.nth(1).click()
+    state = page.locator("[data-voice-state]")
+    expect(state).to_have_attribute("data-voice-state", "reading", timeout=30_000)
+    expect(state).to_have_attribute("data-voice-state", "listening", timeout=30_000)
+    assert any("internet access" in said for said in _spoken(household, before)[2:])
+
+
+@pytest.mark.spec("UX-041")
+def test_another_request_says_that_a_request_waits_on_the_screen_with_the_tools_name(
+    page: Page, server: Server, member: Account, default_model: HarnessModel
+) -> None:
+    household = default_model.connect(member.tenant_id)
+    _speech(server, household)
+    sign_in(page, member)
+    proposal: dict[str, object] = {
+        "name": "Spoken",
+        "instructions": "Say hello.",
+        "time_zone": "Europe/Rome",
+        "triggers": [],
+    }
+    request, before = _asked_hands_free(page, household, f"tool:propose_task {json.dumps(proposal)}")
+    expect(request.get_by_role("button")).to_have_text(["Deny", "Allow once"])
+    spoken: list[str] = []
+    for _ in range(50):
+        spoken = _spoken(household, before)
+        if spoken:
+            break
+        page.wait_for_timeout(200)
+    assert spoken == ["A request waits on the screen: Propose a task."], spoken
+    request.get_by_role("button", name="Deny").click()
+    expect(page.locator("[data-voice-state]")).to_have_attribute("data-voice-state", "reading", timeout=30_000)
