@@ -139,6 +139,13 @@ jobs:
             paths: >-
               tests/security tests/integration/test_sandbox_driver.py
               --ignore=tests/security/test_task_grants.py --ignore=tests/security/test_task_triggers.py
+              --ignore=tests/security/test_sandbox_isolation.py
+            budget: 300
+          # The sandboxes' isolation (SBX-001 to SBX-025): its tests restart the engine
+          # and the network guard, and wait for addresses that never answer; out of the sandbox part, which took
+          # 368 to 439 seconds of its 300 with them, two thirds of it theirs.
+          - part: isolation
+            paths: tests/security/test_sandbox_isolation.py
             budget: 300
           # Tasks (TSK-001 to TSK-013, ADR-0106, ADR-0107): each firing runs a conversation, and the
           # grant and trigger tests wait for the worker's sweeps; about 185 seconds. Raised from 240
