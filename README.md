@@ -359,17 +359,22 @@ reads are fetched from the conversation's sandbox.
 
 **Internet access**
 
-A chat has no internet access until you give it (AGT-034, ADR-0113): its
-sandbox has no network at all, and the assistant can neither search the web
-nor read pages. Commands need no approval: without network they cannot
+A chat has no internet access until you give it (AGT-034, ADR-0113,
+ADR-0115): its sandbox has no network at all, and the assistant can neither
+search the web nor read pages. The **Internet access** switch in the chat's
+top bar shows whether it has it, and turns it on or off at any time, also
+while the assistant works; on the new-chat screen it gives it to the chat
+from its first message. Nothing turns it on for new chats. Commands need no approval: without network they cannot
 send anything out, and the tools of the sandbox need none. When the work
 needs the internet, the assistant asks once, for all it is about to do:
 **Deny**, **Allow for this turn** or **Allow in this chat**. The request
 says what the assistant could then do, that what the chat holds could be
 sent out, and whether the chat holds content from elsewhere that could be
-steering it. A denial holds for the rest of the turn. **Chat settings**
-lists internet access allowed in the chat, to withdraw it: the sandbox
-loses its network at once. A fork starts without it, and no setting gives it
+steering it. Allowed for the turn, the switch stays on until the turn ends;
+turning the switch on answers the request as **Allow in this chat**. A
+denial holds for the rest of the turn. Turning the switch off, or
+withdrawing internet access in **Chat settings**, takes the sandbox's
+network at once. A fork starts without it, and no setting gives it
 to new chats. In hands-free mode, the request plays a sound of its own, is
 said aloud, and is answered only by its large buttons, never by voice.
 
