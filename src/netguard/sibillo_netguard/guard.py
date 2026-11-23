@@ -56,9 +56,6 @@ UNHEALTHY_AFTER_MISSING_SECONDS = 10.0
 STATE_FILE = Path("/run/sibillo-netguard/last-missing")
 # The table as `nft` listed it once installed, without the set's elements, for the health check (ADR-0120).
 EXPECTED_FILE = Path("/run/sibillo-netguard/expected-table")
-# A port of the engine's namespace where the guard accepts connections and closes them: the canary must not reach
-# it from a sandbox bridge, so that "blocked" is not a timeout of an address nobody answers (ADR-0120).
-CANARY_PORT = 9000
 NFT_TIMEOUT_SECONDS = 10
 
 BLOCKED_IPV4 = (
@@ -315,25 +312,6 @@ def serve(path: str) -> _Server:
     return server
 
 
-def listen_for_the_canary() -> socket.socket:
-    """Accept connections on the canary's port and close them at once (ADR-0120)."""
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("0.0.0.0", CANARY_PORT))  # noqa: S104 - every address of the engine's namespace, for the canary
-    listener.listen(16)
-
-    def accept() -> None:
-        while True:
-            try:
-                connection, _ = listener.accept()
-            except OSError:
-                return
-            connection.close()
-
-    threading.Thread(target=accept, name="canary", daemon=True).start()
-    return listener
-
-
 def _keep(resolver: str) -> None:
     """Reinstall the table when it is not in place, and remember that it was missing."""
     if table_present():
@@ -369,7 +347,6 @@ def run(configuration: GuardConfiguration) -> int:
         _mark_missing()
     install(resolver)
     logger.info("egress table %s %s installed for the bridges %s*", TABLE_FAMILY, TABLE_NAME, BRIDGE_PREFIX)
-    listener = listen_for_the_canary()
     server = serve(configuration.socket)
     try:
         while not stopping:
@@ -382,7 +359,6 @@ def run(configuration: GuardConfiguration) -> int:
     finally:
         # The table stays: it goes with the engine's namespace (ADR-0120).
         server.shutdown()
-        listener.close()
         Path(configuration.socket).unlink(missing_ok=True)
         logger.info("stopped; the egress table stays in place")
     return 0

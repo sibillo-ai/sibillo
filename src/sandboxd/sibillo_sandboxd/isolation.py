@@ -36,8 +36,6 @@ logger = logging.getLogger("sibillo.sandboxd")
 
 SUPPORTED_ARCHITECTURES = frozenset({"x86_64", "aarch64"})
 MONITOR_INTERVAL_SECONDS = 2.0
-# The port where the network guard accepts connections in the engine's namespace (ADR-0120).
-GUARD_CANARY_PORT = 9000
 _RELEASE = re.compile(r"release-(\d{8})\.(\d+)")
 # The canary connects to an address of the host on the sandbox bridge and to
 # a private address: a dropped SYN times out, a reachable host refuses or accepts.
@@ -254,8 +252,8 @@ class Isolation:
                     self.state.canary = Check(False, "the canary does not run under gVisor")
                     return
                 # Without network: not even the resolver (SBX-024).
-                # The guard listens on the gateway's port: reaching it means the table is not there (ADR-0120).
-                local = [(gateway, GUARD_CANARY_PORT), ("10.0.0.1", 80)]
+                # Nothing listens on the gateway's port: refused without the table, timed out with it (ADR-0120).
+                local = [(gateway, 9), ("10.0.0.1", 80)]
                 reached = await self._blocked(container, [*local, (self.configuration.resolver, 53)])
                 if reached is not None:
                     self.state.canary = Check(False, f"the canary reaches without network {reached}")
