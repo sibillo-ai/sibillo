@@ -143,8 +143,9 @@ def test_a_run_that_a_client_follows_to_its_end_sends_nothing(
 @pytest.mark.parametrize(
     ("text", "status", "kind", "urgency"),
     [
+        # A request for internet access asks whatever the folder or the run holds (AGT-034).
         pytest.param(
-            f"tool:save_skill {json.dumps({'path': '/scratch/nothing'})}",
+            "tool:request_internet_access {}",
             "interrupted",
             "approval_pending",
             "high",

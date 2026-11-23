@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from tests.support.accounts import Account, create_account, create_tenant, login
@@ -55,10 +57,16 @@ def test_an_instance_where_no_household_has_a_default_model_is_degraded(
         defaults = conn.execute("SELECT id, default_model FROM connections WHERE default_model IS NOT NULL").fetchall()
         conn.execute("UPDATE connections SET default_model = NULL")
     try:
-        with server.client() as client:
-            anonymous = client.get("/health")
         with server.client(login(server, instance_admin)) as client:
             detailed = client.get("/health").json()
+        # An anonymous check answers what was found at most five seconds before (ADR-0131).
+        deadline = time.monotonic() + 10
+        while True:
+            with server.client() as client:
+                anonymous = client.get("/health")
+            if anonymous.json() == {"status": "degraded"} or time.monotonic() > deadline:
+                break
+            time.sleep(0.5)
         assert (anonymous.status_code, anonymous.json()) == (200, {"status": "degraded"})
         assert detailed["checks"]["model_gateway"] == "degraded"
     finally:

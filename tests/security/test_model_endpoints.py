@@ -20,6 +20,9 @@ import pytest
 
 from sibillo_server.endpoints import Address, PublicEndpointTransport, is_public, tenant_http_client
 
+# The servers of these tests speak plain http; the transports allow only https otherwise (ADR-0128).
+HTTP = ("http", "https")
+
 
 class _Server:
     """A local HTTP server that records requests and redirects `/redirect` to `/secret`."""
@@ -117,7 +120,9 @@ def test_names_with_a_private_or_no_address_are_refused_at_connection_time(addre
 @pytest.mark.spec("MOD-009")
 def test_the_connection_goes_to_the_checked_address_with_the_endpoints_name(local_server: _Server) -> None:
     # `model.invalid` resolves nowhere: only the transport's own resolution can reach the server.
-    transport = PublicEndpointTransport(resolve=_resolver({"model.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed)
+    transport = PublicEndpointTransport(
+        resolve=_resolver({"model.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed, schemes=HTTP
+    )
 
     async def request() -> httpx.Response:
         async with httpx.AsyncClient(transport=transport) as client:
@@ -130,7 +135,9 @@ def test_the_connection_goes_to_the_checked_address_with_the_endpoints_name(loca
 
 @pytest.mark.spec("MOD-009")
 def test_redirects_are_not_followed(local_server: _Server) -> None:
-    client = tenant_http_client(resolve=_resolver({"model.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed)
+    client = tenant_http_client(
+        resolve=_resolver({"model.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed, schemes=HTTP
+    )
     # The SDK's signature names httpx2; it also accepts the legacy httpx client the gateway uses.
     legacy_client = cast("Any", client)
     model = openai.AsyncOpenAI(

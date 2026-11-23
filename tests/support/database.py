@@ -86,6 +86,10 @@ SECURITY_DEFINER_FUNCTIONS = (
     "auth_find_session",
     "auth_touch_session",
     "auth_record_login_attempt",
+    # Read-only, before a password is checked (ADR-0118).
+    "auth_check_login_attempt",
+    # Runs a crash left active (ADR-0130).
+    "abandoned_runs",
     "auth_take_sign_in",
     "bootstrap_instance",
     "remove_passkeys",

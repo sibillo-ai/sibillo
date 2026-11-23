@@ -25,6 +25,9 @@ from sibillo_server.mcp_http import mcp_http_client
 from tests.support.database import Context, Database, app_transaction, uuid7
 from tests.support.world import World
 
+# The servers of these tests speak plain http; the transports allow only https otherwise (ADR-0128).
+HTTP = ("http", "https")
+
 
 class _Server:
     """A local HTTP server that records requests and redirects `/redirect` to `/secret`."""
@@ -97,7 +100,10 @@ def test_names_with_a_private_or_no_address_are_refused_at_connection_time(addre
 def test_the_connection_goes_to_the_checked_address_with_the_servers_name(local_server: _Server) -> None:
     # `mcp.invalid` resolves nowhere: only the client's own resolution can reach the server.
     client = mcp_http_client(
-        private_network=False, resolve=_resolver({"mcp.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed
+        private_network=False,
+        resolve=_resolver({"mcp.invalid": ["127.0.0.1"]}),
+        allowed=_loopback_allowed,
+        schemes=HTTP,
     )
     response = _post(client, f"http://mcp.invalid:{local_server.port}/mcp")
     assert response.status_code == 200
@@ -107,10 +113,15 @@ def test_the_connection_goes_to_the_checked_address_with_the_servers_name(local_
 @pytest.mark.spec("AGT-019", "AGT-031")
 @pytest.mark.parametrize("private_network", [False, True])
 def test_redirects_are_not_followed(local_server: _Server, private_network: bool) -> None:
-    client = mcp_http_client(
-        private_network=private_network, resolve=_resolver({"mcp.invalid": ["127.0.0.1"]}), allowed=_loopback_allowed
-    )
     url = f"http://{'127.0.0.1' if private_network else 'mcp.invalid'}:{local_server.port}/redirect"
+    # The instance admin's exemption covers the origin of the server's own address (ADR-0128).
+    client = mcp_http_client(
+        private_network=private_network,
+        server_url=url,
+        resolve=_resolver({"mcp.invalid": ["127.0.0.1"]}),
+        allowed=_loopback_allowed,
+        schemes=HTTP,
+    )
     response = _post(client, url)
     assert response.status_code == 307
     assert local_server.paths == ["/redirect"]
