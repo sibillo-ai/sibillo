@@ -12,7 +12,7 @@ from fastapi import APIRouter, Request, Response, status
 from sqlalchemy import text
 
 from sibillo_server import errors, passkeys, schemas
-from sibillo_server.auth import Engine, check_password, open_session, record_attempt, request_source
+from sibillo_server.auth import Engine, check_attempt, check_password, open_session, record_attempt, request_source
 from sibillo_server.credentials import new_token, token_hash, uuid7
 from sibillo_server.database import Identity, transaction
 
@@ -27,9 +27,12 @@ router = APIRouter()
 async def login(
     body: schemas.LoginRequest, request: Request, response: Response, engine: Engine
 ) -> schemas.LoginResponse | schemas.PasskeyRequired:
+    source = request_source(request)
+    # An attempt over the limits is refused before its password costs a hash (ADR-0118).
+    await check_attempt(engine, body.username, source)
     account = await check_password(engine, body.username, body.password)
     # The answer to a refused attempt does not depend on the password (ADR-0047).
-    await record_attempt(engine, body.username, request_source(request), account is not None)
+    await record_attempt(engine, body.username, source, account is not None)
     if account is None:
         raise errors.invalid_credentials()
     user = Identity(uuid7(), account.user_id, account.tenant_id, account.role, account.instance_admin)

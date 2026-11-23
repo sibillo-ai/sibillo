@@ -128,6 +128,19 @@ def request_source(request: Request) -> Address | None:
     )
 
 
+async def check_attempt(engine: AsyncEngine, username: str, source: Address | None) -> None:
+    """Refuse an attempt over the limits before its password is checked, recording nothing (ADR-0118)."""
+    async with transaction(engine, None) as connection:
+        limit = (
+            await connection.execute(
+                text("SELECT allowed, retry_after_seconds FROM auth_check_login_attempt(:username, :source)"),
+                {"username": username, "source": source},
+            )
+        ).one()
+    if not limit.allowed:
+        raise errors.rate_limited(limit.retry_after_seconds)
+
+
 async def record_attempt(engine: AsyncEngine, username: str, source: Address | None, succeeded: bool) -> None:
     """Count a sign-in attempt; over the limits it is refused, whatever its outcome (ADR-0047)."""
     async with transaction(engine, None) as connection:
@@ -149,9 +162,11 @@ async def confirm_password(request: Request, engine: AsyncEngine, identity: Iden
         username = (
             await connection.execute(text("SELECT username FROM users WHERE id = :id"), {"id": identity.user_id})
         ).scalar_one()
+    source = request_source(request)
+    await check_attempt(engine, username, source)
     account = await check_password(engine, username, password)
     succeeded = account is not None and account.user_id == identity.user_id
-    await record_attempt(engine, username, request_source(request), succeeded)
+    await record_attempt(engine, username, source, succeeded)
     if not succeeded:
         raise errors.wrong_password()
 

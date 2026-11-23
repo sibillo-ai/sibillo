@@ -1251,6 +1251,41 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     END
     $$
     """,
+    # Whether an attempt would be refused now, by the rules of auth_record_login_attempt, recording and
+    # deleting nothing: asked before a password is checked, so that a refused attempt costs no hashing
+    # (AUTH-006, ADR-0118).
+    """
+    CREATE FUNCTION auth_check_login_attempt(username text, source inet)
+    RETURNS TABLE (allowed boolean, retry_after_seconds integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    #variable_conflict use_column
+    DECLARE
+      window_start timestamptz := now() - interval '15 minutes';
+      username_limit_since timestamptz;
+      source_limit_since timestamptz;
+      retry_at timestamptz;
+    BEGIN
+      IF $1 <> '' THEN
+        SELECT a.created_at INTO username_limit_since FROM public.login_attempts a
+        WHERE NOT a.success AND lower(a.username) = lower($1) AND a.created_at >= window_start
+        ORDER BY a.created_at DESC OFFSET 4 LIMIT 1;
+      END IF;
+      IF $2 IS NOT NULL THEN
+        SELECT a.created_at INTO source_limit_since FROM public.login_attempts a
+        WHERE NOT a.success AND a.source = $2 AND a.created_at >= window_start
+        ORDER BY a.created_at DESC OFFSET 19 LIMIT 1;
+      END IF;
+      retry_at := greatest(username_limit_since, source_limit_since) + interval '15 minutes';
+      IF retry_at IS NOT NULL THEN
+        RETURN QUERY SELECT false, greatest(1, ceil(extract(epoch FROM retry_at - now())))::integer;
+        RETURN;
+      END IF;
+      RETURN QUERY SELECT true, 0;
+    END
+    $$
+    """,
     # The passkey step of a sign-in (AUTH-010, ADR-0094): the challenge is
     # deleted as it is taken, so that a token is used once whatever the outcome,
     # and expired challenges of anyone go with it.
@@ -1531,7 +1566,8 @@ PRIVILEGES = [
     """,
     """
     GRANT EXECUTE ON FUNCTION auth_find_login(text), auth_find_session(bytea), auth_touch_session(uuid),
-      auth_record_login_attempt(text, inet, boolean), auth_take_sign_in(bytea), retention_expired_runs(integer),
+      auth_record_login_attempt(text, inet, boolean), auth_check_login_attempt(text, inet), auth_take_sign_in(bytea),
+      retention_expired_runs(integer),
       expired_temporary_conversations(integer), expired_approvals(), default_model_configured(),
       due_task_triggers(), waiting_task_firings(), find_webhook_trigger(bytea), find_event_subscription(uuid)
       TO sibillo_app
@@ -1581,6 +1617,7 @@ def downgrade() -> None:
             "DROP FUNCTION bootstrap_instance(text, text, text, text)",
             "DROP FUNCTION remove_passkeys(text)",
             "DROP FUNCTION auth_take_sign_in(bytea)",
+            "DROP FUNCTION auth_check_login_attempt(text, inet)",
             "DROP FUNCTION auth_record_login_attempt(text, inet, boolean)",
             "DROP FUNCTION auth_touch_session(uuid)",
             "DROP FUNCTION auth_find_session(bytea)",

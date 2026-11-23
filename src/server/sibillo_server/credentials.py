@@ -1,7 +1,8 @@
 """Passwords, session tokens and identifiers (AUTH-001, AUTH-004).
 
 Argon2id hashing is CPU-bound, so it runs in a worker thread and never blocks
-the event loop.
+the event loop, and takes about 64 MiB, so at most two passwords are hashed
+or checked at once in each process (ADR-0118).
 """
 
 from __future__ import annotations
@@ -22,9 +23,13 @@ _UNKNOWN_USER_HASH = _HASHER.hash(secrets.token_urlsafe(32))
 
 TOKEN_BYTES = 32
 
+# Passwords hashed or checked at once in this process; others wait their turn (ADR-0118).
+_HASHING = asyncio.Semaphore(2)
+
 
 async def hash_password(password: str) -> str:
-    return await asyncio.to_thread(_HASHER.hash, password)
+    async with _HASHING:
+        return await asyncio.to_thread(_HASHER.hash, password)
 
 
 async def verify_password(password_hash: str | None, password: str) -> bool:
@@ -36,7 +41,8 @@ async def verify_password(password_hash: str | None, password: str) -> bool:
         except (VerificationError, InvalidHashError):
             return False
 
-    return await asyncio.to_thread(verify)
+    async with _HASHING:
+        return await asyncio.to_thread(verify)
 
 
 def new_token() -> str:
