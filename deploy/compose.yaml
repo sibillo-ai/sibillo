@@ -18,7 +18,7 @@ x-logging: &logging
     max-file: "3"
 
 x-server: &server
-  image: sibillo/server:local
+  image: sibillo/server:${SIBILLO_IMAGE_TAG:-local}
   build:
     context: ..
     dockerfile: deploy/images/server/Dockerfile
@@ -140,7 +140,7 @@ services:
       search: { condition: service_healthy }
 
   sandboxd:
-    image: sibillo/sandboxd:local
+    image: sibillo/sandboxd:${SIBILLO_IMAGE_TAG:-local}
     logging: *logging
     security_opt: ["no-new-privileges:true"]
     # What it reads of sandboxes cannot take the host's memory (SBX-011, ADR-0129).
@@ -245,7 +245,7 @@ services:
     restart: unless-stopped
 
   netguard:
-    image: sibillo/netguard:local
+    image: sibillo/netguard:${SIBILLO_IMAGE_TAG:-local}
     logging: *logging
     build:
       context: ..
@@ -273,7 +273,7 @@ services:
   # listens on its Unix socket only, and the host's Docker socket is mounted
   # nowhere.
   engine:
-    image: sibillo/engine:local
+    image: sibillo/engine:${SIBILLO_IMAGE_TAG:-local}
     logging: *logging
     build:
       context: ..
@@ -293,7 +293,7 @@ services:
 
   # Builds the sandbox image for the engine, then exits.
   sandbox:
-    image: sibillo/sandbox:local
+    image: sibillo/sandbox:${SIBILLO_IMAGE_TAG:-local}
     logging: *logging
     build:
       context: ..
