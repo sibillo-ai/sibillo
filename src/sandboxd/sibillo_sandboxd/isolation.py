@@ -324,5 +324,6 @@ class Isolation:
                 elif not self.state.canary.ok:
                     await self.run_canary()
                 await self.sandboxes.stop_idle()
+                await self.sandboxes.reap_files()
             except Exception:
                 logger.exception("isolation monitor failed")

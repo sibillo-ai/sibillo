@@ -28,6 +28,8 @@ VARIABLES = frozenset(
         "SIBILLO_SANDBOX_COMMAND_TIMEOUT_SECONDS",
         "SIBILLO_SANDBOX_MAX_OUTPUT_BYTES",
         "SIBILLO_SANDBOX_IDLE_MINUTES",
+        "SIBILLO_SANDBOX_MAX_RUNNING",
+        "SIBILLO_SANDBOX_MAX_FILE_CONTAINERS",
         "SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB",
         "SIBILLO_SANDBOX_DISK_MB",
         "SIBILLO_SANDBOX_MINIMUM_GVISOR_RELEASE",
@@ -72,6 +74,9 @@ class DriverConfiguration:
     minimum_release: str = BUILT_IN_MINIMUM_RELEASE
     # The range the sandbox bridges take their subnets of four addresses from (SBX-024, ADR-0113).
     subnets: ipaddress.IPv4Network = DEFAULT_RANGE
+    # The most sandboxes, and containers of file operations, that run at once (SBX-011, ADR-0129).
+    max_running: int = 64
+    max_file_containers: int = 32
 
 
 def _integer(environment: Mapping[str, str], name: str, default: int, low: int, high: int) -> int:
@@ -121,6 +126,13 @@ LOCAL_RANGES = tuple(
         "192.168.0.0/16",
         "224.0.0.0/4",
         "240.0.0.0/4",
+        # Azure's WireServer, IETF protocol assignments, benchmarking and documentation ranges (SBX-005, ADR-0129).
+        "168.63.129.16/32",
+        "192.0.0.0/24",
+        "192.0.2.0/24",
+        "198.18.0.0/15",
+        "198.51.100.0/24",
+        "203.0.113.0/24",
     )
 )
 
@@ -195,4 +207,6 @@ def load_configuration(environment: Mapping[str, str]) -> DriverConfiguration:
         disk_mb=_integer(environment, "SIBILLO_SANDBOX_DISK_MB", 4096, 64, 1048576),
         minimum_release=_minimum_release(environment),
         subnets=_subnets(environment),
+        max_running=_integer(environment, "SIBILLO_SANDBOX_MAX_RUNNING", 64, 1, 16384),
+        max_file_containers=_integer(environment, "SIBILLO_SANDBOX_MAX_FILE_CONTAINERS", 32, 1, 1024),
     )

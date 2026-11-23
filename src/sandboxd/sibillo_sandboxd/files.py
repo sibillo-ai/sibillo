@@ -111,7 +111,16 @@ def walk(rel, *, follow_last=False, missing_ok=False):
 
 def entry(path):
     info = os.lstat(path)
-    kind = "link" if stat.S_ISLNK(info.st_mode) else "folder" if stat.S_ISDIR(info.st_mode) else "file"
+    # A FIFO, a socket or a device is other, and never read: opening a FIFO would wait for ever (ADR-0129).
+    kind = (
+        "link"
+        if stat.S_ISLNK(info.st_mode)
+        else "folder"
+        if stat.S_ISDIR(info.st_mode)
+        else "file"
+        if stat.S_ISREG(info.st_mode)
+        else "other"
+    )
     return {
         "name": os.path.basename(path),
         "path": os.path.relpath(path, ROOT),

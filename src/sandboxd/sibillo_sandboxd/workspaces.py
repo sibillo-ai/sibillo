@@ -1,8 +1,11 @@
 """Workspaces as tar archives, for backups and restores (SBX-020, ADR-0077).
 
 An archive holds regular files, directories and symbolic links, named
-relative to the workspace root. One that names anything else, or anything
-outside the workspace, is refused as a whole before a byte of it is written.
+relative to the workspace root. A link may point anywhere, as a Python
+virtual environment's do, since nothing is written through it: an archive
+with a member whose path goes through a link it made, with anything but
+those three kinds, or with a path outside the workspace is refused as a
+whole before a byte of it is written (ADR-0129).
 """
 
 from __future__ import annotations
@@ -30,15 +33,18 @@ def _relative(name: str) -> str:
 
 def check_archive(path: Path) -> None:
     """Refuse an archive with any entry the workspace must not receive."""
+    links: set[str] = set()
     with tarfile.open(path, "r:") as archive:
         for member in archive:
             name = _relative(member.name)
             if member.type not in ALLOWED_TYPES:
                 raise UnsafeArchiveError(f"not a file, a folder or a link: {member.name}")
+            # Nothing is written through a link the archive made: its folders are the workspace's own.
+            parts = name.split("/")
+            if any("/".join(parts[:depth]) in links for depth in range(1, len(parts) + 1)):
+                raise UnsafeArchiveError(f"a path through a link: {member.name}")
             if member.type == tarfile.SYMTYPE:
-                if member.linkname.startswith("/"):
-                    raise UnsafeArchiveError(f"link outside the workspace: {member.name}")
-                _relative(posixpath.join(posixpath.dirname(name), member.linkname))
+                links.add(name)
 
 
 # The skills of a sandbox are files and folders only (SBX-022, ADR-0096).

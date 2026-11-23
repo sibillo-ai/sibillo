@@ -113,7 +113,8 @@ def container_config(
         "Hostname": "sandbox",
         # No credentials, and nothing from the driver's environment (SBX-008).
         "Env": [],
-        "Labels": {LABEL: "sandbox"} | labels,
+        # Found by its image's name, whatever build of it it runs (SBX-018, ADR-0129).
+        "Labels": {LABEL: "sandbox", f"{LABEL}.image": configuration.image} | labels,
         "HostConfig": {
             "Runtime": configuration.runtime,
             # Its own bridge; the driver's own helper containers have no network.
@@ -128,6 +129,8 @@ def container_config(
             "Ulimits": [{"Name": "nproc", "Soft": configuration.processes, "Hard": configuration.processes}],
             "Mounts": mounts,
             "Privileged": False,
+            # No raw packets on its link (SBX-006, ADR-0129).
+            "CapDrop": ["NET_RAW"],
             "SecurityOpt": ["no-new-privileges"],
             "RestartPolicy": {"Name": "no"},
             # gVisor bounds everything outside the workspace, without a runtime of its own (SBX-016, ADR-0098).

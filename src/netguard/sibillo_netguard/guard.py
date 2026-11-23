@@ -68,6 +68,13 @@ BLOCKED_IPV4 = (
     "192.168.0.0/16",
     "224.0.0.0/4",
     "240.0.0.0/4",
+    # Azure's WireServer, IETF protocol assignments, benchmarking and documentation ranges (SBX-005, ADR-0129).
+    "168.63.129.16/32",
+    "192.0.0.0/24",
+    "192.0.2.0/24",
+    "198.18.0.0/15",
+    "198.51.100.0/24",
+    "203.0.113.0/24",
 )
 
 RESOLVER_VARIABLE = "SIBILLO_SANDBOX_RESOLVER"

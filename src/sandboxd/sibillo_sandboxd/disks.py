@@ -165,7 +165,7 @@ def helper_config(
         "Entrypoint": ["sh", "-c", HELPER, "disk-helper"],
         "Cmd": list(argv),
         "Env": [],
-        "Labels": {LABEL: "disk-helper"} | labels,
+        "Labels": {LABEL: "disk-helper", f"{LABEL}.image": configuration.image} | labels,
         "NetworkDisabled": True,
         "HostConfig": {
             "Runtime": "runc",

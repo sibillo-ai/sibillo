@@ -248,7 +248,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
                 }
                 actions={
                   <>
-                    {entry.type !== "link" && (
+                    {(entry.type === "file" || entry.type === "folder") && (
                       <IconButton label={t("files.download")} onClick={() => download(entry.type === "folder" ? archiveUrl(conversationId, entry.path) : downloadUrl(conversationId, entry.path))}>
                         <Download aria-hidden="true" />
                       </IconButton>
@@ -274,6 +274,9 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
                   </div>
                 ) : entry.type === "link" ? (
                   <p className={`p-3 ${NOTE}`}>{t("files.linkPreview")}</p>
+                ) : entry.type === "other" ? (
+                  // A FIFO, a socket or a device: never read (ADR-0129).
+                  <p className={`p-3 ${NOTE}`}>{t("files.otherPreview")}</p>
                 ) : undefined}
               </CodeFrame>
             </section>

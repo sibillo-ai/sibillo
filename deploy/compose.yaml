@@ -25,6 +25,8 @@ x-server: &server
   networks: [internal]
   restart: unless-stopped
   logging: *logging
+  # No process gains a privilege it did not start with (ADR-0129).
+  security_opt: ["no-new-privileges:true"]
 
 x-app-database: &app-database
   SIBILLO_DATABASE_URL: postgresql://sibillo_app:${SIBILLO_APP_PASSWORD:-}@postgres:5432/sibillo
@@ -140,6 +142,9 @@ services:
   sandboxd:
     image: sibillo/sandboxd:local
     logging: *logging
+    security_opt: ["no-new-privileges:true"]
+    # What it reads of sandboxes cannot take the host's memory (SBX-011, ADR-0129).
+    mem_limit: 1g
     build:
       context: ..
       dockerfile: deploy/images/sandboxd/Dockerfile
@@ -249,7 +254,9 @@ services:
     # never host networking (ADR-0021, SBX-025). A guard whose engine restarted
     # stops, and starts again in the engine's new namespace.
     network_mode: service:engine
+    cap_drop: [ALL]
     cap_add: [NET_ADMIN]
+    security_opt: ["no-new-privileges:true"]
     # DNS from sandboxes reaches only this resolver, as the driver's (SBX-007, ADR-0098).
     environment:
       SIBILLO_SANDBOX_RESOLVER: ${SIBILLO_SANDBOX_RESOLVER:-9.9.9.9}

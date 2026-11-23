@@ -68,9 +68,18 @@ TIMEOUT_GRACE_SECONDS = 10
 KILLED_EXIT_CODES = frozenset({124, 137})
 NOT_FOUND = 404
 ARCHIVE_CHUNK_BYTES = 1024 * 1024
+# What the driver reads of its own commands in a sandbox, and for how long (ADR-0129).
+OWN_OUTPUT_BYTES = 1024 * 1024
+OWN_COMMAND_SECONDS = 60
+# A file container older than this is left by a stream nobody read (ADR-0129).
+FILE_CONTAINER_SECONDS = 600
 # Deleting a workspace waits this long for a file operation that still uses it.
 DELETE_ATTEMPTS = 20
 DELETE_PAUSE_SECONDS = 0.5
+
+
+class OwnCommandError(Exception):
+    """A command the driver ran in a sandbox wrote too much, or ran too long (ADR-0129)."""
 
 
 async def _assume_in_place() -> bool:
@@ -93,8 +102,8 @@ class Exit:
     timed_out: bool
     truncated: bool
     duration_ms: int
-    # The workspace's size after the command, and its quota (SBX-019).
-    workspace_bytes: int
+    # The workspace's size after the command, unknown when it could not be measured, and its quota (SBX-019).
+    workspace_bytes: int | None
     workspace_quota_bytes: int
 
 
@@ -200,23 +209,35 @@ class Sandboxes:
         return code, output
 
     async def _run_logged(self, container: Any, argv: Sequence[str]) -> tuple[int, str, str]:
-        """Run a command of the driver's own in the container: its exit code, standard output and error."""
+        """Run a command of the driver's own in the container: its exit code, standard output and error.
+
+        The sandbox's code may have replaced the program: what it writes is read up to `OWN_OUTPUT_BYTES`, for up
+        to `OWN_COMMAND_SECONDS`, or the command fails with `OwnCommandError` (SBX-011, ADR-0129).
+        """
         execute = await container.exec(cmd=list(argv), stdout=True, stderr=True, stdin=False, user="root")
         streams: dict[int, list[bytes]] = {1: [], 2: []}
-        async with execute.start(detach=False) as stream:
-            while (message := await stream.read_out()) is not None:
-                streams[message.stream].append(message.data)
+        received = 0
+        try:
+            async with asyncio.timeout(OWN_COMMAND_SECONDS), execute.start(detach=False) as stream:
+                while (message := await stream.read_out()) is not None:
+                    received += len(message.data)
+                    if received > OWN_OUTPUT_BYTES:
+                        raise OwnCommandError(f"{argv[0]} wrote more than {OWN_OUTPUT_BYTES} bytes")
+                    streams[message.stream].append(message.data)
+        except TimeoutError:
+            raise OwnCommandError(f"{argv[0]} ran longer than {OWN_COMMAND_SECONDS} seconds") from None
         code = int((await execute.inspect())["ExitCode"] or 0)
         return code, b"".join(streams[1]).decode(errors="replace"), b"".join(streams[2]).decode(errors="replace")
 
-    async def _workspace_bytes(self, container: Any) -> int:
-        """The workspace's size, measured inside the sandbox (SBX-019)."""
+    async def _workspace_bytes(self, container: Any) -> int | None:
+        """The workspace's size, measured inside the sandbox (SBX-019); None when it could not be, within the
+        driver's bounds: the disk's own limit holds regardless (ADR-0098, ADR-0129)."""
         try:
             code, output = await self._run(container, ["du", "-sb", WORKSPACE])
-            return int(output.split()[0]) if code == 0 and output else 0
-        except (DockerError, ValueError, IndexError):
+            return int(output.split()[0]) if code == 0 and output else None
+        except (DockerError, ValueError, IndexError, OwnCommandError):
             logger.warning("the workspace of %s could not be measured", container.id)
-            return 0
+            return None
 
     async def ensure(self, sandbox: SandboxId, internet_access: bool | None = None) -> dict[str, Any]:
         """The conversation's sandbox, created if needed (idempotent), with network when `internet_access` says
@@ -255,6 +276,7 @@ class Sandboxes:
                 raise
         started = container is None
         if started:
+            await self._within(self.configuration.max_running, files=False)
             await self.disks.attach(sandbox)
             skills = await self._fill_skills(sandbox)
             container = await self.start_container(name, sandbox.volume, sandbox.labels, skills=skills)
@@ -367,7 +389,8 @@ class Sandboxes:
         so that no sandbox is left that the driver does not track (SBX-018,
         ADR-0078). Another driver's sandboxes, of another image, are left alone.
         """
-        filters = {"label": [f"{LABEL}=sandbox"], "ancestor": [self.configuration.image]}
+        # By the label of the image's name, not by the image the tag names now (ADR-0129).
+        filters = {"label": [f"{LABEL}=sandbox", f"{LABEL}.image={self.configuration.image}"]}
         containers = await self.docker.containers.list(all=True, filters=json.dumps(filters))
         await asyncio.gather(*(container.delete(force=True) for container in containers), return_exceptions=True)
         # No bridge has network any more, and every bridge goes (SBX-024, ADR-0113).
@@ -394,11 +417,43 @@ class Sandboxes:
         )
         return len(containers)
 
+    async def _running_of(self, *, files: bool) -> list[dict[str, Any]]:
+        """The running containers of this driver's image: its sandboxes, or its file containers."""
+        filters = {"label": [f"{LABEL}=sandbox", f"{LABEL}.image={self.configuration.image}"], "status": ["running"]}
+        found = await self.docker.containers.list(filters=json.dumps(filters))
+        listed = [container._container for container in found]  # pyright: ignore[reportPrivateUsage]
+        labels = [listing.get("Labels") or {} for listing in listed]
+        return [
+            listing
+            for listing, label in zip(listed, labels, strict=True)
+            if (f"{LABEL}.files" in label) == files and f"{LABEL}.canary" not in label
+        ]
+
+    async def _within(self, ceiling: int, *, files: bool) -> None:
+        """Refuse one more container beyond the ceiling of those that run at once (SBX-011, ADR-0129)."""
+        if len(await self._running_of(files=files)) >= ceiling:
+            raise NoSubnetError("the most sandboxes that may run at once are running")
+
+    async def reap_files(self) -> int:
+        """Remove file containers older than ten minutes, as a stream nobody read leaves (ADR-0129)."""
+        old = [
+            listing
+            for listing in await self._running_of(files=True)
+            if time.time() - float(listing.get("Created") or 0) > FILE_CONTAINER_SECONDS
+        ]
+        for listing in old:
+            await self._delete_container(str(listing["Names"][0]).lstrip("/"))
+        return len(old)
+
     async def start(self) -> None:
         """As the driver starts: no sandbox, and no device, from before is trusted (SBX-018, ADR-0098)."""
         removed = await self.stop_all()
         if removed:
             logger.info("removed %d sandboxes left from before the driver started", removed)
+        # A helper a crash left, privileged as disk helpers are, goes too (ADR-0129).
+        filters = {"label": [f"{LABEL}=disk-helper", f"{LABEL}.image={self.configuration.image}"]}
+        helpers = await self.docker.containers.list(all=True, filters=json.dumps(filters))
+        await asyncio.gather(*(helper.delete(force=True) for helper in helpers), return_exceptions=True)
         forgotten = await self.disks.forget_devices()
         if forgotten:
             logger.info("removed %d workspace volumes of devices from before the driver started", forgotten)
@@ -507,14 +562,19 @@ class Sandboxes:
         )
 
     async def export_workspace(self, sandbox: SandboxId, destination: Path) -> None:
-        """Write the conversation's workspace to `destination` as a tar archive of paths relative to it (SBX-020)."""
-        await self.ensure(sandbox)
-        container = await self.docker.containers.get(sandbox.container)
+        """Write the conversation's workspace to `destination` as a tar archive of paths relative to it (SBX-020).
+
+        Read through a container of its own, without network, removed at once: the conversation's sandbox is not
+        started (ADR-0129).
+        """
         raw = destination.with_name(f"{destination.name}.docker")
         try:
-            async with self.docker._query(  # pyright: ignore[reportPrivateUsage]
-                f"containers/{container.id}/archive", params={"path": WORKSPACE}
-            ) as response:
+            async with (
+                self._borrowed(sandbox) as container,
+                self.docker._query(  # pyright: ignore[reportPrivateUsage]
+                    f"containers/{container.id}/archive", params={"path": WORKSPACE}
+                ) as response,
+            ):
                 with raw.open("wb") as file:
                     async for chunk in response.content.iter_chunked(ARCHIVE_CHUNK_BYTES):
                         await asyncio.to_thread(file.write, chunk)
@@ -527,15 +587,16 @@ class Sandboxes:
 
         Nothing from the archive is run.
 
-        The workspace is emptied first; an archive that would write outside it
-        is refused whole, leaving it empty. The sandbox is removed afterwards,
-        so that the next command sees the workspace as unpacked.
+        The archive is checked first; one that would write outside the workspace is refused whole, leaving the
+        workspace as it was. The sandbox is removed, and the workspace is emptied and unpacked in a container of
+        its own, without network, so that the next command sees it as unpacked (ADR-0129).
         """
-        await self.ensure(sandbox)
-        container = await self.docker.containers.get(sandbox.container)
-        try:
+        # Checked before anything changes: a refused archive leaves the workspace as it was (ADR-0129).
+        await asyncio.to_thread(check_archive, source)
+        # A running sandbox would see the workspace change under it: it goes first.
+        await self.stop(sandbox)
+        async with self._borrowed(sandbox) as container:
             await self._run_quietly(container, ["find", WORKSPACE, "-mindepth", "1", "-delete"])
-            await asyncio.to_thread(check_archive, source)
             with source.open("rb") as file:
                 async with self.docker._query(  # pyright: ignore[reportPrivateUsage]
                     f"containers/{container.id}/archive",
@@ -545,8 +606,6 @@ class Sandboxes:
                     headers={"content-type": "application/x-tar"},
                 ) as response:
                     await response.read()
-        finally:
-            await self.stop(sandbox)
 
     async def delete_workspace(self, sandbox: SandboxId) -> None:
         """Remove the conversation's sandbox and delete its workspace and disk, as it is deleted (SBX-010)."""
@@ -603,6 +662,7 @@ class Sandboxes:
         # File operations need no network at all.
         config["HostConfig"] = {**config["HostConfig"], "NetworkMode": "none", "Dns": []}
         name = f"sibillo-files-{sandbox.conversation_id}-{uuid.uuid4().hex[:8]}"
+        await self._within(self.configuration.max_file_containers, files=True)
         # Attached and mounted under the sandbox's lock, so that the idle sweep cannot detach it in between.
         async with self._locks.setdefault(sandbox.container, asyncio.Lock()):
             await self.disks.attach(sandbox)
@@ -612,9 +672,10 @@ class Sandboxes:
         return container
 
     async def workspace_size(self, sandbox: SandboxId) -> dict[str, int]:
+        # Measured in a fresh container of the image, whose `du` no code of the sandbox has replaced.
         async with self._borrowed(sandbox) as container:
             used = await self._workspace_bytes(container)
-        return {"bytes": used, "quota_bytes": self.configuration.workspace_quota_mb * MIB}
+        return {"bytes": used or 0, "quota_bytes": self.configuration.workspace_quota_mb * MIB}
 
     async def list_folder(self, sandbox: SandboxId, path: str) -> dict[str, Any]:
         async with self._borrowed(sandbox) as container:

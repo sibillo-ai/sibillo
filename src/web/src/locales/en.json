@@ -428,6 +428,7 @@
     "loading": "Loading…",
     "noPreview": "No preview for this kind of file. Download it to open it.",
     "linkPreview": "A link: it is never followed. It can be deleted.",
+    "otherPreview": "This is not a file to open: a pipe, a socket or a device the assistant made.",
     "cut": "Showing the first megabyte.",
     "quota": "{{used}} of {{quota}}",
     "quotaLabel": "Workspace space used",
