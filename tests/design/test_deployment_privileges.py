@@ -53,7 +53,8 @@ def test_only_the_sandbox_engine_is_privileged() -> None:
     for name, service in services.items():
         assert not service.get("pid"), name
         assert not service.get("devices"), name
-        assert not service.get("security_opt"), name
+        # Only the option that takes privileges away, never one that loosens a profile (ADR-0129).
+        assert set(service.get("security_opt", [])) <= {"no-new-privileges:true"}, name
 
 
 @pytest.mark.spec("SBX-025", "OPS-001")
