@@ -200,6 +200,8 @@ def test_what_an_interrupted_backup_left_is_removed(tmp_path: Path) -> None:
         (tmp_path / name / "contents").mkdir(parents=True)
         (tmp_path / name / "contents" / "database.dump").write_bytes(b"plain")
     (tmp_path / "sibillo-20261101T030000Z.tar.age").write_bytes(b"archive")
+    # An archive an interrupted backup was still writing, encrypted, under a name of its own.
+    (tmp_path / ".partial-sibillo-20261102T030000Z.tar.age").write_bytes(b"half")
     remove_leftovers(tmp_path)
     assert sorted(path.name for path in tmp_path.iterdir()) == ["sibillo-20261101T030000Z.tar.age"]
     # Staged outside the backup folder from now on.
