@@ -125,7 +125,8 @@ approval (ADR-0090).
 - **Verification:** integration
 
 Every tool invocation, including calls that were denied, expired or refused,
-MUST produce an audit event (tool, time, run, conversation, approval outcome
+calls to tools that are off or unknown, and approved calls to a remote MCP
+server's tool that changed since (ADR-0132), MUST produce an audit event (tool, time, run, conversation, approval outcome
 and its scope) that the user it acted for can view. Audit events MUST NOT
 hold the call's arguments or results, MUST outlive the conversation, and
 MUST be deleted with their user. Tools in the `external_communication`,
@@ -267,7 +268,9 @@ and delete it. Skills MUST be private to their owner, MUST be validated by
 the Agent Skills rules, and MUST stay within the limits of ADR-0096. The
 download of an import MUST run in a sandbox, never in the control plane, and
 archives MUST be refused when an entry would fall outside the skill's folder
-or when they exceed the limits.
+or when they exceed the limits. A skill's front matter MUST be bounded
+before it is parsed, and parsed off the event loop; an import MUST be
+bounded in files and bytes, one at a time for each user (ADR-0132).
 
 Every run MUST be given the skills that are on for its user and not turned
 off in its conversation, with only their names and descriptions in the

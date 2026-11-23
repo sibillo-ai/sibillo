@@ -54,7 +54,8 @@ A user MUST be able to rewind a conversation to any earlier turn, or to
 before its first turn, and continue from there. What followed that turn MUST
 be deleted: its messages, runs and run events (ADR-0068). Rewinding MUST NOT
 change files in the conversation's workspace, and the API contract MUST say so;
-clients ask first and tell the user (UX-010). A rewind that deletes a run
+clients ask first and tell the user (UX-010). A rewind MUST wait until the
+workflow of a cancelled run has stopped (ADR-0132). A rewind that deletes a run
 holding untrusted content (AGT-003) MUST withdraw the conversation's
 allowances, and every later run of that conversation MUST count as having
 untrusted content from its start, since its task list and workspace may

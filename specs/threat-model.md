@@ -154,6 +154,9 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **Audit events of a reused call ID.** A model server that gives two calls
+  of one run the same ID makes them one audit event, with its attempts
+  counted (AGT-008, ADR-0132).
 - **What a household can learn of names.** Usernames are unique in the
   instance, so a tenant admin creating a user learns whether a name is taken
   in another household; members see the names and roles of their own

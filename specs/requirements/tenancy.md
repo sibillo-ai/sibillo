@@ -116,4 +116,6 @@ Data stored by the durable execution engine outside the application schema
 (ADR-0034) MUST be reached by application code only through run identifiers
 read from row-level-secured tables, MUST be deleted together with the
 conversation it belongs to, and MUST be deleted once its run has finished and
-the retention period configured by the instance admin has passed.
+the retention period configured by the instance admin has passed. Row-level
+security does not cover it, so a run MUST take its user's role from the
+database when it starts, never from its stored input (ADR-0132).
