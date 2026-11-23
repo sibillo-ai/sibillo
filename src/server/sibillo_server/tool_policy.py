@@ -102,7 +102,8 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "run_command": _READS,
     "start_command": _READS,
     "check_command": _READS,
-    "stop_command": _WRITES,
+    # It returns the command's output, as `check_command` does (ADR-0127).
+    "stop_command": _READS,
     "read_file": _READS,
     "write_file": _WRITES,
     "edit_file": _WRITES,
@@ -352,7 +353,9 @@ def describe(tool: str, arguments: Mapping[str, Any]) -> tuple[str, str, str]:
         command = str(arguments.get("command", ""))
         purpose = str(arguments.get("description", "") or arguments.get("purpose", ""))
         action = "Run a command in the sandbox" if tool == "run_command" else "Start a command in the sandbox"
-        return (f"{action}: {purpose}" if purpose else action), command, "The conversation's sandbox"
+        # The description is the model's own: quoted as the assistant's, never as Sibillo's (ADR-0127).
+        said = f'{action}; the assistant says: "{purpose}"' if purpose else action
+        return said, command, "The conversation's sandbox"
     if tool == UPDATE_TASK:
         return (
             "Change one of your tasks, with what the change lists",

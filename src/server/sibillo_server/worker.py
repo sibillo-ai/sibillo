@@ -57,8 +57,8 @@ from pydantic_ai_harness.tool_output_limits import ToolOutputLimits
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from sibillo_server import schemas
-from sibillo_server.approvals import Approvals
+from sibillo_server import errors, schemas
+from sibillo_server.approvals import Approvals, record
 from sibillo_server.changes import announce
 from sibillo_server.changes import event as change_event
 from sibillo_server.config import WorkerConfiguration
@@ -984,6 +984,29 @@ async def _delete_expired_temporary_conversations() -> None:
             logger.exception("a temporary conversation could not be deleted")
 
 
+async def _deny_without_run(owner: Identity, conversation_id: uuid.UUID) -> None:
+    """Record every expired approval of the conversation as expired, and clear its pending interrupt (ADR-0127)."""
+    async with transaction(_engine(), owner) as connection:
+        conversation = await find_conversation(connection, conversation_id, lock=True)
+        if conversation.pending_interrupts is None or conversation.active_run_id is None:
+            return
+        for decision in expired(conversation.pending_interrupts).approvals:
+            await record(
+                connection,
+                owner,
+                conversation_id=conversation_id,
+                run_id=conversation.active_run_id,
+                tool_call_id=decision.tool_call_id,
+                tool=decision.tool,
+                outcome="expired",
+                reason=decision.reason,
+            )
+        await connection.execute(
+            text("UPDATE conversations SET pending_interrupts = NULL, approvals_expire_at = NULL WHERE id = :id"),
+            {"id": conversation_id},
+        )
+
+
 async def _deny_expired_approvals() -> None:
     """Resume each conversation whose approval requests expired, denying them, under its owner (AGT-007)."""
     async with transaction(_engine(), None) as connection:
@@ -1005,14 +1028,16 @@ async def _deny_expired_approvals() -> None:
                     continue
                 if conversation.approvals_expire_at > datetime.datetime.now(datetime.UTC):
                     continue
+                answers = expired(conversation.pending_interrupts)
                 workflow_input = await create_run(
-                    connection,
-                    owner,
-                    conversation,
-                    run_id=run_id,
-                    answers=expired(conversation.pending_interrupts),
-                    expired=True,
+                    connection, owner, conversation, run_id=run_id, answers=answers, expired=True
                 )
+        except errors.ApiError as error:
+            # No run can be made, as when the conversation's model is no longer offered: denied without one,
+            # so that the conversation is not left waiting (AGT-007, ADR-0127).
+            logger.warning("expired approvals denied without a run: %s", error.code)
+            await _deny_without_run(owner, row.conversation_id)
+            continue
         except Exception:
             # The next sweep tries again.
             logger.exception("expired approvals could not be denied")

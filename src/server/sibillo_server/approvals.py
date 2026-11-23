@@ -43,6 +43,25 @@ from sibillo_server.tool_policy import (
     has_untrusted_content,
 )
 
+# The memory tools that change or delete an item (ADR-0127).
+MEMORY_CHANGES = frozenset({"update_memory", "forget"})
+
+
+async def _users_item(deps: RunDeps, item_id: Any) -> str | None:
+    """The text of a trusted memory item the call names, which the user wrote or saved; None otherwise."""
+    try:
+        parsed = uuid.UUID(str(item_id))
+    except ValueError:
+        return None
+    async with transaction(deps.engine, deps.identity) as connection:
+        found = (
+            await connection.execute(
+                text("SELECT text FROM memory_items WHERE id = :id AND NOT untrusted"), {"id": parsed}
+            )
+        ).scalar_one_or_none()
+    return None if found is None else str(found)
+
+
 # Saves a folder as a skill: its approval shows the skill (AGT-026, ADR-0124).
 SAVE_SKILL = "save_skill"
 
@@ -154,6 +173,34 @@ class Approvals(AbstractCapability[RunDeps]):
                     )
         else:
             untrusted = deps.untrusted or has_untrusted_content(ctx.messages)
+            # What the user wrote in memory is changed or deleted in an untrusted run only if they say so (ADR-0127).
+            if untrusted and call.tool_name in MEMORY_CHANGES:
+                guarded = await _users_item(deps, args.get("id"))
+                if guarded is not None:
+                    if deps.unattended:
+                        async with transaction(deps.engine, deps.identity) as connection:
+                            await record(
+                                connection,
+                                deps.identity,
+                                conversation_id=deps.conversation_id,
+                                run_id=run_id,
+                                tool_call_id=call.tool_call_id,
+                                tool=call.tool_name,
+                                outcome="not_granted",
+                                reason="untrusted_content",
+                            )
+                        return NOT_GRANTED
+                    verb = "Forget" if call.tool_name == "forget" else "Replace"
+                    raise ApprovalRequired(
+                        metadata={
+                            "reason": "untrusted_content",
+                            "scopes": ["once"],
+                            "approval": {
+                                "action": f'{verb} the memory item you wrote: "{guarded}"',
+                                "destination": "Your memory, which your later conversations are given",
+                            },
+                        }
+                    )
             decision = decide(call.tool_name, deps.permissions, untrusted, allowances)
             if decision.denied:
                 # The user denied internet access in this turn: denied again, without asking (AGT-034).
