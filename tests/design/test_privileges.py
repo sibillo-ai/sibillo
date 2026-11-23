@@ -93,6 +93,8 @@ EXECUTABLE_FUNCTIONS = {
     "auth_find_session(bytea)",
     "auth_touch_session(uuid)",
     "auth_record_login_attempt(text, inet, boolean)",
+    # Read-only, before a password is checked (ADR-0118).
+    "auth_check_login_attempt(text, inet)",
     "auth_take_sign_in(bytea)",
     "retention_expired_runs(integer)",
     "expired_temporary_conversations(integer)",
