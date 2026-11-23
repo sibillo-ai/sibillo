@@ -31,9 +31,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from sibillo_sandboxd.config import DriverConfiguration
 from sibillo_sandboxd.disks import DiskError
 from sibillo_sandboxd.files import FileOperationError, PathRefusedError
+from sibillo_sandboxd.guard import GuardUnavailableError
 from sibillo_sandboxd.isolation import Isolation
 from sibillo_sandboxd.policy import SandboxId
-from sibillo_sandboxd.sandboxes import Exit, Output, Sandboxes
+from sibillo_sandboxd.sandboxes import Exit, NoSubnetError, Output, Sandboxes
 from sibillo_sandboxd.workspaces import UnsafeArchiveError
 
 logger = logging.getLogger("sibillo.sandboxd")
@@ -57,6 +58,14 @@ def _problem(status: int, code: str, title: str) -> JSONResponse:
         status_code=status,
         media_type="application/problem+json",
     )
+
+
+class EnsureRequest(BaseModel):
+    """Whether the conversation has internet access, so that its sandbox has network (SBX-024, ADR-0113)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    internet_access: bool
 
 
 class ExecRequest(BaseModel):
@@ -176,6 +185,17 @@ def create_app(configuration: DriverConfiguration) -> FastAPI:
         logger.warning("%s", error)
         return _problem(503, "driver.isolation_unavailable", "The workspace's disk is not available")
 
+    @app.exception_handler(GuardUnavailableError)
+    async def guard_error(request: Request, error: GuardUnavailableError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        # The egress table counts as missing: the monitor stops the sandboxes (SBX-015, ADR-0113).
+        logger.warning("%s", error)
+        return _problem(503, "driver.egress_rules_missing", "The network guard did not take the change")
+
+    @app.exception_handler(NoSubnetError)
+    async def no_subnet(request: Request, error: NoSubnetError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        logger.warning("%s", error)
+        return _problem(503, "driver.isolation_unavailable", "No more sandboxes can run at once")
+
     @app.exception_handler(PathRefusedError)
     async def path_refused(request: Request, error: PathRefusedError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         return _problem(422, "driver.validation_failed", f"The path is refused: {error}")
@@ -197,9 +217,16 @@ def create_app(configuration: DriverConfiguration) -> FastAPI:
     @app.post(f"{SANDBOX}/ensure", dependencies=authenticated)
     async def ensure(  # pyright: ignore[reportUnusedFunction]
         sandbox: Addressed,
+        body: EnsureRequest,
         sandboxes: Annotated[Sandboxes, Depends(ready)],
     ) -> dict[str, Any]:
-        return await sandboxes.ensure(sandbox)
+        return await sandboxes.ensure(sandbox, body.internet_access)
+
+    @app.delete(f"{SANDBOX}/network", dependencies=authenticated)
+    async def withdraw_network(sandbox: Addressed, request: Request) -> Response:  # pyright: ignore[reportUnusedFunction]
+        # Allowed even while isolation is not verified: taking network away is always safe (SBX-024).
+        await request.app.state.sandboxes.withdraw_network(sandbox)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.post(f"{SANDBOX}/exec", dependencies=authenticated)
     async def execute(  # pyright: ignore[reportUnusedFunction]

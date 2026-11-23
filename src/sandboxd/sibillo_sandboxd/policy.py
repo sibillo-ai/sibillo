@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
+import ipaddress
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
 from sibillo_sandboxd.config import DriverConfiguration
 
-NETWORK = "sibillo-sandboxes"
-BRIDGE_INTERFACE = "sibillosbx0"
+# The prefix of every sandbox bridge's interface name, which the egress table matches (SBX-024, ADR-0113).
+BRIDGE_PREFIX = "sbx"
 WORKSPACE = "/workspace"
 # Where commands start: discarded with the sandbox, unlike the workspace (SBX-018, ADR-0076).
 SCRATCH = "/scratch"
@@ -56,19 +58,32 @@ class SandboxId:
         }
 
 
-def network_config() -> dict[str, Any]:
-    """The sandbox bridge (ADR-0021): fixed interface name, no traffic between sandboxes, no IPv6."""
+def network_name(container: str) -> str:
+    """The Docker network of a sandbox's own bridge, named after its container (SBX-024, ADR-0113)."""
+    return f"{container}-bridge"
+
+
+def bridge_interface(container: str) -> str:
+    """The interface name of a sandbox's bridge: the prefix and twelve hexadecimal digits, fifteen characters."""
+    return BRIDGE_PREFIX + hashlib.sha256(container.encode()).hexdigest()[:12]
+
+
+def network_config(container: str, subnet: ipaddress.IPv4Network, labels: dict[str, str], image: str) -> dict[str, Any]:
+    """A sandbox's own bridge (ADR-0021, ADR-0113): its interface name with the prefix, a subnet of four
+    addresses, no IPv6. Whether it has network is the egress table's set, never the bridge's."""
+    gateway = next(subnet.hosts())
     return {
-        "Name": NETWORK,
+        "Name": network_name(container),
         "Driver": "bridge",
         "EnableIPv6": False,
         "Internal": False,
+        "IPAM": {"Driver": "default", "Config": [{"Subnet": str(subnet), "Gateway": str(gateway)}]},
         "Options": {
-            "com.docker.network.bridge.name": BRIDGE_INTERFACE,
+            "com.docker.network.bridge.name": bridge_interface(container),
             "com.docker.network.bridge.enable_icc": "false",
             "com.docker.network.bridge.enable_ip_masquerade": "true",
         },
-        "Labels": {LABEL: "network"},
+        "Labels": {LABEL: "network", f"{LABEL}.image": image} | labels,
     }
 
 
@@ -79,8 +94,9 @@ def container_config(
     *,
     skills: str | None = None,
     skills_writable: bool = False,
+    network: str | None = None,
 ) -> dict[str, Any]:
-    """A sandbox container: gVisor, the sandbox bridge, the limits, no privileges, no credentials.
+    """A sandbox container: gVisor, its own bridge, the limits, no privileges, no credentials.
 
     `volume` is the conversation's workspace; the canary has none. `skills` is the volume of the skills
     given to the sandbox, read-only at /skills (SBX-022, ADR-0096); writable only to the driver's own
@@ -100,7 +116,8 @@ def container_config(
         "Labels": {LABEL: "sandbox"} | labels,
         "HostConfig": {
             "Runtime": configuration.runtime,
-            "NetworkMode": NETWORK,
+            # Its own bridge; the driver's own helper containers have no network.
+            "NetworkMode": network or "none",
             "Dns": [configuration.resolver],
             "NanoCpus": int(configuration.cpus * 1_000_000_000),
             "Memory": memory,

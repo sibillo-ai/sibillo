@@ -21,6 +21,7 @@ VARIABLES = frozenset(
         "SIBILLO_SANDBOX_RUNTIME",
         "SIBILLO_NETGUARD_SOCKET",
         "SIBILLO_SANDBOX_RESOLVER",
+        "SIBILLO_SANDBOX_SUBNETS",
         "SIBILLO_SANDBOX_CPUS",
         "SIBILLO_SANDBOX_MEMORY_MB",
         "SIBILLO_SANDBOX_PROCESSES",
@@ -37,6 +38,11 @@ MINIMUM_TOKEN_LENGTH = 32
 # admin may require a newer one, never an older one (ADR-0058).
 BUILT_IN_MINIMUM_RELEASE = "release-20261026.0"
 RELEASE = re.compile(r"^release-(\d{8})\.(\d+)$")
+
+
+DEFAULT_SUBNETS = "10.213.0.0/16"
+DEFAULT_RANGE = ipaddress.IPv4Network(DEFAULT_SUBNETS)
+PRIVATE_RANGES = tuple(ipaddress.IPv4Network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 
 
 class ConfigurationError(Exception):
@@ -64,6 +70,8 @@ class DriverConfiguration:
     # The disk a sandbox may use outside its workspace (SBX-016).
     disk_mb: int = 4096
     minimum_release: str = BUILT_IN_MINIMUM_RELEASE
+    # The range the sandbox bridges take their subnets of four addresses from (SBX-024, ADR-0113).
+    subnets: ipaddress.IPv4Network = DEFAULT_RANGE
 
 
 def _integer(environment: Mapping[str, str], name: str, default: int, low: int, high: int) -> int:
@@ -131,6 +139,21 @@ def _resolver(environment: Mapping[str, str]) -> str:
     return resolver
 
 
+def _subnets(environment: Mapping[str, str]) -> ipaddress.IPv4Network:
+    """The private range of the sandbox bridges, from a /24 to a /12 (SBX-024, ADR-0113)."""
+    name = "SIBILLO_SANDBOX_SUBNETS"
+    value = environment.get(name, DEFAULT_SUBNETS) or DEFAULT_SUBNETS
+    try:
+        network = ipaddress.IPv4Network(value)
+    except ValueError:
+        raise ConfigurationError(f"{name} must be an IPv4 range such as {DEFAULT_SUBNETS}") from None
+    if not 12 <= network.prefixlen <= 24:
+        raise ConfigurationError(f"{name} must be a range from a /24 to a /12")
+    if not any(network.subnet_of(private) for private in PRIVATE_RANGES):
+        raise ConfigurationError(f"{name} must be a private range")
+    return network
+
+
 def _socket(environment: Mapping[str, str]) -> str:
     name = "SIBILLO_NETGUARD_SOCKET"
     path = _required(environment, name)
@@ -171,4 +194,5 @@ def load_configuration(environment: Mapping[str, str]) -> DriverConfiguration:
         workspace_quota_mb=_integer(environment, "SIBILLO_SANDBOX_WORKSPACE_QUOTA_MB", 2048, 1, 1048576),
         disk_mb=_integer(environment, "SIBILLO_SANDBOX_DISK_MB", 4096, 64, 1048576),
         minimum_release=_minimum_release(environment),
+        subnets=_subnets(environment),
     )

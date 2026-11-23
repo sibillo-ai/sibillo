@@ -21,21 +21,21 @@ import secrets
 import shutil
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 import aiodocker
 from aiodocker.exceptions import DockerError
 
 from sibillo_sandboxd.config import DriverConfiguration, release_key
 from sibillo_sandboxd.disks import DiskError
-from sibillo_sandboxd.policy import LABEL, MIB
+from sibillo_sandboxd.guard import GuardUnavailableError, ask_guard
+from sibillo_sandboxd.policy import LABEL, MIB, network_name
 from sibillo_sandboxd.sandboxes import Sandboxes
 
 logger = logging.getLogger("sibillo.sandboxd")
 
 SUPPORTED_ARCHITECTURES = frozenset({"x86_64", "aarch64"})
 MONITOR_INTERVAL_SECONDS = 2.0
-GUARD_TIMEOUT_SECONDS = 5.0
 _RELEASE = re.compile(r"release-(\d{8})\.(\d+)")
 # The canary connects to an address of the host on the sandbox bridge and to
 # a private address: a dropped SYN times out, a reachable host refuses or accepts.
@@ -205,57 +205,63 @@ class Isolation:
         else:
             self.state.release = Check(True, f"{self.state.runtime_version} >= {minimum_release}")
 
-    async def _ask_guard(self, request: dict[str, Any]) -> dict[str, Any]:
-        """One request to the network guard, on the socket the two share (ADR-0113)."""
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_unix_connection(self.configuration.netguard_socket), GUARD_TIMEOUT_SECONDS
-        )
-        try:
-            writer.write(json.dumps(request).encode() + b"\n")
-            await writer.drain()
-            line = await asyncio.wait_for(reader.readline(), GUARD_TIMEOUT_SECONDS)
-        finally:
-            writer.close()
-        answer = json.loads(line)
-        if not isinstance(answer, dict):
-            raise ValueError("the network guard's answer is not an object")
-        return cast(dict[str, Any], answer)
-
     async def check_egress(self) -> bool:
+        """The guard answers, its table is in place, and its set of bridges with network is the driver's; given
+        again when it is not, as after the guard reinstalled its table, which starts with none (ADR-0113)."""
         try:
-            answer = await self._ask_guard({"op": "status"})
-        except (OSError, TimeoutError, ValueError) as error:
-            self.state.egress_table = Check(
-                False, f"the network guard does not answer: {error or type(error).__name__}"
-            )
+            answer = await ask_guard(self.configuration.netguard_socket, {"op": "status"})
+            if answer.get("healthy") is True and answer.get("online") != sorted(self.sandboxes.online):
+                await self.sandboxes.publish_online()
+        except GuardUnavailableError as error:
+            self.state.egress_table = Check(False, str(error))
             return False
         if answer.get("healthy") is True:
-            self.state.egress_table = Check(True, "the network guard reports the table in place")
+            self.state.egress_table = Check(
+                True, "the network guard reports the table in place, with the bridges that have network"
+            )
             return True
         self.state.egress_table = Check(False, "the network guard reports the table missing")
         return False
 
+    async def _blocked(self, container: Any, targets: list[tuple[str, int]]) -> str | None:
+        """The first target the canary reaches, as `host: what happened`; None when every one is blocked."""
+        probes = await asyncio.gather(
+            *(self._output(container, ["python3", "-c", _PROBE, host, str(port)]) for host, port in targets)
+        )
+        for (host, port), probe in zip(targets, probes, strict=True):
+            if "blocked" not in probe:
+                return f"{host}:{port}: {probe.strip()}"
+        return None
+
     async def run_canary(self) -> None:
-        """A sandbox like any other must run under gVisor and reach nothing local (SBX-003)."""
+        """A sandbox like any other must run under gVisor, reach nothing without network, and nothing local with it
+        (SBX-003, SBX-024)."""
         prerequisites = (self.state.platform, self.state.isolation_runtime, self.state.release, self.state.egress_table)
         if not all(check.ok for check in prerequisites):
             self.state.canary = Check(False, "waiting for the runtime and the egress table")
             return
         name = f"sibillo-canary-{secrets.token_hex(4)}"
         try:
-            network = await self.sandboxes.ensure_network()
-            gateway = network["IPAM"]["Config"][0]["Gateway"]
             container = await self.sandboxes.start_container(name, None, {f"{LABEL}.canary": "true"})
             try:
+                network = await (await self.docker.networks.get(network_name(name))).show()
+                gateway = network["IPAM"]["Config"][0]["Gateway"]
                 kernel = await self._output(container, ["sh", "-c", "dmesg 2>/dev/null | head -n 1"])
                 if "gVisor" not in kernel:
                     self.state.canary = Check(False, "the canary does not run under gVisor")
                     return
-                for host, port in ((gateway, 9), ("10.0.0.1", 80)):
-                    probe = await self._output(container, ["python3", "-c", _PROBE, host, str(port)])
-                    if "blocked" not in probe:
-                        self.state.canary = Check(False, f"the canary reaches {host}: {probe.strip()}")
-                        return
+                # Without network: not even the resolver (SBX-024).
+                local = [(gateway, 9), ("10.0.0.1", 80)]
+                reached = await self._blocked(container, [*local, (self.configuration.resolver, 53)])
+                if reached is not None:
+                    self.state.canary = Check(False, f"the canary reaches without network {reached}")
+                    return
+                # With network: still nothing local (SBX-005).
+                await self.sandboxes.set_online(name, True)
+                reached = await self._blocked(container, local)
+                if reached is not None:
+                    self.state.canary = Check(False, f"the canary reaches {reached}")
+                    return
                 # The disk outside the workspace has the configured size (SBX-016, ADR-0098).
                 size = await self._output(container, ["sh", "-c", "df -B1 --output=size / | tail -n 1"])
                 expected = self.configuration.disk_mb * MIB
@@ -263,12 +269,14 @@ class Isolation:
                     self.state.canary = Check(False, f"the canary's disk is {size.strip()} bytes, not {expected}")
                     return
             finally:
-                await container.delete(force=True)
-        except (DockerError, KeyError, IndexError) as error:
+                await self.sandboxes.remove_container(name)
+        except (DockerError, KeyError, IndexError, GuardUnavailableError) as error:
             self.state.canary = Check(False, f"the canary failed: {error}")
             return
         self.state.canary = Check(
-            True, "gVisor, the host and private addresses are unreachable, and the disk is limited"
+            True,
+            "gVisor, nothing reachable without network, the host and private addresses unreachable with it,"
+            " and the disk is limited",
         )
 
     async def check_disks(self) -> None:

@@ -1,11 +1,17 @@
-"""The egress table of the sandbox bridge, kept in the sandbox engine's network namespace (ADR-0021, ADR-0114).
+"""The egress table of the sandbox bridges, kept in the sandbox engine's network namespace (ADR-0021, ADR-0114).
 
-The table matches only traffic entering from the sandbox bridge. It drops
-forwarded traffic to every local range of SBX-005, all IPv6 (SBX-013), and
-everything addressed to the host itself; the rest is left to the host's
-normal processing, so sandboxes reach public addresses (SBX-004). DNS, on
-ports 53 and 853, reaches only the instance's resolver (SBX-007, ADR-0098).
-It never touches other tables.
+The table matches only traffic entering from a sandbox bridge, every
+interface whose name starts with the prefix of the sandbox bridges. It drops
+everything from a bridge that is not in the set of the bridges with network,
+those whose conversation has internet access (SBX-024, ADR-0113). From the
+others, it drops forwarded traffic to every local range of SBX-005, all IPv6
+(SBX-013), and everything addressed to the host itself; the rest is left to
+the host's normal processing, so they reach public addresses (SBX-004). DNS,
+on ports 53 and 853, reaches only the instance's resolver (SBX-007,
+ADR-0098). It never touches other tables.
+
+The sandbox driver gives the guard the whole list of the bridges with
+network; a table the guard installs, or installs again, starts with none.
 
 The guard shares the network namespace of the sandbox engine, where the
 sandbox bridge is, and nothing of the host's (SBX-025). The sandbox driver
@@ -18,6 +24,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import socketserver
@@ -33,7 +40,12 @@ logger = logging.getLogger("sibillo.netguard")
 
 TABLE_FAMILY = "inet"
 TABLE_NAME = "sibillo"
-BRIDGE_INTERFACE = "sibillosbx0"
+# The prefix of the sandbox bridges' interface names, and the set of those that have network (SBX-024, ADR-0113).
+BRIDGE_PREFIX = "sbx"
+ONLINE_SET = "online"
+# A sandbox bridge's interface name: the prefix and twelve hexadecimal digits, as the driver names them.
+BRIDGE_NAME = re.compile(r"^sbx[0-9a-f]{12}$")
+MAX_ONLINE = 16384
 CHECK_INTERVAL_SECONDS = 1.0
 # The guard reports unhealthy this long after it last found the table missing (ADR-0053).
 UNHEALTHY_AFTER_MISSING_SECONDS = 10.0
@@ -102,19 +114,25 @@ def resolver_from(environment: dict[str, str]) -> str:
 
 
 def rules(resolver: str) -> str:
-    """The table: no IPv6, no local ranges, nothing to the host, and DNS only to the resolver."""
+    """The table: nothing from a bridge without network; from the others no IPv6, no local ranges, nothing to the
+    host, and DNS only to the resolver. The set of bridges with network starts empty."""
     ports = ", ".join(str(port) for port in DNS_PORTS)
+    bridges = f'iifname "{BRIDGE_PREFIX}*"'
     return f"""
 table {TABLE_FAMILY} {TABLE_NAME} {{
+  set {ONLINE_SET} {{
+    type ifname;
+  }}
   chain forward {{
     type filter hook forward priority -10; policy accept;
-    iifname "{BRIDGE_INTERFACE}" meta nfproto ipv6 drop
-    iifname "{BRIDGE_INTERFACE}" ip daddr {{ {", ".join(BLOCKED_IPV4)} }} drop
-    iifname "{BRIDGE_INTERFACE}" meta l4proto {{ tcp, udp }} th dport {{ {ports} }} ip daddr != {resolver} drop
+    {bridges} iifname != @{ONLINE_SET} drop
+    {bridges} meta nfproto ipv6 drop
+    {bridges} ip daddr {{ {", ".join(BLOCKED_IPV4)} }} drop
+    {bridges} meta l4proto {{ tcp, udp }} th dport {{ {ports} }} ip daddr != {resolver} drop
   }}
   chain input {{
     type filter hook input priority -10; policy accept;
-    iifname "{BRIDGE_INTERFACE}" drop
+    {bridges} drop
   }}
 }}
 """
@@ -132,9 +150,42 @@ def _nft(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess[st
 
 
 def table_present() -> bool:
-    """Whether the table is installed with both of its chains."""
+    """Whether the table is installed with its set and both of its chains."""
     listed = _nft("list", "table", TABLE_FAMILY, TABLE_NAME)
-    return listed.returncode == 0 and "chain forward" in listed.stdout and "chain input" in listed.stdout
+    return (
+        listed.returncode == 0
+        and f"set {ONLINE_SET}" in listed.stdout
+        and "chain forward" in listed.stdout
+        and "chain input" in listed.stdout
+    )
+
+
+def online() -> list[str] | None:
+    """The bridges in the set of those with network; None when the table is missing."""
+    listed = _nft("--json", "list", "set", TABLE_FAMILY, TABLE_NAME, ONLINE_SET)
+    if listed.returncode != 0:
+        return None
+    try:
+        items = cast("list[dict[str, object]]", json.loads(listed.stdout)["nftables"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    for item in items:
+        found = item.get("set")
+        if isinstance(found, dict):
+            elements = cast("list[object]", cast("dict[str, object]", found).get("elem") or [])
+            return sorted(str(element) for element in elements)
+    return None
+
+
+def set_online(bridges: list[str]) -> list[str] | None:
+    """Make the set of bridges with network exactly `bridges`, at once; the set as it then is, None on failure."""
+    elements = ", ".join(f'"{bridge}"' for bridge in bridges)
+    script = f"flush set {TABLE_FAMILY} {TABLE_NAME} {ONLINE_SET}\n"
+    if bridges:
+        script += f"add element {TABLE_FAMILY} {TABLE_NAME} {ONLINE_SET} {{ {elements} }}\n"
+    if _nft("-f", "-", stdin=script).returncode != 0:
+        return None
+    return online()
 
 
 def install(resolver: str) -> None:
@@ -170,6 +221,10 @@ def healthy() -> bool:
     return time.time() - last_missing > UNHEALTHY_AFTER_MISSING_SECONDS
 
 
+# One change of the set at a time.
+_CHANGES = threading.Lock()
+
+
 class _Requests(socketserver.StreamRequestHandler):
     """One request of the sandbox driver on each connection: a JSON object on a line, answered the same way."""
 
@@ -178,9 +233,22 @@ class _Requests(socketserver.StreamRequestHandler):
             request: object = json.loads(self.rfile.readline(65536) or b"{}")
         except ValueError:
             request = None
-        operation = cast("dict[str, object]", request).get("op") if isinstance(request, dict) else None
+        fields = cast("dict[str, object]", request) if isinstance(request, dict) else {}
+        operation = fields.get("op")
         if operation == "status":
-            answer: dict[str, object] = {"healthy": healthy()}
+            answer: dict[str, object] = {"healthy": healthy(), "online": online()}
+        elif operation == "online":
+            # The whole list of the sandbox bridges with network (SBX-024, ADR-0113).
+            bridges = fields.get("bridges")
+            if (
+                not isinstance(bridges, list)
+                or len(cast("list[object]", bridges)) > MAX_ONLINE
+                or not all(isinstance(name, str) and BRIDGE_NAME.match(name) for name in cast("list[object]", bridges))
+            ):
+                answer = {"error": "invalid bridges"}
+            else:
+                with _CHANGES:
+                    answer = {"online": set_online(sorted(set(cast("list[str]", bridges))))}
         else:
             answer = {"error": "unknown operation"}
         self.wfile.write(json.dumps(answer).encode() + b"\n")
@@ -217,7 +285,7 @@ def run(configuration: GuardConfiguration) -> int:
         logger.error("no %s here: the guard must share the sandbox engine's network namespace", UPLINK_INTERFACE)
         return EXIT_ENGINE_LEFT
     install(resolver)
-    logger.info("egress table %s %s installed for %s", TABLE_FAMILY, TABLE_NAME, BRIDGE_INTERFACE)
+    logger.info("egress table %s %s installed for the bridges %s*", TABLE_FAMILY, TABLE_NAME, BRIDGE_PREFIX)
     server = serve(configuration.socket)
     try:
         while not stopping:
@@ -227,9 +295,11 @@ def run(configuration: GuardConfiguration) -> int:
                 logger.error("the sandbox engine left this network namespace: stopping, to join its new one")
                 return EXIT_ENGINE_LEFT
             if not table_present():
+                # Reinstalled with no bridge with network: the driver gives the list again (ADR-0113).
                 logger.warning("egress table missing: reinstalling it")
                 _mark_missing()
-                install(resolver)
+                with _CHANGES:
+                    install(resolver)
     finally:
         server.shutdown()
         Path(configuration.socket).unlink(missing_ok=True)

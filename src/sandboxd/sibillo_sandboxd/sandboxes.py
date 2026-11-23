@@ -2,6 +2,12 @@
 
 A sandbox that stops is removed; the next command gets a new one from the
 image, with only the user's workspace (SBX-018, ADR-0076).
+
+Each sandbox has a bridge of its own, removed with it, and starts without
+network: the network guard's set of the bridges with network has only those
+whose conversation has internet access, as the control plane says on
+`ensure` (SBX-024, ADR-0113). The driver gives the guard the whole set at
+every change, and checks that the guard took it before it answers.
 """
 
 # aiodocker leaves some parameters untyped; only those checks are relaxed here.
@@ -12,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import codecs
 import contextlib
+import ipaddress
 import json
 import logging
 import shutil
@@ -38,16 +45,18 @@ from sibillo_sandboxd.files import (
     relative,
     tar_member_content,
 )
+from sibillo_sandboxd.guard import GuardUnavailableError, give_online
 from sibillo_sandboxd.policy import (
     LABEL,
     MIB,
-    NETWORK,
     SCRATCH,
     SKILLS,
     WORKSPACE,
     SandboxId,
+    bridge_interface,
     container_config,
     network_config,
+    network_name,
 )
 from sibillo_sandboxd.workspaces import check_archive, check_skills_archive, workspace_entries
 
@@ -62,6 +71,10 @@ ARCHIVE_CHUNK_BYTES = 1024 * 1024
 # Deleting a workspace waits this long for a file operation that still uses it.
 DELETE_ATTEMPTS = 20
 DELETE_PAUSE_SECONDS = 0.5
+
+
+class NoSubnetError(Exception):
+    """Every subnet of the sandbox bridges' range is taken: no more sandboxes run at once (SBX-024)."""
 
 
 @dataclass(frozen=True)
@@ -93,26 +106,69 @@ class Sandboxes:
         # The skills each sandbox's next container gets, as archives of the driver's own (SBX-022).
         self._skills_folder = Path(tempfile.mkdtemp(prefix="sibillo-skills-"))
         self._skills: dict[str, Path] = {}
+        # The bridges with network, as the guard was last given them (SBX-024, ADR-0113).
+        self._online: set[str] = set()
+        self._online_lock = asyncio.Lock()
+        self._networks_lock = asyncio.Lock()
 
-    async def ensure_network(self) -> dict[str, Any]:
-        """The sandbox bridge, created on first use; returns its inspection."""
-        try:
-            network = await self.docker.networks.get(NETWORK)
-        except DockerError as error:
-            if error.status != NOT_FOUND:
+    @property
+    def online(self) -> frozenset[str]:
+        return frozenset(self._online)
+
+    async def publish_online(self) -> None:
+        """Give the guard the whole set of bridges with network again, as after it reinstalled its table."""
+        async with self._online_lock:
+            await give_online(self.configuration.netguard_socket, set(self._online))
+
+    async def set_online(self, container: str, online: bool) -> None:
+        """Give a sandbox's bridge network, or take it, at once (SBX-024); raises if the guard does not take it."""
+        bridge = bridge_interface(container)
+        async with self._online_lock:
+            if (bridge in self._online) == online:
+                return
+            wanted = self._online | {bridge} if online else self._online - {bridge}
+            try:
+                await give_online(self.configuration.netguard_socket, wanted)
+            except GuardUnavailableError:
+                if not online:
+                    # Not taken from the set: the sandbox goes instead, so that it has no network (fail closed).
+                    self._online.discard(bridge)
+                    with contextlib.suppress(DockerError):
+                        await self._delete_container(container)
                 raise
-            network = await self.docker.networks.create(network_config())
-        return await network.show()
+            self._online = wanted
+
+    async def _create_network(self, container: str, labels: dict[str, str]) -> None:
+        """The sandbox's own bridge, with the first free subnet of four addresses of the range (ADR-0113)."""
+        async with self._networks_lock:
+            await self._delete_network(container)
+            used: set[ipaddress.IPv4Network] = set()
+            for network in await self.docker.networks.list(filters={"label": [f"{LABEL}=network"]}):
+                for config in (network.get("IPAM") or {}).get("Config") or []:
+                    with contextlib.suppress(ValueError, KeyError, TypeError):
+                        used.add(ipaddress.IPv4Network(config["Subnet"]))
+            subnet = next(
+                (subnet for subnet in self.configuration.subnets.subnets(new_prefix=30) if subnet not in used), None
+            )
+            if subnet is None:
+                raise NoSubnetError("every subnet of SIBILLO_SANDBOX_SUBNETS is taken")
+            await self.docker.networks.create(network_config(container, subnet, labels, self.configuration.image))
+
+    async def _delete_network(self, container: str) -> None:
+        await self._delete_network_named(network_name(container))
 
     async def start_container(
         self, name: str, volume: str | None, labels: dict[str, str], *, skills: str | None = None
     ) -> Any:
-        """Create and start a container with the fixed policy, then point it at the instance's resolver.
+        """Create and start a container with the fixed policy, on a bridge of its own and without network, then
+        point it at the instance's resolver.
 
         `volume` is a workspace whose disk is attached (ADR-0098).
         """
-        await self.ensure_network()
-        config = container_config(self.configuration, volume, labels, skills=skills)
+        # A new sandbox never has network until the control plane says so (SBX-024).
+        await self.set_online(name, False)
+        await self._create_network(name, labels)
+        config = container_config(self.configuration, volume, labels, skills=skills, network=network_name(name))
         container = await self.docker.containers.create(config, name=name)
         await container.start()
         await self._write_resolver(container)
@@ -150,13 +206,27 @@ class Sandboxes:
             logger.warning("the workspace of %s could not be measured", container.id)
             return 0
 
-    async def ensure(self, sandbox: SandboxId) -> dict[str, Any]:
-        """The conversation's sandbox, created if needed (idempotent)."""
+    async def ensure(self, sandbox: SandboxId, internet_access: bool | None = None) -> dict[str, Any]:
+        """The conversation's sandbox, created if needed (idempotent), with network when `internet_access` says
+        so; as it is when None (SBX-024)."""
         name = sandbox.container
         async with self._locks.setdefault(name, asyncio.Lock()):
             container, _ = await self._running(sandbox)
+            if internet_access is not None:
+                await self.set_online(name, internet_access)
             info = await container.show()
-        return {"state": "running", "started_at": info["State"]["StartedAt"], "working_dir": SCRATCH}
+        return {
+            "state": "running",
+            "started_at": info["State"]["StartedAt"],
+            "working_dir": SCRATCH,
+            "internet_access": bridge_interface(name) in self._online,
+        }
+
+    async def withdraw_network(self, sandbox: SandboxId) -> None:
+        """Take the network from the conversation's sandbox, at once; nothing when it has none (SBX-024)."""
+        name = sandbox.container
+        async with self._locks.setdefault(name, asyncio.Lock()):
+            await self.set_online(name, False)
 
     async def _running(self, sandbox: SandboxId) -> tuple[Any, bool]:
         """The sandbox's running container, started if needed, and whether it was started; under its lock."""
@@ -191,16 +261,38 @@ class Sandboxes:
             await self._remove(name)
 
     async def _remove(self, name: str) -> None:
-        """Stop a sandbox and remove its container, keeping its workspace (SBX-018); its skills go with it."""
+        """Stop a sandbox and remove its container, keeping its workspace (SBX-018); its skills and its bridge go
+        with it."""
+        await self._delete_container(name, STOP_GRACE_SECONDS)
+        try:
+            await self.set_online(name, False)
+        except GuardUnavailableError:
+            logger.warning("the network guard did not take the bridge of %s out of its set", name)
+        await self._delete_network(name)
+        await self._delete_volume(name.replace("sibillo-sandbox-", "sibillo-skills-", 1))
+
+    async def remove_container(self, name: str) -> None:
+        """Remove a container the driver started for itself, such as the canary, at once, with its bridge."""
+        await self._delete_container(name)
+        await self._remove(name)
+
+    async def _delete_container(self, name: str, grace: int | None = None) -> None:
         try:
             container = await self.docker.containers.get(name)
-            with contextlib.suppress(DockerError):
-                await container.stop(t=STOP_GRACE_SECONDS)
+            if grace is not None:
+                with contextlib.suppress(DockerError):
+                    await container.stop(t=grace)
             await container.delete(force=True)
         except DockerError as error:
             if error.status != NOT_FOUND:
                 raise
-        await self._delete_volume(name.replace("sibillo-sandbox-", "sibillo-skills-", 1))
+
+    async def _delete_network_named(self, name: str) -> None:
+        try:
+            await (await self.docker.networks.get(name)).delete()
+        except DockerError as error:
+            if error.status != NOT_FOUND:
+                raise
 
     async def _delete_volume(self, volume: str) -> None:
         try:
@@ -266,6 +358,21 @@ class Sandboxes:
         filters = {"label": [f"{LABEL}=sandbox"], "ancestor": [self.configuration.image]}
         containers = await self.docker.containers.list(all=True, filters=json.dumps(filters))
         await asyncio.gather(*(container.delete(force=True) for container in containers), return_exceptions=True)
+        # No bridge has network any more, and every bridge goes (SBX-024, ADR-0113).
+        async with self._online_lock:
+            self._online = set()
+            try:
+                await give_online(self.configuration.netguard_socket, set())
+            except GuardUnavailableError:
+                # A guard that answers again starts with no bridge, or is given none by the monitor.
+                logger.warning("the network guard could not be told that no bridge has network")
+        networks = await self.docker.networks.list(filters={"label": [f"{LABEL}=network"]})
+        mine = [
+            network
+            for network in networks
+            if (network.get("Labels") or {}).get(f"{LABEL}.image") in (self.configuration.image, None)
+        ]
+        await asyncio.gather(*(self._delete_network_named(network["Name"]) for network in mine), return_exceptions=True)
         # The skills of the containers removed go with them (SBX-022).
         volumes = await self.docker.volumes.list(
             filters={"label": [f"{LABEL}=skills", f"{LABEL}.image={self.configuration.image}"]}
