@@ -629,7 +629,7 @@ lethal trifecta, whatever the run has read (T-08).
 
 ## AGT-035: Delegating work
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 3
 - **Verification:** integration
@@ -653,7 +653,7 @@ opinion is formed from the brief alone.
 
 ## AGT-036: What a delegated run may do
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security
@@ -677,7 +677,7 @@ a way to act without the approvals the delegating run would need (T-49).
 
 ## AGT-037: Provenance through delegation
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security
@@ -693,7 +693,7 @@ a report can carry them back; neither may pass unseen (T-48).
 
 ## AGT-038: Delegated runs end, fail and survive with their run
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration

@@ -38,7 +38,11 @@ ADR-0107).
    delegated run is told of the work, written to stand on its own. It starts
    a **delegated run** of the agent on it, waits for it, and returns its
    **report**, the delegated run's final answer, bounded as tool results are
-   (AGT-014). Several calls in one answer run at the same time. Its class is
+   (AGT-014). Several calls in one answer run at the same time: a durable
+   run with a workspace makes its tool calls one after another, so that a
+   replay gives each its own results, and the first call of `delegate` in an
+   answer therefore starts every call of `delegate` of that answer that needs
+   no approval, each waiting for its own. Its class is
    `reads_private_data`; it is allowed by default, and is in a tool group of
    its own, so that the user can switch it off (CNV-013, ADR-0087)
    (AGT-035).
