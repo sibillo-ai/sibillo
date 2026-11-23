@@ -225,7 +225,10 @@ class MilestonePullRequestTest(unittest.TestCase):
     def test_a_commit_without_parents_is_rejected(self) -> None:
         self.git("checkout", "-q", "--orphan", "orphan")
         self.git("rm", "-q", "-r", "--cached", ".", check=False)
-        self.commit("impl: from nowhere", "tools/check_x.py", branch="orphan")
+        (self.repo / "tools").mkdir(exist_ok=True)
+        (self.repo / "tools" / "check_x.py").write_text("accept everything\n")
+        self.git("add", "tools/check_x.py")
+        self.git("commit", "-q", "-m", "impl: from nowhere")
         self.git("checkout", "-q", "milestone/x")
         self.git("merge", "-q", "--allow-unrelated-histories", "-m", "Merge branch 'master'", "orphan")
         problems = self.problems()
