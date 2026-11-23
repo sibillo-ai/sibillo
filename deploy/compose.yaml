@@ -45,7 +45,11 @@ x-backup-environment: &backup-environment
   SIBILLO_BACKUP_KEEP: ${SIBILLO_BACKUP_KEEP:-14}
 
 networks:
-  internal: {}
+  # Where the services meet; it reaches nothing outside (OPS-003, ADR-0134).
+  internal:
+    internal: true
+  # The way out of the API and the worker: providers, MCP servers, push services, and the published port.
+  egress: {}
   # The worker and the search service, and nothing else (ADR-0075).
   search: {}
   # The sandbox engine's way out, and nothing else (SBX-025, ADR-0114).
@@ -81,6 +85,10 @@ services:
 
   migrate:
     <<: *server
+    # No capability, and a read-only root filesystem but for /tmp (ADR-0134).
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
     command: ["alembic", "-c", "migrations/alembic.ini", "upgrade", "head"]
     environment:
       <<: *owner-database
@@ -90,6 +98,11 @@ services:
 
   api:
     <<: *server
+    # No capability, and a read-only root filesystem but for /tmp (ADR-0134).
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [internal, egress]
     command: ["sibillo_server", "api"]
     environment:
       <<: *app-database
@@ -119,6 +132,10 @@ services:
 
   worker:
     <<: *server
+    # No capability, and a read-only root filesystem but for /tmp (ADR-0134).
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
     command: ["sibillo_server", "worker"]
     environment:
       <<: *app-database
@@ -133,7 +150,7 @@ services:
       SIBILLO_SANDBOXD_URL: http://sandboxd:8100/v1
       SIBILLO_SANDBOXD_TOKEN: ${SIBILLO_SANDBOXD_TOKEN:-}
       SIBILLO_SEARCH_URL: http://search:8080
-    networks: [internal, search]
+    networks: [internal, egress, search]
     depends_on:
       migrate: { condition: service_completed_successfully }
       sandboxd: { condition: service_healthy }
@@ -143,6 +160,7 @@ services:
     image: sibillo/sandboxd:${SIBILLO_IMAGE_TAG:-local}
     logging: *logging
     security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # What it reads of sandboxes cannot take the host's memory (SBX-011, ADR-0129).
     mem_limit: 1g
     build:
@@ -257,6 +275,8 @@ services:
     cap_drop: [ALL]
     cap_add: [NET_ADMIN]
     security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/run/sibillo-netguard]
     # DNS from sandboxes reaches only this resolver, as the driver's (SBX-007, ADR-0098).
     environment:
       SIBILLO_SANDBOX_RESOLVER: ${SIBILLO_SANDBOX_RESOLVER:-9.9.9.9}
