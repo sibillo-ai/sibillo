@@ -38,7 +38,9 @@ configurations clearly, such as rootless Docker (ADR-0114).
 
 By default the deployment MUST publish a single HTTP entry point. Databases,
 queues, the sandbox driver, model servers and other internal services MUST
-NOT be published on host ports.
+NOT be published on host ports. Services that need not reach the internet
+MUST NOT be able to, and services MUST run without capabilities and with
+read-only root filesystems where they work so (ADR-0134).
 
 ## OPS-004: No host execution
 
