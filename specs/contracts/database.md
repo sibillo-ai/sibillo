@@ -691,7 +691,7 @@ ADR-0099).
 | `name` | text | not null; the server's name for the tool, without the prefix |
 | `listed` | jsonb | the tool as last listed, `{title, description, inputSchema, annotations}`; null when the last listing did not have it |
 | `accepted` | jsonb | the tool as a tenant admin accepted it, `{title, description, inputSchema}`; null when not accepted |
-| `problem` | text | why the listed tool cannot be accepted: `name`, `description_too_long`, `schema_too_large`, `too_many_tools` or `requires_tasks`; else null |
+| `problem` | text | why the listed tool cannot be accepted: `name`, `description_too_long`, `schema_too_large`, `too_many_tools`, `requires_tasks` or `hidden_characters` (ADR-0128); else null |
 | `accepted_at` | timestamptz | set exactly when `accepted` is |
 
 Primary key (`server_id`, `name`). Policies as for `connections`. Listing
