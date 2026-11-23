@@ -475,7 +475,8 @@
       "memory": "স্মৃতি",
       "skills": "দক্ষতা",
       "scheduled": "কাজ",
-      "conversations": "তোমার অন্য চ্যাটগুলো"
+      "conversations": "তোমার অন্য চ্যাটগুলো",
+      "delegation": "অর্পিত কাজ"
     },
     "toolNames": {
       "web_search": "ওয়েবে খোঁজো",
@@ -510,6 +511,7 @@
       "list_tasks": "তোমার কাজগুলোর তালিকা দেখাও",
       "search_conversations": "তোমার চ্যাটগুলোতে খোঁজো",
       "read_conversation": "তোমার একটি চ্যাট পড়ো",
+      "delegate": "কাজ অর্পণ করুন",
       "request_internet_access": "ইন্টারনেট ব্যবহারের অনুমতি চাও"
     },
     "cannotReason": "এই মডেল যুক্তি প্রয়োগ করতে পারে না।",

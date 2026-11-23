@@ -475,7 +475,8 @@
       "memory": "Minne",
       "skills": "Färdigheter",
       "scheduled": "Uppgifter",
-      "conversations": "Dina andra chattar"
+      "conversations": "Dina andra chattar",
+      "delegation": "Delegerat arbete"
     },
     "toolNames": {
       "web_search": "Sök på webben",
@@ -510,6 +511,7 @@
       "list_tasks": "Lista dina uppgifter",
       "search_conversations": "Sök i dina chattar",
       "read_conversation": "Läs en av dina chattar",
+      "delegate": "Delegera arbete",
       "request_internet_access": "Be om internetåtkomst"
     },
     "cannotReason": "Den här modellen kan inte resonera.",

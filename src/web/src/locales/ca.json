@@ -480,7 +480,8 @@
       "memory": "Memòria",
       "skills": "Habilitats",
       "scheduled": "Tasques",
-      "conversations": "Els teus altres xats"
+      "conversations": "Els teus altres xats",
+      "delegation": "Treball delegat"
     },
     "toolNames": {
       "web_search": "Cercar a la web",
@@ -515,6 +516,7 @@
       "list_tasks": "Llistar les teves tasques",
       "search_conversations": "Cercar als teus xats",
       "read_conversation": "Llegir un dels teus xats",
+      "delegate": "Delegar la feina",
       "request_internet_access": "Demanar accés a internet"
     },
     "cannotReason": "Aquest model no pot raonar.",

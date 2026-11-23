@@ -475,7 +475,8 @@
       "memory": "स्मृति",
       "skills": "स्किल",
       "scheduled": "कार्य",
-      "conversations": "आपकी दूसरी चैट"
+      "conversations": "आपकी दूसरी चैट",
+      "delegation": "सौंपा गया कार्य"
     },
     "toolNames": {
       "web_search": "वेब पर खोजें",
@@ -510,6 +511,7 @@
       "list_tasks": "अपने कार्यों की सूची दिखाएँ",
       "search_conversations": "अपनी चैट खोजें",
       "read_conversation": "अपनी एक चैट पढ़ें",
+      "delegate": "कार्य सौंपें",
       "request_internet_access": "इंटरनेट एक्सेस माँगें"
     },
     "cannotReason": "यह मॉडल सोच नहीं सकता।",

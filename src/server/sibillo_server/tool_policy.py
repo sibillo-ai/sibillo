@@ -136,6 +136,8 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "list_tasks": _WRITES,
     "search_conversations": _WRITES,
     "read_conversation": _WRITES,
+    # Hands a brief to a delegated run: private data, untrusted only by what the delegated run read (ADR-0136).
+    "delegate": _WRITES,
     # Loads a skill: what it brings in is untrusted when the skill is, by provenance (AGT-025, ADR-0096).
     "load_capability": _OWN,
     # The output limits' own tool, which reads back a large result set aside (AGT-014): no switch (ADR-0087).

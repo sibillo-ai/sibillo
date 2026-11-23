@@ -470,7 +470,8 @@
       "memory": "記憶",
       "skills": "技能",
       "scheduled": "任務",
-      "conversations": "你的其他聊天"
+      "conversations": "你的其他聊天",
+      "delegation": "委派的工作"
     },
     "toolNames": {
       "web_search": "搜尋網路",
@@ -505,6 +506,7 @@
       "list_tasks": "列出你的任務",
       "search_conversations": "搜尋你的聊天",
       "read_conversation": "讀取你的其中一個聊天",
+      "delegate": "委派工作",
       "request_internet_access": "要求網際網路存取"
     },
     "cannotReason": "這個模型無法推理。",

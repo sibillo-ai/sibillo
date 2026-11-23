@@ -475,7 +475,8 @@
       "memory": "Emlékezet",
       "skills": "Készségek",
       "scheduled": "Feladatok",
-      "conversations": "A többi chat"
+      "conversations": "A többi chat",
+      "delegation": "Delegált munka"
     },
     "toolNames": {
       "web_search": "Keresés a weben",
@@ -510,6 +511,7 @@
       "list_tasks": "A feladataid listázása",
       "search_conversations": "Keresés a chatjeidben",
       "read_conversation": "Egy chat elolvasása",
+      "delegate": "Munka delegálása",
       "request_internet_access": "Internethozzáférés kérése"
     },
     "cannotReason": "Ez a modell nem tud gondolkodni.",

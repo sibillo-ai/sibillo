@@ -475,7 +475,8 @@
       "memory": "Muisti",
       "skills": "Taidot",
       "scheduled": "Tehtävät",
-      "conversations": "Muut chatisi"
+      "conversations": "Muut chatisi",
+      "delegation": "Delegoitu työ"
     },
     "toolNames": {
       "web_search": "Hae verkosta",
@@ -510,6 +511,7 @@
       "list_tasks": "Listaa tehtäväsi",
       "search_conversations": "Etsi chateistasi",
       "read_conversation": "Lue yksi chateistasi",
+      "delegate": "Delegoi työ",
       "request_internet_access": "Pyydä pääsyä internetiin"
     },
     "cannotReason": "Tämä malli ei osaa päätellä.",

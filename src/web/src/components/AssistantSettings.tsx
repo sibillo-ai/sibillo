@@ -35,6 +35,8 @@ const TOOL_GROUPS: { id: string; tools: ToolName[] }[] = [
   { id: "scheduled", tools: ["propose_task", "update_task", "list_tasks"] },
   // Searching and reading the user's other chats (AGT-032, AGT-033, ADR-0107).
   { id: "conversations", tools: ["search_conversations", "read_conversation"] },
+  // Handing self-contained work to delegated runs (AGT-035, ADR-0136).
+  { id: "delegation", tools: ["delegate"] },
 ];
 export function useSettings() {
   return useQuery({ queryKey: SETTINGS, queryFn: async () => unwrap(await api.GET("/me/settings")) });

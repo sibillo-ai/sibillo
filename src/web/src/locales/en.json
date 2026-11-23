@@ -475,7 +475,8 @@
       "memory": "Memory",
       "skills": "Skills",
       "scheduled": "Tasks",
-      "conversations": "Your other chats"
+      "conversations": "Your other chats",
+      "delegation": "Delegated work"
     },
     "toolNames": {
       "web_search": "Search the web",
@@ -510,6 +511,7 @@
       "list_tasks": "List your tasks",
       "search_conversations": "Search your chats",
       "read_conversation": "Read one of your chats",
+      "delegate": "Delegate work",
       "request_internet_access": "Ask for internet access"
     },
     "cannotReason": "This model can't reason.",

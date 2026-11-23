@@ -48,6 +48,7 @@ CONTRACT_TABLES = (
     "run_followers",
     "conversation_messages",
     "compaction_checkpoints",
+    "delegations",
     "usage_ledger",
     "tool_permissions",
     "egress_policies",
@@ -75,6 +76,7 @@ PRIVATE_TABLES = (
     "run_followers",
     "conversation_messages",
     "compaction_checkpoints",
+    "delegations",
     "usage_ledger",
     "audit_events",
     "notification_subscriptions",
@@ -119,7 +121,8 @@ TOOL_NAMES = (
     "'update_task', "
     "'list_tasks', "
     "'search_conversations', "
-    "'read_conversation'"
+    "'read_conversation', "
+    "'delegate'"
     "]"
 )
 # The capability classes of tools (AGT-005, ADR-0012).
@@ -756,6 +759,32 @@ TABLES = [
     )
     """,
     "CREATE INDEX compaction_checkpoints_conversation_idx ON compaction_checkpoints (conversation_id)",
+    # Each delegation of a run to a delegated run, kept with its run (AGT-035 to AGT-038, ADR-0136).
+    """
+    CREATE TABLE delegations (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      owner_id uuid NOT NULL,
+      conversation_id uuid NOT NULL,
+      run_id uuid NOT NULL,
+      tool_call_id text NOT NULL,
+      brief text NOT NULL,
+      status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+      error_code text,
+      untrusted boolean NOT NULL DEFAULT false,
+      report text,
+      messages jsonb NOT NULL DEFAULT '[]',
+      created_at timestamptz NOT NULL,
+      started_at timestamptz,
+      finished_at timestamptz,
+      UNIQUE (run_id, tool_call_id),
+      FOREIGN KEY (tenant_id, owner_id, conversation_id)
+        REFERENCES conversations (tenant_id, owner_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id, owner_id, conversation_id, run_id)
+        REFERENCES runs (tenant_id, owner_id, conversation_id, id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX delegations_run_idx ON delegations (run_id)",
     """
     CREATE TABLE usage_ledger (
       id uuid PRIMARY KEY,
@@ -763,7 +792,7 @@ TABLES = [
       owner_id uuid NOT NULL,
       conversation_id uuid,
       run_id uuid,
-      purpose text NOT NULL CHECK (purpose IN ('run', 'title', 'compaction', 'speech', 'memory')),
+      purpose text NOT NULL CHECK (purpose IN ('run', 'title', 'compaction', 'speech', 'memory', 'delegation')),
       provider text NOT NULL,
       model text NOT NULL,
       input_tokens bigint NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
@@ -1572,6 +1601,7 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, UPDATE, DELETE ON conversations TO sibillo_app",
     "GRANT SELECT, INSERT ON compaction_checkpoints TO sibillo_app",
     "GRANT SELECT, INSERT ON conversation_messages TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE ON delegations TO sibillo_app",
     # Rewinding deletes runs (ADR-0068).
     "GRANT SELECT, INSERT, UPDATE, DELETE ON runs TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON run_followers TO sibillo_app",

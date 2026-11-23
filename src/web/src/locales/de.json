@@ -475,7 +475,8 @@
       "memory": "Gedächtnis",
       "skills": "Fähigkeiten",
       "scheduled": "Aufgaben",
-      "conversations": "Deine anderen Chats"
+      "conversations": "Deine anderen Chats",
+      "delegation": "Delegierte Arbeit"
     },
     "toolNames": {
       "web_search": "Im Web suchen",
@@ -510,6 +511,7 @@
       "list_tasks": "Deine Aufgaben auflisten",
       "search_conversations": "Deine Chats durchsuchen",
       "read_conversation": "Einen deiner Chats lesen",
+      "delegate": "Arbeit delegieren",
       "request_internet_access": "Internetzugriff anfragen"
     },
     "cannotReason": "Dieses Modell kann nicht nachdenken.",

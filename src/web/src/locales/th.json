@@ -470,7 +470,8 @@
       "memory": "ความจำ",
       "skills": "ทักษะ",
       "scheduled": "งานอัตโนมัติ",
-      "conversations": "แชตอื่น ๆ ของคุณ"
+      "conversations": "แชตอื่น ๆ ของคุณ",
+      "delegation": "งานที่มอบหมาย"
     },
     "toolNames": {
       "web_search": "ค้นหาเว็บ",
@@ -505,6 +506,7 @@
       "list_tasks": "แสดงรายการงานอัตโนมัติของคุณ",
       "search_conversations": "ค้นหาแชตของคุณ",
       "read_conversation": "อ่านแชตของคุณ",
+      "delegate": "มอบหมายงาน",
       "request_internet_access": "ขอเข้าถึงอินเทอร์เน็ต"
     },
     "cannotReason": "โมเดลนี้คิดวิเคราะห์ไม่ได้",

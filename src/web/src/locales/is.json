@@ -475,7 +475,8 @@
       "memory": "Minni",
       "skills": "Færni",
       "scheduled": "Verkefni",
-      "conversations": "Önnur spjall hjá þér"
+      "conversations": "Önnur spjall hjá þér",
+      "delegation": "Falið verk"
     },
     "toolNames": {
       "web_search": "Leita á vefnum",
@@ -510,6 +511,7 @@
       "list_tasks": "Sýna verkefnin þín",
       "search_conversations": "Leita í spjöllunum þínum",
       "read_conversation": "Lesa eitt spjallanna þinna",
+      "delegate": "Fela verk",
       "request_internet_access": "Biðja um aðgang að internetinu"
     },
     "cannotReason": "Þetta líkan getur ekki hugsað.",

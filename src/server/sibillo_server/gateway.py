@@ -171,6 +171,8 @@ class RunDeps:
     # The summary that replaces the oldest history in this run's requests, once made (AGT-016).
     compacted: tuple[int, list[ModelMessage]] | None = None
     compactions: int = 0
+    # For a delegated run, the run that delegated the work; `run_id` is then the delegation's (ADR-0136).
+    delegated_by: uuid.UUID | None = None
 
 
 def model_reference(connection_id: str, model: str) -> str:
@@ -441,6 +443,9 @@ async def _compacted(ctx: RunContext[RunDeps], messages: list[ModelMessage]) -> 
         ModelResponse(parts=[TextPart("Noted. I will continue from this summary.")]),
     ]
     deps.compacted = (cut, summary)
+    if deps.delegated_by is not None:
+        # A delegated run's history is its own, and its summary lasts as long as it does (ADR-0136).
+        return [*summary, *messages[cut:]]
     checkpoint = storable(
         ModelMessagesTypeAdapter.dump_python(
             without_instructions([*summary, *messages[cut : deps.history_length]]), mode="json"
@@ -507,6 +512,10 @@ def _cost(deps: RunDeps, response: ModelResponse) -> tuple[Decimal | None, str |
 async def record_usage(deps: RunDeps, entry_id: uuid.UUID, response: ModelResponse, purpose: str = "run") -> None:
     """Record a model request in the cost ledger, once, and add its cost to the run's (MOD-006)."""
     cost, currency, price_source = _cost(deps, response)
+    # A delegated run's requests count under the run that delegated the work (AGT-038, ADR-0136).
+    run_id = deps.run_id if deps.delegated_by is None else deps.delegated_by
+    if deps.delegated_by is not None and purpose == "run":
+        purpose = "delegation"
     if cost is None:
         deps.cost = None
     elif deps.cost is not None:
@@ -528,7 +537,7 @@ async def record_usage(deps: RunDeps, entry_id: uuid.UUID, response: ModelRespon
                 "tenant_id": deps.identity.tenant_id,
                 "owner_id": deps.identity.user_id,
                 "conversation_id": deps.conversation_id,
-                "run_id": deps.run_id,
+                "run_id": run_id,
                 "provider": deps.provider,
                 "model": deps.model,
                 "input": usage.input_tokens or 0,
@@ -567,6 +576,14 @@ async def store_messages(deps: RunDeps, messages: list[ModelMessage]) -> None:
     if not messages:
         return
     serialized = storable(ModelMessagesTypeAdapter.dump_python(without_instructions(messages), mode="json"))
+    if deps.delegated_by is not None:
+        # A delegated run's messages are kept with its delegation, never in the conversation (ADR-0136).
+        async with transaction(deps.engine, deps.identity) as connection:
+            await connection.execute(
+                text("UPDATE delegations SET messages = CAST(:messages AS jsonb) WHERE id = :id"),
+                {"messages": json.dumps(serialized), "id": deps.run_id},
+            )
+        return
     async with transaction(deps.engine, deps.identity) as connection:
         for seq, message in enumerate(serialized, start=1):
             await connection.execute(

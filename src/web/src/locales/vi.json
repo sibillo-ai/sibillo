@@ -470,7 +470,8 @@
       "memory": "Bộ nhớ",
       "skills": "Kỹ năng",
       "scheduled": "Tác vụ",
-      "conversations": "Các chat khác của bạn"
+      "conversations": "Các chat khác của bạn",
+      "delegation": "Công việc được giao"
     },
     "toolNames": {
       "web_search": "Tìm kiếm trên web",
@@ -505,6 +506,7 @@
       "list_tasks": "Liệt kê các tác vụ của bạn",
       "search_conversations": "Tìm kiếm trong các chat của bạn",
       "read_conversation": "Đọc một chat của bạn",
+      "delegate": "Giao việc",
       "request_internet_access": "Xin quyền truy cập internet"
     },
     "cannotReason": "Mô hình này không suy luận được.",

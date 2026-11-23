@@ -485,7 +485,8 @@
       "memory": "Pamięć",
       "skills": "Umiejętności",
       "scheduled": "Zadania",
-      "conversations": "Twoje inne czaty"
+      "conversations": "Twoje inne czaty",
+      "delegation": "Praca zlecona"
     },
     "toolNames": {
       "web_search": "Szukanie w sieci",
@@ -520,6 +521,7 @@
       "list_tasks": "Wyświetlanie twoich zadań",
       "search_conversations": "Szukanie w twoich czatach",
       "read_conversation": "Czytanie jednego z twoich czatów",
+      "delegate": "Zleć pracę",
       "request_internet_access": "Proszenie o dostęp do internetu"
     },
     "cannotReason": "Ten model nie potrafi rozumować.",

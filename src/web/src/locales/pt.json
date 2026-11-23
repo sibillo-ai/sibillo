@@ -480,7 +480,8 @@
       "memory": "Memória",
       "skills": "Habilidades",
       "scheduled": "Tarefas",
-      "conversations": "Seus outros chats"
+      "conversations": "Seus outros chats",
+      "delegation": "Trabalho delegado"
     },
     "toolNames": {
       "web_search": "Pesquisar na web",
@@ -515,6 +516,7 @@
       "list_tasks": "Listar suas tarefas",
       "search_conversations": "Pesquisar seus chats",
       "read_conversation": "Ler um dos seus chats",
+      "delegate": "Delegar trabalho",
       "request_internet_access": "Pedir acesso à internet"
     },
     "cannotReason": "Este modelo não consegue raciocinar.",

@@ -480,7 +480,8 @@
       "memory": "Меморија",
       "skills": "Вештине",
       "scheduled": "Задаци",
-      "conversations": "Твоји други четови"
+      "conversations": "Твоји други четови",
+      "delegation": "Делегирани рад"
     },
     "toolNames": {
       "web_search": "Претражи веб",
@@ -515,6 +516,7 @@
       "list_tasks": "Прикажи твоје задатке",
       "search_conversations": "Претражи твоје четове",
       "read_conversation": "Прочитај један од твојих четова",
+      "delegate": "Делегирај посао",
       "request_internet_access": "Затражи приступ интернету"
     },
     "cannotReason": "Овај модел не уме да размишља.",

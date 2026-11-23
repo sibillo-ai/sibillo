@@ -10,6 +10,9 @@ APPLICATION_VERSION = "2026.10.1"
 RUN_QUEUE = "runs"
 RUN_WORKFLOW = "sibillo.run"
 EVENTS_STREAM = "events"
+# Delegated runs, on a queue of their own, partitioned by the delegating run (AGT-035, ADR-0136).
+DELEGATION_QUEUE = "delegations"
+DELEGATION_WORKFLOW = "sibillo.delegation"
 
 
 def create_client(database_url: str) -> DBOSClient:

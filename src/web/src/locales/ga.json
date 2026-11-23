@@ -490,7 +490,8 @@
       "memory": "Cuimhne",
       "skills": "Scileanna",
       "scheduled": "Tascanna",
-      "conversations": "Do chatanna eile"
+      "conversations": "Do chatanna eile",
+      "delegation": "Obair tharmligthe"
     },
     "toolNames": {
       "web_search": "Cuardaigh an gréasán",
@@ -525,6 +526,7 @@
       "list_tasks": "Liostaigh do thascanna",
       "search_conversations": "Cuardaigh do chatanna",
       "read_conversation": "Léigh ceann de do chatanna",
+      "delegate": "Tarmlig obair",
       "request_internet_access": "Iarr rochtain ar an idirlíon"
     },
     "cannotReason": "Ní féidir leis an múnla seo réasúnaíocht a dhéanamh.",

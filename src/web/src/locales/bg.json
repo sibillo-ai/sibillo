@@ -475,7 +475,8 @@
       "memory": "Памет",
       "skills": "Умения",
       "scheduled": "Задачи",
-      "conversations": "Другите ти чатове"
+      "conversations": "Другите ти чатове",
+      "delegation": "Делегирана работа"
     },
     "toolNames": {
       "web_search": "Търсене в уеб",
@@ -510,6 +511,7 @@
       "list_tasks": "Изброяване на задачите ти",
       "search_conversations": "Търсене в чатовете ти",
       "read_conversation": "Четене на един от чатовете ти",
+      "delegate": "Делегиране на работа",
       "request_internet_access": "Заявка за достъп до интернет"
     },
     "cannotReason": "Този модел не може да разсъждава.",

@@ -475,7 +475,8 @@
       "memory": "حافظه",
       "skills": "مهارتها",
       "scheduled": "وظایف",
-      "conversations": "چتهای دیگرت"
+      "conversations": "چتهای دیگرت",
+      "delegation": "کار واگذارشده"
     },
     "toolNames": {
       "web_search": "جستوجو در وب",
@@ -510,6 +511,7 @@
       "list_tasks": "فهرست وظایف تو",
       "search_conversations": "جستوجو در چتهای تو",
       "read_conversation": "خواندن یکی از چتهای تو",
+      "delegate": "واگذاری کار",
       "request_internet_access": "درخواست دسترسی به اینترنت"
     },
     "cannotReason": "این مدل توان استدلال ندارد.",

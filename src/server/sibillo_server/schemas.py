@@ -440,6 +440,7 @@ type ToolName = Literal[
     "list_tasks",
     "search_conversations",
     "read_conversation",
+    "delegate",
 ]
 
 

@@ -470,7 +470,8 @@
       "memory": "Memori",
       "skills": "Keterampilan",
       "scheduled": "Tugas",
-      "conversations": "Chat kamu yang lain"
+      "conversations": "Chat kamu yang lain",
+      "delegation": "Pekerjaan yang didelegasikan"
     },
     "toolNames": {
       "web_search": "Cari di web",
@@ -505,6 +506,7 @@
       "list_tasks": "Tampilkan daftar tugasmu",
       "search_conversations": "Cari di chatmu",
       "read_conversation": "Baca salah satu chatmu",
+      "delegate": "Delegasikan pekerjaan",
       "request_internet_access": "Minta akses internet"
     },
     "cannotReason": "Model ini tidak bisa bernalar.",

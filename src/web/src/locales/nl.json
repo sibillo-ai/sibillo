@@ -475,7 +475,8 @@
       "memory": "Geheugen",
       "skills": "Vaardigheden",
       "scheduled": "Taken",
-      "conversations": "Je andere chats"
+      "conversations": "Je andere chats",
+      "delegation": "Gedelegeerd werk"
     },
     "toolNames": {
       "web_search": "Het web doorzoeken",
@@ -510,6 +511,7 @@
       "list_tasks": "Je taken weergeven",
       "search_conversations": "Je chats doorzoeken",
       "read_conversation": "Een van je chats lezen",
+      "delegate": "Werk delegeren",
       "request_internet_access": "Om internettoegang vragen"
     },
     "cannotReason": "Dit model kan niet redeneren.",

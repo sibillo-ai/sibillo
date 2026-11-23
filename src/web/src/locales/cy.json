@@ -495,7 +495,8 @@
       "memory": "Cof",
       "skills": "Sgiliau",
       "scheduled": "Tasgau",
-      "conversations": "Dy sgyrsiau eraill"
+      "conversations": "Dy sgyrsiau eraill",
+      "delegation": "Gwaith dirprwyedig"
     },
     "toolNames": {
       "web_search": "Chwilio'r we",
@@ -530,6 +531,7 @@
       "list_tasks": "Rhestru dy dasgau",
       "search_conversations": "Chwilio dy sgyrsiau",
       "read_conversation": "Darllen un o dy sgyrsiau",
+      "delegate": "Dirprwyo gwaith",
       "request_internet_access": "Gofyn am fynediad i'r rhyngrwyd"
     },
     "cannotReason": "Ni all y model hwn resymu.",

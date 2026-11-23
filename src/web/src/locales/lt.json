@@ -485,7 +485,8 @@
       "memory": "Atmintis",
       "skills": "Įgūdžiai",
       "scheduled": "Užduotys",
-      "conversations": "Tavo kiti čatai"
+      "conversations": "Tavo kiti čatai",
+      "delegation": "Deleguotas darbas"
     },
     "toolNames": {
       "web_search": "Ieškoti saityne",
@@ -520,6 +521,7 @@
       "list_tasks": "Išvardyti savo užduotis",
       "search_conversations": "Ieškoti savo čatuose",
       "read_conversation": "Skaityti vieną savo čatą",
+      "delegate": "Deleguoti darbą",
       "request_internet_access": "Paprašyti prieigos prie interneto"
     },
     "cannotReason": "Šis modelis nemoka mąstyti.",

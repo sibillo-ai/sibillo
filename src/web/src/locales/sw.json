@@ -475,7 +475,8 @@
       "memory": "Kumbukumbu",
       "skills": "Ujuzi",
       "scheduled": "Kazi",
-      "conversations": "Soga zako nyingine"
+      "conversations": "Soga zako nyingine",
+      "delegation": "Majukumu yaliyokabidhiwa"
     },
     "toolNames": {
       "web_search": "Tafuta kwenye wavuti",
@@ -510,6 +511,7 @@
       "list_tasks": "Orodhesha kazi zako",
       "search_conversations": "Tafuta soga zako",
       "read_conversation": "Soma moja ya soga zako",
+      "delegate": "Kabidhi majukumu",
       "request_internet_access": "Omba ufikiaji wa intaneti"
     },
     "cannotReason": "Modeli hii haiwezi kufikiri.",

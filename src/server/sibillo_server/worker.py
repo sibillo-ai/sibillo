@@ -20,7 +20,15 @@ from dataclasses import replace
 from typing import Any, cast, get_args
 
 from dbos import DBOS, DBOSClient, DBOSConfig
-from pydantic_ai import Agent, DeferredToolRequests, DeferredToolResults, RunContext, ToolDenied, UsageLimits
+from pydantic_ai import (
+    Agent,
+    DeferredToolRequests,
+    DeferredToolResults,
+    RunContext,
+    ToolDenied,
+    UsageLimits,
+    capture_run_messages,
+)
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.durable_exec.dbos import DBOSDurability
 from pydantic_ai.exceptions import (
@@ -66,9 +74,15 @@ from sibillo_server.conversation_tools import TOOLS as CONVERSATION_TOOLS
 from sibillo_server.conversations import delete_everything, find_conversation, path_runs, stored_messages
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, create_engine, transaction
+from sibillo_server.delegations import AT_ONCE as DELEGATIONS_AT_ONCE
+from sibillo_server.delegations import DELEGATED_INSTRUCTIONS, DelegationInput
+from sibillo_server.delegations import TOOLS as DELEGATION_TOOLS
+from sibillo_server.delegations import configure as configure_delegations
 from sibillo_server.durable import (
     APPLICATION_NAME,
     APPLICATION_VERSION,
+    DELEGATION_QUEUE,
+    DELEGATION_WORKFLOW,
     EVENTS_STREAM,
     RUN_QUEUE,
     RUN_WORKFLOW,
@@ -282,7 +296,9 @@ def instructions(ctx: RunContext[RunDeps]) -> str:
         working[2],
         working[3],
         VOICE_INSTRUCTIONS.get(deps.voice or "", ""),
-        TASK_INSTRUCTIONS if deps.unattended else "",
+        # A delegated run is told of its place, not of the task it may work for (ADR-0136).
+        TASK_INSTRUCTIONS if deps.unattended and deps.delegated_by is None else "",
+        DELEGATED_INSTRUCTIONS if deps.delegated_by is not None else "",
         MEMORY_INSTRUCTIONS if keeping else "",
         memory_section(deps.memory),
         deps.additional_instructions or "",
@@ -330,6 +346,11 @@ def _encoded(event: Any) -> dict[str, Any]:
 
 async def _handle_events(ctx: RunContext[RunDeps], events: AsyncIterable[AgentStreamEvent]) -> None:
     """Encode the agent's events as AG-UI events and append them to the run's stream, live."""
+    if ctx.deps.delegated_by is not None:
+        # A delegated run has no stream of its own: its call shows in the delegating run's (ADR-0136).
+        async for _ in events:
+            pass
+        return
     run_id = str(ctx.deps.run_id)
     encoder = _ENCODERS[run_id]
     async for event in events:
@@ -383,7 +404,17 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
     # And saving a skill (AGT-026, ADR-0096).
     # And proposing a task (TSK-006, ADR-0106).
     # And looking at an image of the workspace (CNV-020, ADR-0110).
-    tools=(*WEB_TOOLS, *OFFER_TOOLS, *IMAGE_TOOLS, *MEMORY_TOOL_LIST, *SKILL_TOOLS, *TASK_TOOLS, *CONVERSATION_TOOLS),
+    # And delegating work to a delegated run of this agent (AGT-035, ADR-0136).
+    tools=(
+        *WEB_TOOLS,
+        *OFFER_TOOLS,
+        *IMAGE_TOOLS,
+        *MEMORY_TOOL_LIST,
+        *SKILL_TOOLS,
+        *TASK_TOOLS,
+        *CONVERSATION_TOOLS,
+        *DELEGATION_TOOLS,
+    ),
     capabilities=[
         Gateway(show_images=with_images),
         # The user's sandbox, and the harness's tools that work in it (AGT-011, ADR-0035).
@@ -908,6 +939,188 @@ def _deferred_results(run: RunWorkflowInput, offered: frozenset[str] = frozenset
     return DeferredToolResults(calls=run.answers or {}, approvals=dict(approvals), metadata=metadata)
 
 
+# How often a delegated run reads whether its delegating run still runs (AGT-038, ADR-0136).
+WATCH_SECONDS = 0.5
+
+
+@DBOS.workflow(name=DELEGATION_WORKFLOW)
+async def delegation_workflow(serialized_input: str) -> None:
+    await _delegated(DelegationInput.from_json(serialized_input))
+
+
+async def _end_delegation(
+    identity: Identity,
+    delegation_id: uuid.UUID,
+    status: str,
+    report: str,
+    *,
+    error_code: str | None = None,
+    untrusted: bool = False,
+) -> None:
+    async with transaction(_engine(), identity) as connection:
+        await connection.execute(
+            text(
+                "UPDATE delegations SET status = :status, report = :report, error_code = :code,"
+                " untrusted = untrusted OR :untrusted, started_at = coalesce(started_at, now()), finished_at = now()"
+                " WHERE id = :id AND status IN ('queued', 'running')"
+            ),
+            {"id": delegation_id, "status": status, "report": report, "code": error_code, "untrusted": untrusted},
+        )
+
+
+async def _watch(identity: Identity, run_id: uuid.UUID, work: asyncio.Task[Any], stopped: asyncio.Event) -> None:
+    """Stop the delegated run's work once its delegating run no longer runs (AGT-038, ADR-0136)."""
+    while not work.done():
+        async with transaction(_engine(), identity) as connection:
+            status = (
+                await connection.execute(text("SELECT status FROM runs WHERE id = :id"), {"id": run_id})
+            ).scalar_one_or_none()
+        if status != "running":
+            stopped.set()
+            work.cancel()
+            return
+        await asyncio.sleep(WATCH_SECONDS)
+
+
+def _delegated_report(error: BaseException) -> tuple[str, str]:
+    """The error code of a delegated run that failed, and the report that says so (AGT-038)."""
+    code = _error_code(error)
+    reason = _reason(error)
+    said = f" ({reason})" if reason else ""
+    return code, f"The delegated run failed with the error {code}{said}, so its work is not done."
+
+
+async def _delegated(item: DelegationInput) -> None:
+    """Execute a delegated run on its brief, with a fresh context, and record its report (ADR-0136)."""
+    delegation_id, run_id = uuid.UUID(item.delegation_id), uuid.UUID(item.run_id)
+    plain = Identity(
+        session_id=uuid.UUID(int=0),
+        user_id=uuid.UUID(item.user_id),
+        tenant_id=uuid.UUID(item.tenant_id),
+        role="member",
+        instance_admin=False,
+    )
+    async with transaction(_engine(), plain) as connection:
+        user = (
+            await connection.execute(
+                text("SELECT role, instance_admin, disabled_at IS NOT NULL AS disabled FROM users WHERE id = :id"),
+                {"id": plain.user_id},
+            )
+        ).one_or_none()
+        found = (
+            await connection.execute(
+                text("SELECT brief, status, untrusted FROM delegations WHERE id = :id"), {"id": delegation_id}
+            )
+        ).one_or_none()
+    # Deleted with its run, or ended before a crash.
+    if found is None or found.status not in ("queued", "running"):
+        return
+    if user is None or user.disabled:
+        await _end_delegation(
+            plain, delegation_id, "failed", "The delegated run did not start.", error_code="internal.error"
+        )
+        return
+    identity = replace(plain, role=user.role, instance_admin=user.instance_admin)
+    async with transaction(_engine(), identity) as connection:
+        await connection.execute(
+            text(
+                "UPDATE delegations SET status = 'running', started_at = coalesce(started_at, now())"
+                " WHERE id = :id AND status IN ('queued', 'running')"
+            ),
+            {"id": delegation_id},
+        )
+        permissions = await permissions_of(connection, identity.user_id)
+        wanted = set(item.skills)
+        skills = tuple(skill for skill in await run_skills(connection, ()) if skill.name in wanted)
+    conversation_id = uuid.UUID(item.conversation_id)
+    deps = RunDeps(
+        engine=_engine(),
+        identity=identity,
+        secret_key=_WORKER.secret_key,
+        conversation_id=conversation_id,
+        run_id=delegation_id,
+        history_length=0,
+        provider=item.provider,
+        model=item.model_name,
+        sandboxd_url=_WORKER.sandboxd_url,
+        sandboxd_token=_WORKER.sandboxd_token,
+        search_url=_WORKER.search_url,
+        reasoning=item.reasoning,
+        disabled_tools=frozenset(item.disabled_tools),
+        base_instructions=item.base_instructions,
+        language=item.language,
+        permissions=permissions,
+        allowances=Allowances(
+            turn_internet_access=item.turn_internet_access,
+            internet_access=item.internet_access,
+            tools=frozenset(item.allowed_tools),
+            turn_denied_internet_access=item.turn_denied_internet_access,
+        ),
+        # Untrusted from its start when the delegating run held untrusted content at the call (AGT-037).
+        untrusted=bool(found.untrusted),
+        skills=skills,
+        temporary=item.temporary,
+        mcp_call_seconds=_WORKER.mcp_call_seconds,
+        unattended=item.unattended,
+        grants=tuple(Grant(grant["tool"], grant["arguments"]) for grant in item.grants),
+        public_origin=_WORKER.public_origin,
+        delegated_by=run_id,
+    )
+    deps = replace(deps, prepare_sandbox=sandbox_preparer(deps))
+    stopped = asyncio.Event()
+    with capture_run_messages() as messages:
+        work = asyncio.create_task(
+            agent.run(
+                found.brief,
+                message_history=[],
+                model=model_reference(item.connection_id, item.model),
+                deps=deps,
+                run_id=item.delegation_id,
+                conversation_id=item.conversation_id,
+                # The conversation's own sandbox, beside the delegating run (ADR-0136).
+                workspace=sandbox_ref(item.tenant_id, item.user_id, item.conversation_id),
+                usage_limits=UsageLimits(request_limit=_WORKER.run_request_limit),
+            )
+        )
+        watcher = asyncio.create_task(_watch(identity, run_id, work, stopped))
+        try:
+            result = await work
+        except asyncio.CancelledError:
+            if not stopped.is_set():
+                raise
+            untrusted = has_untrusted_content(messages)
+            report = "The delegated run was stopped with the run that delegated the work."
+            await _end_delegation(identity, delegation_id, "cancelled", report, untrusted=untrusted)
+            return
+        except Exception as error:
+            code, report = _delegated_report(error)
+            logger.warning("delegated run %s failed: %s", delegation_id, code)
+            await _end_delegation(
+                identity,
+                delegation_id,
+                "failed",
+                report,
+                error_code=code,
+                untrusted=has_untrusted_content(messages),
+            )
+            return
+        finally:
+            watcher.cancel()
+    untrusted = has_untrusted_content(result.all_messages())
+    if isinstance(result.output, DeferredToolRequests):
+        # It is offered nothing that asks: never expected.
+        await _end_delegation(
+            identity,
+            delegation_id,
+            "failed",
+            "The delegated run stopped to ask for something that nobody can give it.",
+            error_code="internal.error",
+            untrusted=untrusted,
+        )
+        return
+    await _end_delegation(identity, delegation_id, "completed", result.output, untrusted=untrusted)
+
+
 TITLE_PROMPT = (
     "Write a title of at most six words for a conversation that starts with this message, in its language."
     " Answer with the title only, without quotes.\n\n"
@@ -1006,6 +1219,24 @@ async def _apply_retention(days: int) -> None:
     if existing:
         await DBOS.delete_workflows_async(existing)
         logger.info("deleted %d expired workflows", len(existing))
+
+
+async def _apply_delegation_retention(days: int) -> None:
+    """Delete the durable workflows of delegated runs that ended more than `days` days ago (TEN-009, ADR-0136).
+
+    They are found by their name and age, as a delegating run's are by its row: a delegation's row may be gone.
+    """
+    before = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days)).isoformat()
+    ended = await DBOS.list_workflows_async(
+        name=DELEGATION_WORKFLOW,
+        status=["SUCCESS", "ERROR", "CANCELLED"],
+        completed_before=before,
+        load_input=False,
+        load_output=False,
+    )
+    if ended:
+        await DBOS.delete_workflows_async([status.workflow_id for status in ended])
+        logger.info("deleted %d expired workflows of delegated runs", len(ended))
 
 
 # A run still queued or running two days after it was made was left by a crash (OPS-006, ADR-0130).
@@ -1177,6 +1408,7 @@ async def _retention_loop(days: int) -> None:
     while True:
         try:
             await _apply_retention(days)
+            await _apply_delegation_retention(days)
         except Exception:
             logger.exception("retention failed")
         await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
@@ -1185,6 +1417,10 @@ async def _retention_loop(days: int) -> None:
 async def _serve(configuration: WorkerConfiguration) -> None:
     DBOS.launch()
     await DBOS.register_queue_async(RUN_QUEUE, partition_concurrency=1, polling_interval_sec=QUEUE_POLLING_SECONDS)
+    # At most four delegated runs of one run at once (AGT-035, ADR-0136).
+    await DBOS.register_queue_async(
+        DELEGATION_QUEUE, partition_concurrency=DELEGATIONS_AT_ONCE, polling_interval_sec=QUEUE_POLLING_SECONDS
+    )
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT):
@@ -1213,6 +1449,7 @@ def run_worker(configuration: WorkerConfiguration) -> None:
     _WORKER.mcp_call_seconds = configuration.mcp_call_seconds
     _WORKER.public_origin = configuration.public_origin
     _WORKER.durable = create_client(configuration.database_url)
+    configure_delegations(_WORKER.durable)
     configure_tasks(_WORKER.engine, configuration.secret_key, configuration.public_origin, _WORKER.durable)
     DBOS(
         config=DBOSConfig(

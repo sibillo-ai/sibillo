@@ -485,7 +485,8 @@
       "memory": "Память",
       "skills": "Навыки",
       "scheduled": "Задачи",
-      "conversations": "Твои другие чаты"
+      "conversations": "Твои другие чаты",
+      "delegation": "Делегированная работа"
     },
     "toolNames": {
       "web_search": "Искать в интернете",
@@ -520,6 +521,7 @@
       "list_tasks": "Показать твои задачи",
       "search_conversations": "Искать в твоих чатах",
       "read_conversation": "Прочитать один из твоих чатов",
+      "delegate": "Делегировать работу",
       "request_internet_access": "Запросить доступ в интернет"
     },
     "cannotReason": "Эта модель не умеет рассуждать.",

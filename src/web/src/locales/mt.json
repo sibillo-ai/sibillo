@@ -490,7 +490,8 @@
       "memory": "Memorja",
       "skills": "Ħiliet",
       "scheduled": "Kompiti",
-      "conversations": "Il-chats l-oħra tiegħek"
+      "conversations": "Il-chats l-oħra tiegħek",
+      "delegation": "Xogħol iddelegat"
     },
     "toolNames": {
       "web_search": "Fittex il-web",
@@ -525,6 +526,7 @@
       "list_tasks": "Elenka l-kompiti tiegħek",
       "search_conversations": "Fittex il-chats tiegħek",
       "read_conversation": "Aqra wieħed mill-chats tiegħek",
+      "delegate": "Iddelega xogħol",
       "request_internet_access": "Titlob aċċess għall-internet"
     },
     "cannotReason": "Dan il-mudell ma jistax jirraġuna.",

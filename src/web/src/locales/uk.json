@@ -485,7 +485,8 @@
       "memory": "Пам'ять",
       "skills": "Навички",
       "scheduled": "Завдання",
-      "conversations": "Ваші інші чати"
+      "conversations": "Ваші інші чати",
+      "delegation": "Делегована робота"
     },
     "toolNames": {
       "web_search": "Пошук у вебі",
@@ -520,6 +521,7 @@
       "list_tasks": "Показати ваші завдання",
       "search_conversations": "Пошук у ваших чатах",
       "read_conversation": "Прочитати один із ваших чатів",
+      "delegate": "Делегувати роботу",
       "request_internet_access": "Попросити доступ до інтернету"
     },
     "cannotReason": "Ця модель не вміє міркувати.",

@@ -108,6 +108,22 @@ async def record(
     )
 
 
+# What a delegated run is told of a call it could not ask for (AGT-036, ADR-0136).
+NOT_ASKED = (
+    "This call needs the user's approval, and nobody can give it to delegated work, so it was denied without"
+    " asking. Say in your report what you needed, so that the assistant that delegated the work can ask for it."
+)
+
+
+def _unwatched(deps: RunDeps) -> bool:
+    """Whether nobody can answer the run: a task's run (TSK-004), or a delegated run (AGT-036, ADR-0136)."""
+    return deps.unattended or deps.delegated_by is not None
+
+
+def _not_granted(deps: RunDeps) -> str:
+    return NOT_GRANTED if deps.delegated_by is None else NOT_ASKED
+
+
 def _granted(deps: RunDeps, tool: str, arguments: dict[str, Any]) -> Grant | None:
     """The task's grant that covers the call, if one does and may still be used (TSK-004, ADR-0106)."""
     grants = [grant for grant in deps.grants if isinstance(grant, Grant)]
@@ -189,7 +205,7 @@ class Approvals(AbstractCapability[RunDeps]):
             if untrusted and call.tool_name in MEMORY_CHANGES:
                 guarded = await _users_item(deps, args.get("id"))
                 if guarded is not None:
-                    if deps.unattended:
+                    if _unwatched(deps):
                         async with transaction(deps.engine, deps.identity) as connection:
                             await record(
                                 connection,
@@ -201,7 +217,7 @@ class Approvals(AbstractCapability[RunDeps]):
                                 outcome="not_granted",
                                 reason="untrusted_content",
                             )
-                        return NOT_GRANTED
+                        return _not_granted(deps)
                     verb = "Forget" if call.tool_name == "forget" else "Replace"
                     raise ApprovalRequired(
                         metadata={
@@ -228,8 +244,9 @@ class Approvals(AbstractCapability[RunDeps]):
                         reason="internet_access",
                     )
                 return DENIED_INTERNET_ACCESS
-            if decision.request is not None and deps.unattended:
-                # Nobody watches a task's run: a grant covers the call, or it is denied without asking (TSK-004).
+            if decision.request is not None and _unwatched(deps):
+                # Nobody watches a task's run, or a delegated run: a grant covers the call, or it is denied without
+                # asking (TSK-004, AGT-036).
                 if _granted(deps, call.tool_name, args) is None:
                     async with transaction(deps.engine, deps.identity) as connection:
                         await record(
@@ -242,7 +259,7 @@ class Approvals(AbstractCapability[RunDeps]):
                             outcome="not_granted",
                             reason=decision.request.reason,
                         )
-                    return NOT_GRANTED
+                    return _not_granted(deps)
                 outcome, scope, reason = "granted", None, decision.request.reason
             elif decision.request is not None:
                 metadata: dict[str, Any] = {"reason": decision.request.reason, "scopes": list(decision.request.scopes)}

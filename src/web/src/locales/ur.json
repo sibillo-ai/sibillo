@@ -475,7 +475,8 @@
       "memory": "یادداشت",
       "skills": "مہارتیں",
       "scheduled": "ٹاسک",
-      "conversations": "آپ کی دوسری چیٹس"
+      "conversations": "آپ کی دوسری چیٹس",
+      "delegation": "سونپا گیا کام"
     },
     "toolNames": {
       "web_search": "ویب پر تلاش کرنا",
@@ -510,6 +511,7 @@
       "list_tasks": "اپنے ٹاسک کی فہرست دکھانا",
       "search_conversations": "اپنی چیٹس میں تلاش کرنا",
       "read_conversation": "اپنی ایک چیٹ پڑھنا",
+      "delegate": "کام سونپیں",
       "request_internet_access": "انٹرنیٹ تک رسائی مانگنا"
     },
     "cannotReason": "یہ ماڈل استدلال نہیں کر سکتا۔",

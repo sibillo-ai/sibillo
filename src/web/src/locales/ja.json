@@ -470,7 +470,8 @@
       "memory": "記憶",
       "skills": "スキル",
       "scheduled": "タスク",
-      "conversations": "他のチャット"
+      "conversations": "他のチャット",
+      "delegation": "委任された作業"
     },
     "toolNames": {
       "web_search": "ウェブを検索する",
@@ -505,6 +506,7 @@
       "list_tasks": "タスクを一覧表示する",
       "search_conversations": "チャットを検索する",
       "read_conversation": "チャットを一つ読む",
+      "delegate": "作業を委任",
       "request_internet_access": "インターネットへのアクセスを求める"
     },
     "cannotReason": "このモデルは推論できません。",

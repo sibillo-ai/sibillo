@@ -475,7 +475,8 @@
       "memory": "நினைவு",
       "skills": "திறன்கள்",
       "scheduled": "பணிகள்",
-      "conversations": "உங்கள் மற்ற அரட்டைகள்"
+      "conversations": "உங்கள் மற்ற அரட்டைகள்",
+      "delegation": "ஒப்படைக்கப்பட்ட வேலை"
     },
     "toolNames": {
       "web_search": "இணையத்தில் தேடு",
@@ -510,6 +511,7 @@
       "list_tasks": "உங்கள் பணிகளைப் பட்டியலிடு",
       "search_conversations": "உங்கள் அரட்டைகளில் தேடு",
       "read_conversation": "உங்கள் அரட்டைகளில் ஒன்றைப் படி",
+      "delegate": "வேலையை ஒப்படை",
       "request_internet_access": "இணைய அணுகலைக் கேட்கும்"
     },
     "cannotReason": "இந்த மாடலால் சிந்திக்க முடியாது.",

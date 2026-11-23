@@ -25,7 +25,8 @@ async def current_allowances(deps: RunDeps) -> Allowances:
                     "SELECT c.allowed_internet_access, r.turn_allows_internet_access FROM conversations c"
                     " JOIN runs r ON r.conversation_id = c.id WHERE c.id = :conversation AND r.id = :run"
                 ),
-                {"conversation": deps.conversation_id, "run": deps.run_id},
+                # A delegated run has its delegating run's turn (AGT-036, ADR-0136).
+                {"conversation": deps.conversation_id, "run": deps.delegated_by or deps.run_id},
             )
         ).one_or_none()
     if row is None:

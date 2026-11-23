@@ -475,7 +475,8 @@
       "memory": "Hukommelse",
       "skills": "Færdigheder",
       "scheduled": "Opgaver",
-      "conversations": "Dine andre chats"
+      "conversations": "Dine andre chats",
+      "delegation": "Delegeret arbejde"
     },
     "toolNames": {
       "web_search": "Søg på nettet",
@@ -510,6 +511,7 @@
       "list_tasks": "Vis dine opgaver",
       "search_conversations": "Søg i dine chats",
       "read_conversation": "Læs en af dine chats",
+      "delegate": "Delegér arbejde",
       "request_internet_access": "Bed om adgang til internettet"
     },
     "cannotReason": "Denne model kan ikke tænke.",

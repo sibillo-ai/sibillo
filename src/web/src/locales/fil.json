@@ -475,7 +475,8 @@
       "memory": "Alaala",
       "skills": "Mga kasanayan",
       "scheduled": "Mga gawain",
-      "conversations": "Ang iba mong chat"
+      "conversations": "Ang iba mong chat",
+      "delegation": "Ipinagkatiwalang trabaho"
     },
     "toolNames": {
       "web_search": "Maghanap sa web",
@@ -510,6 +511,7 @@
       "list_tasks": "Ilista ang mga gawain mo",
       "search_conversations": "Maghanap sa mga chat mo",
       "read_conversation": "Basahin ang isa sa mga chat mo",
+      "delegate": "Ipagkatiwala ang trabaho",
       "request_internet_access": "Humingi ng access sa internet"
     },
     "cannotReason": "Hindi kayang mag-isip ng model na ito.",

@@ -485,7 +485,8 @@
       "memory": "Paměť",
       "skills": "Dovednosti",
       "scheduled": "Úlohy",
-      "conversations": "Tvé další chaty"
+      "conversations": "Tvé další chaty",
+      "delegation": "Delegovaná práce"
     },
     "toolNames": {
       "web_search": "Hledat na webu",
@@ -520,6 +521,7 @@
       "list_tasks": "Vypsat tvé úlohy",
       "search_conversations": "Prohledat tvé chaty",
       "read_conversation": "Přečíst jeden z tvých chatů",
+      "delegate": "Delegovat práci",
       "request_internet_access": "Požádat o přístup k internetu"
     },
     "cannotReason": "Tento model neumí uvažovat.",

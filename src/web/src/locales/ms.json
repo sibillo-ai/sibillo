@@ -470,7 +470,8 @@
       "memory": "Ingatan",
       "skills": "Kemahiran",
       "scheduled": "Tugasan",
-      "conversations": "Sembang anda yang lain"
+      "conversations": "Sembang anda yang lain",
+      "delegation": "Kerja diwakilkan"
     },
     "toolNames": {
       "web_search": "Cari di web",
@@ -505,6 +506,7 @@
       "list_tasks": "Senaraikan tugasan anda",
       "search_conversations": "Cari dalam sembang anda",
       "read_conversation": "Baca salah satu sembang anda",
+      "delegate": "Wakilkan kerja",
       "request_internet_access": "Minta akses internet"
     },
     "cannotReason": "Model ini tidak boleh membuat penaakulan.",

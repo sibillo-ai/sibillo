@@ -475,7 +475,8 @@
       "memory": "Memoria",
       "skills": "Habilidades",
       "scheduled": "Tarefas",
-      "conversations": "Os teus outros chats"
+      "conversations": "Os teus outros chats",
+      "delegation": "Traballo delegado"
     },
     "toolNames": {
       "web_search": "Buscar na web",
@@ -510,6 +511,7 @@
       "list_tasks": "Listar as túas tarefas",
       "search_conversations": "Buscar nos teus chats",
       "read_conversation": "Ler un dos teus chats",
+      "delegate": "Delegar traballo",
       "request_internet_access": "Pedir acceso a internet"
     },
     "cannotReason": "Este modelo non pode razoar.",

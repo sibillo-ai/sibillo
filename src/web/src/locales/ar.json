@@ -495,7 +495,8 @@
       "memory": "الذاكرة",
       "skills": "المهارات",
       "scheduled": "المهام التلقائية",
-      "conversations": "دردشاتك الأخرى"
+      "conversations": "دردشاتك الأخرى",
+      "delegation": "العمل المفوّض"
     },
     "toolNames": {
       "web_search": "البحث في الويب",
@@ -530,6 +531,7 @@
       "list_tasks": "سرد مهامك التلقائية",
       "search_conversations": "البحث في دردشاتك",
       "read_conversation": "قراءة إحدى دردشاتك",
+      "delegate": "تفويض العمل",
       "request_internet_access": "طلب الوصول إلى الإنترنت"
     },
     "cannotReason": "هذا النموذج لا يستطيع التفكير.",

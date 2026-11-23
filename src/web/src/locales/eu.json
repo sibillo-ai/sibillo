@@ -475,7 +475,8 @@
       "memory": "Memoria",
       "skills": "Trebetasunak",
       "scheduled": "Zereginak",
-      "conversations": "Zure beste txatak"
+      "conversations": "Zure beste txatak",
+      "delegation": "Lan delegatua"
     },
     "toolNames": {
       "web_search": "Bilatu webean",
@@ -510,6 +511,7 @@
       "list_tasks": "Zerrendatu zure zereginak",
       "search_conversations": "Bilatu zure txatetan",
       "read_conversation": "Irakurri zure txat bat",
+      "delegate": "Lana delegatu",
       "request_internet_access": "Eskatu interneterako sarbidea"
     },
     "cannotReason": "Modelo honek ezin du arrazonatu.",

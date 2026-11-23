@@ -480,7 +480,8 @@
       "memory": "זיכרון",
       "skills": "מיומנויות",
       "scheduled": "משימות",
-      "conversations": "הצ'אטים האחרים שלך"
+      "conversations": "הצ'אטים האחרים שלך",
+      "delegation": "עבודה מואצלת"
     },
     "toolNames": {
       "web_search": "חיפוש באינטרנט",
@@ -515,6 +516,7 @@
       "list_tasks": "הצגת המשימות שלך",
       "search_conversations": "חיפוש בצ'אטים שלך",
       "read_conversation": "קריאת אחד מהצ'אטים שלך",
+      "delegate": "האצלת עבודה",
       "request_internet_access": "בקשת גישה לאינטרנט"
     },
     "cannotReason": "המודל הזה לא תומך בחשיבה.",

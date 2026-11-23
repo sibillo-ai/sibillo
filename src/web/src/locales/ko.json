@@ -470,7 +470,8 @@
       "memory": "기억",
       "skills": "스킬",
       "scheduled": "작업",
-      "conversations": "내 다른 채팅"
+      "conversations": "내 다른 채팅",
+      "delegation": "위임된 작업"
     },
     "toolNames": {
       "web_search": "웹 검색",
@@ -505,6 +506,7 @@
       "list_tasks": "작업 목록 보기",
       "search_conversations": "내 채팅 검색",
       "read_conversation": "내 채팅 하나 읽기",
+      "delegate": "작업 위임",
       "request_internet_access": "인터넷 접근 요청"
     },
     "cannotReason": "이 모델은 추론할 수 없어요.",

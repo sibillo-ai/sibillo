@@ -475,7 +475,8 @@
       "memory": "Mälu",
       "skills": "Oskused",
       "scheduled": "Ülesanded",
-      "conversations": "Sinu teised chat'id"
+      "conversations": "Sinu teised chat'id",
+      "delegation": "Delegeeritud töö"
     },
     "toolNames": {
       "web_search": "Otsi veebist",
@@ -510,6 +511,7 @@
       "list_tasks": "Loetle sinu ülesanded",
       "search_conversations": "Otsi sinu chat'idest",
       "read_conversation": "Loe üht sinu chat'i",
+      "delegate": "Delegeeri töö",
       "request_internet_access": "Küsi interneti ligipääsu"
     },
     "cannotReason": "See mudel ei oska mõelda.",

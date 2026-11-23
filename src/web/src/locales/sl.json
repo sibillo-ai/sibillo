@@ -485,7 +485,8 @@
       "memory": "Spomin",
       "skills": "Veščine",
       "scheduled": "Opravila",
-      "conversations": "Tvoji drugi klepeti"
+      "conversations": "Tvoji drugi klepeti",
+      "delegation": "Delegirano delo"
     },
     "toolNames": {
       "web_search": "Iskanje po spletu",
@@ -520,6 +521,7 @@
       "list_tasks": "Izpis tvojih opravil",
       "search_conversations": "Iskanje po tvojih klepetih",
       "read_conversation": "Branje enega od tvojih klepetov",
+      "delegate": "Delegiraj delo",
       "request_internet_access": "Zahteva za dostop do interneta"
     },
     "cannotReason": "Ta model ne zna razmišljati.",

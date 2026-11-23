@@ -480,7 +480,8 @@
       "memory": "Mémoire",
       "skills": "Compétences",
       "scheduled": "Tâches",
-      "conversations": "Tes autres discussions"
+      "conversations": "Tes autres discussions",
+      "delegation": "Travail délégué"
     },
     "toolNames": {
       "web_search": "Rechercher sur le web",
@@ -515,6 +516,7 @@
       "list_tasks": "Lister tes tâches",
       "search_conversations": "Rechercher dans tes discussions",
       "read_conversation": "Lire une de tes discussions",
+      "delegate": "Déléguer du travail",
       "request_internet_access": "Demander l'accès à internet"
     },
     "cannotReason": "Ce modèle ne sait pas raisonner.",

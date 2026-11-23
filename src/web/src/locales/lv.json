@@ -480,7 +480,8 @@
       "memory": "Atmiņa",
       "skills": "Prasmes",
       "scheduled": "Uzdevumi",
-      "conversations": "Tavi pārējie čati"
+      "conversations": "Tavi pārējie čati",
+      "delegation": "Deleģētais darbs"
     },
     "toolNames": {
       "web_search": "Meklēt tīmeklī",
@@ -515,6 +516,7 @@
       "list_tasks": "Uzskaitīt tavus uzdevumus",
       "search_conversations": "Meklēt tavos čatos",
       "read_conversation": "Nolasīt vienu no taviem čatiem",
+      "delegate": "Deleģēt darbu",
       "request_internet_access": "Lūgt piekļuvi internetam"
     },
     "cannotReason": "Šis modelis nespēj spriest.",

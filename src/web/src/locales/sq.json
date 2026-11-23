@@ -475,7 +475,8 @@
       "memory": "Kujtesa",
       "skills": "Aftësitë",
       "scheduled": "Detyrat",
-      "conversations": "Chatet e tua të tjera"
+      "conversations": "Chatet e tua të tjera",
+      "delegation": "Punë e deleguar"
     },
     "toolNames": {
       "web_search": "Kërko në web",
@@ -510,6 +511,7 @@
       "list_tasks": "Listo detyrat e tua",
       "search_conversations": "Kërko në chatet e tua",
       "read_conversation": "Lexo një nga chatet e tua",
+      "delegate": "Delego punë",
       "request_internet_access": "Kërko akses në internet"
     },
     "cannotReason": "Ky model nuk mund të arsyetojë.",

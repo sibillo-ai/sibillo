@@ -475,7 +475,8 @@
       "memory": "Hafıza",
       "skills": "Yetenekler",
       "scheduled": "Görevler",
-      "conversations": "Diğer sohbetlerin"
+      "conversations": "Diğer sohbetlerin",
+      "delegation": "Devredilen iş"
     },
     "toolNames": {
       "web_search": "Web'de ara",
@@ -510,6 +511,7 @@
       "list_tasks": "Görevlerini listele",
       "search_conversations": "Sohbetlerinde ara",
       "read_conversation": "Sohbetlerinden birini oku",
+      "delegate": "İş devret",
       "request_internet_access": "İnternet erişimi iste"
     },
     "cannotReason": "Bu model akıl yürütemiyor.",
