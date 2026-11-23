@@ -40,7 +40,9 @@ def _document(page: Page) -> tuple[str, str]:
 def _set_language(page: Page, language: str | None) -> None:
     settings = page.request.get("/v1/me/settings")
     assert settings.ok, settings.text()
-    body = settings.json() | {"language": language}
+    # The built-in instructions are only read, never sent back.
+    body = {key: value for key, value in settings.json().items() if key != "built_in_base_instructions"}
+    body["language"] = language
     response = page.request.put("/v1/me/settings", data=body, headers=REQUEST)
     assert response.ok, response.text()
 
