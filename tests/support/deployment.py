@@ -27,7 +27,18 @@ from tests.support.sandbox import free_port
 COMPOSE_FILE = ROOT / "deploy" / "compose.yaml"
 UP_TIMEOUT_SECONDS = 1800
 # CI builds the deployment's images with its build cache; `up` then uses them (ADR-0059).
-BUILD = [] if os.environ.get("TEST_DEPLOYMENT_IMAGES") == "built" else ["--build"]
+BUILT = os.environ.get("TEST_DEPLOYMENT_IMAGES") == "built"
+BUILD = [] if BUILT else ["--build"]
+# The images the Compose file builds, by service; their tag is the deployment's own (ADR-0133).
+BUILT_IMAGES = ("server", "sandboxd", "netguard", "engine", "sandbox")
+
+
+def image_tag(project: str) -> str:
+    """The tag of a test deployment's images: CI's `local` when it built them, else one of the project's own, so
+    that a deployment on the same host keeps its images (ADR-0133)."""
+    return "local" if BUILT else project.removeprefix("sibillo-")
+
+
 SANDBOX_LABEL = "dev.sibillo.sandbox"
 SANDBOX_NETWORK = "sibillo-sandboxes"
 
@@ -64,7 +75,7 @@ def compose(
         text=True,
         timeout=timeout,
         check=False,
-        env={**os.environ, "SIBILLO_CONFIG_DIR": str(config_dir)},
+        env={**os.environ, "SIBILLO_CONFIG_DIR": str(config_dir), "SIBILLO_IMAGE_TAG": image_tag(project)},
     )
     if check and result.returncode != 0:
         raise RuntimeError(
@@ -158,7 +169,7 @@ def run_text(client: httpx.Client, conversation_id: str, text: str, parent: str 
 
 @contextlib.contextmanager
 def installed(config_dir: Path) -> Generator[Deployment]:
-    """A deployment installed in `config_dir`, removed with its volumes and images at the end."""
+    """A deployment installed in `config_dir`, removed with its volumes and its own images at the end."""
     project = f"sibillo-e2e-{secrets.token_hex(3)}"
     port = free_port()
     username, password = f"admin-{secrets.token_hex(3)}", secrets.token_urlsafe(18)
@@ -174,8 +185,12 @@ def installed(config_dir: Path) -> Generator[Deployment]:
         deployment.compose("run", "--rm", "--no-TTY", "setup", stdin=answers)
         yield deployment
     finally:
-        # Everything of the deployment goes with it: its sandboxes are in its engine (ADR-0114).
-        compose(project, config_dir, "down", "--volumes", "--rmi", "all", "--timeout", "30", check=False, timeout=600)
+        # Everything of the deployment goes with it: its sandboxes are in its engine (ADR-0114), and the images of
+        # its own tag, never one another project runs (ADR-0133).
+        compose(project, config_dir, "down", "--volumes", "--timeout", "30", check=False, timeout=600)
+        tag = image_tag(project)
+        if tag != "local":
+            docker_cli("rmi", *(f"sibillo/{image}:{tag}" for image in BUILT_IMAGES))
 
 
 @contextlib.contextmanager
