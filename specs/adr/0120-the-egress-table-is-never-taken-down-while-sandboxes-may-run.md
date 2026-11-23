@@ -45,9 +45,9 @@ windows in which a sandbox runs without it:
    place only while that listing is unchanged.
 4. **The canary has something to reach.** The guard listens on TCP port
    9000 of its namespace and closes every connection it accepts. The canary
-   probes that port at its bridge's gateway, with and without network: it
-   must be refused or time out, and any connection there means the input
-   chain is not in place.
+   probes that port at its bridge's gateway, with and without network: the
+   probe must time out, as the input chain drops it; a connection, or a
+   refusal, means the chain is not in place.
 5. **The driver stops sandboxes at every failed check.** While the guard
    reports the table missing or does not answer, every check of the monitor,
    every two seconds, stops every sandbox that runs, not only the first.
