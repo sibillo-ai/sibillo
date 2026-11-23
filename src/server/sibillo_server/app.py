@@ -36,6 +36,7 @@ from sibillo_server.config import ApiConfiguration
 from sibillo_server.database import create_engine
 from sibillo_server.durable import create_client
 from sibillo_server.errors import install_error_handlers
+from sibillo_server.security_headers import SecurityHeaders
 
 API_PREFIX = "/v1"
 
@@ -93,4 +94,7 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     install_error_handlers(app)
     # Outermost, so that a body over its limit is refused before any route or session check (API-009, ADR-0119).
     app.add_middleware(BodyLimits, prefix=API_PREFIX)
+    # Outside the body limits, so that their answers carry the headers too (AUTH-005, ADR-0131).
+    https = (configuration.public_origin or "").startswith("https://")
+    app.add_middleware(SecurityHeaders, prefix=API_PREFIX, https=https)
     return app

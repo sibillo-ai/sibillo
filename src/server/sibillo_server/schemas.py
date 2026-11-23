@@ -55,7 +55,15 @@ class User(Response):
     instance_admin: bool
     # The user must replace an initial password before anything else (AUTH-012, ADR-0105).
     password_change_required: bool
+    disabled: bool
     created_at: Timestamp
+
+
+class UpdateUserRequest(Request):
+    """A tenant admin's change of an account: its role, or whether it is disabled (AUTH-008, ADR-0131)."""
+
+    role: Role | None = None
+    disabled: bool | None = None
 
 
 class DeviceSession(Response):

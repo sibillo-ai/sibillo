@@ -10,6 +10,7 @@ scripts (UX-002).
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -61,10 +62,14 @@ def router(root: Path) -> APIRouter:
     async def serve(path: str) -> Response:  # pyright: ignore[reportUnusedFunction]
         if path == API_SEGMENT or path.startswith(f"{API_SEGMENT}/"):
             raise errors.not_found()
-        candidate = (root / path).resolve()
+        # A NUL byte names no file (ADR-0131).
+        if "\x00" in path:
+            return Response(status_code=404, headers=HEADERS)
+        # Read off the event loop (ADR-0131).
+        candidate = await asyncio.to_thread((root / path).resolve)
         if not candidate.is_relative_to(root):
             return Response(status_code=404, headers=HEADERS)
-        if candidate.is_file():
+        if await asyncio.to_thread(candidate.is_file):
             # Only the files under assets/ have a hash of their content in their names, so a new version has
             # new names; every other file, the page and the service worker first, is asked for again (UX-040,
             # ADR-0112).

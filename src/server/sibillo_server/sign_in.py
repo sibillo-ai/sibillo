@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from sibillo_server import errors, passkeys, schemas
 from sibillo_server.auth import Engine, check_attempt, check_password, open_session, record_attempt, request_source
-from sibillo_server.credentials import new_token, token_hash, uuid7
+from sibillo_server.credentials import hash_password, needs_rehash, new_token, token_hash, uuid7
 from sibillo_server.database import Identity, transaction
 
 router = APIRouter()
@@ -36,6 +36,13 @@ async def login(
     if account is None:
         raise errors.invalid_credentials()
     user = Identity(uuid7(), account.user_id, account.tenant_id, account.role, account.instance_admin)
+    if needs_rehash(account.password_hash):
+        # Hashed again with this release's parameters, while the password is at hand (ADR-0131).
+        fresh = await hash_password(body.password)
+        async with transaction(engine, user) as connection:
+            await connection.execute(
+                text("UPDATE users SET password_hash = :hash WHERE id = :id"), {"hash": fresh, "id": user.user_id}
+            )
     async with transaction(engine, user) as connection:
         rows = await passkeys.credentials_of(connection, user.user_id)
     if not rows:

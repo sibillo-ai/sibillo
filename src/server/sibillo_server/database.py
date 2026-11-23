@@ -42,6 +42,7 @@ _SET_CONTEXT = text(
 )
 
 UNIQUE_VIOLATION = "23505"
+INSUFFICIENT_PRIVILEGE = "42501"
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -52,6 +53,8 @@ def create_engine(database_url: str) -> AsyncEngine:
         # as a session's 90 days are exact (ADR-0049).
         connect_args={"server_settings": {"timezone": "UTC", "application_name": "sibillo-api"}},
         pool_pre_ping=True,
+        # A database error never carries the request's values into the logs (OBS-003, ADR-0131).
+        hide_parameters=True,
     )
 
 

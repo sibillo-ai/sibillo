@@ -9,6 +9,7 @@ admins see every check.
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -98,8 +99,19 @@ async def _identity(request: Request, engine: Engine) -> Identity | None:
         return None
 
 
+# An anonymous check answers what was found at most this long before: it does no work of its own (ADR-0131).
+CACHE_SECONDS = 5.0
+_last: dict[str, Any] = {}
+
+
 @router.get("/health")
 async def get_health(request: Request, engine: Engine) -> JSONResponse:
+    identity = await _identity(request, engine)
+    admin = identity is not None and identity.instance_admin
+    found = _last.get("answer")
+    if not admin and found is not None and time.monotonic() - float(_last["at"]) < CACHE_SECONDS:
+        (status,) = found
+        return JSONResponse({"status": status}, status_code=503 if status == "unavailable" else 200)
     database, model = await _database_and_model(engine)
     checks: dict[str, Status] = {"database": database, **await _driver(request), "model_gateway": model}
     status_file: Path | None = request.app.state.configuration.backup_status
@@ -112,7 +124,7 @@ async def get_health(request: Request, engine: Engine) -> JSONResponse:
     else:
         status = "ok"
     body: dict[str, Any] = {"status": status}
-    identity = await _identity(request, engine)
-    if identity is not None and identity.instance_admin:
+    _last.update(answer=(status,), at=time.monotonic())
+    if admin:
         body["checks"] = checks
     return JSONResponse(body, status_code=503 if status == "unavailable" else 200)

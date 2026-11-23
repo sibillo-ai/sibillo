@@ -1086,8 +1086,9 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, pg_temp
     AS $$
-      SELECT s.id, s.user_id, s.tenant_id, u.role, u.instance_admin, u.password_change_required, s.expires_at,
-             s.revoked_at IS NOT NULL
+      -- However it is used, a session ends a year after it was made (ADR-0131).
+      SELECT s.id, s.user_id, s.tenant_id, u.role, u.instance_admin, u.password_change_required,
+             least(s.expires_at, s.created_at + interval '365 days'), s.revoked_at IS NOT NULL
       FROM public.device_sessions s
       JOIN public.users u ON u.tenant_id = s.tenant_id AND u.id = s.user_id
       WHERE s.token_hash = $1 AND u.disabled_at IS NULL
@@ -1244,6 +1245,10 @@ PRE_AUTHENTICATION_FUNCTIONS = [
       retry_at timestamptz;
     BEGIN
       PERFORM pg_advisory_xact_lock(hashtextextended('sibillo.login_attempts:' || lower($1), 0));
+      -- And of the source, so that failures for several usernames cannot race past its limit (ADR-0131).
+      IF $2 IS NOT NULL THEN
+        PERFORM pg_advisory_xact_lock(hashtextextended('sibillo.login_sources:' || host($2), 0));
+      END IF;
       DELETE FROM public.login_attempts a WHERE a.created_at < window_start;
       -- An empty username, for a sign-in token nobody holds, counts for the source only (ADR-0094).
       IF $1 <> '' THEN
@@ -1419,7 +1424,13 @@ APPLICATION_POLICIES = [
         f"CREATE POLICY passkeys_app_{operation.lower()} ON passkeys FOR {operation} TO sibillo_app {clause}"
         for operation, clause in (
             ("SELECT", "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR app_is_tenant_admin()))"),
-            ("DELETE", "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR app_is_tenant_admin()))"),
+            # A tenant admin removes another user's, never an instance admin's but as one (ADR-0131).
+            (
+                "DELETE",
+                "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR (app_is_tenant_admin()"
+                " AND (app_is_instance_admin() OR NOT EXISTS (SELECT 1 FROM users u WHERE u.tenant_id ="
+                " passkeys.tenant_id AND u.id = passkeys.user_id AND u.instance_admin)))))",
+            ),
             ("INSERT", "WITH CHECK (tenant_id = app_tenant_id() AND user_id = app_user_id())"),
             (
                 "UPDATE",

@@ -273,6 +273,21 @@ async def add_my_passkey(
     transports = _transports(body.credential)
     try:
         async with transaction(engine, identity) as connection:
+            first = (
+                await connection.execute(
+                    text("SELECT count(*) FROM passkeys WHERE user_id = :user"), {"user": identity.user_id}
+                )
+            ).scalar_one() == 0
+            if first:
+                # From now on signing in takes a passkey: sessions opened with the password alone end, but this
+                # one (ADR-0131).
+                await connection.execute(
+                    text(
+                        "UPDATE device_sessions SET revoked_at = now() WHERE user_id = :user AND id <> :current"
+                        " AND revoked_at IS NULL"
+                    ),
+                    {"user": identity.user_id, "current": identity.session_id},
+                )
             row = (
                 await connection.execute(
                     text(
@@ -336,7 +351,16 @@ async def count_user_passkeys(user_id: uuid.UUID, identity: Authenticated, engin
 
 @router.delete("/tenant/users/{user_id}/passkeys", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def remove_user_passkeys(user_id: uuid.UUID, identity: Authenticated, engine: Engine) -> Response:
+    # For a user who lost theirs: never one's own, which a stolen session would weaken, nor an instance admin's
+    # but by an instance admin (AUTH-010, ADR-0131).
+    if user_id == identity.user_id:
+        raise errors.permission_denied()
     async with transaction(engine, identity) as connection:
         await _tenant_user(connection, identity, user_id)
+        target = (
+            await connection.execute(text("SELECT instance_admin FROM users WHERE id = :id"), {"id": user_id})
+        ).scalar_one()
+        if target and not identity.instance_admin:
+            raise errors.permission_denied()
         await connection.execute(text("DELETE FROM passkeys WHERE user_id = :user"), {"user": user_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -10,6 +10,7 @@ Signing in itself, with a password and a passkey, is in `sign_in`.
 
 from __future__ import annotations
 
+import ipaddress
 import uuid
 from typing import Annotated, Any, Literal
 
@@ -25,13 +26,19 @@ from sibillo_server.network import Address, source_address
 router = APIRouter()
 
 # The web app's session cookie, and the header its changes carry (AUTH-005, ADR-0067).
-SESSION_COOKIE = "sibillo_session"
+# Only this host can set it: no sibling host plants a session (AUTH-005, ADR-0131).
+SESSION_COOKIE = "__Host-sibillo_session"
 REQUEST_HEADER = "x-sibillo-request"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 # Browsers keep a cookie at most 400 days; the session's own expiry still applies.
 COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60
+# The most sessions a user has at once (AUTH-004, ADR-0131).
+MAX_SESSIONS = 50
 
-USER_COLUMNS = "id, tenant_id, username, display_name, role, instance_admin, password_change_required, created_at"
+USER_COLUMNS = (
+    "id, tenant_id, username, display_name, role, instance_admin, password_change_required,"
+    " disabled_at IS NOT NULL AS disabled, created_at"
+)
 
 
 def engine_of(request: Request) -> AsyncEngine:
@@ -115,17 +122,23 @@ def user_response(row: Any) -> schemas.User:
         role=row.role,
         instance_admin=row.instance_admin,
         password_change_required=row.password_change_required,
+        disabled=row.disabled,
         created_at=row.created_at,
     )
 
 
 def request_source(request: Request) -> Address | None:
-    """The source address of a request, for rate limits (ADR-0050)."""
-    return source_address(
+    """The source address of a request, for rate limits (ADR-0050): every forwarding line, as one, since a proxy
+    may add a line of its own after the client's; an IPv6 source as its /64, which one host holds (ADR-0131)."""
+    lines = request.headers.getlist("x-forwarded-for")
+    found = source_address(
         request.client.host if request.client else None,
-        request.headers.get("x-forwarded-for"),
+        ",".join(lines) if lines else None,
         request.app.state.configuration.trusted_proxies,
     )
+    if isinstance(found, ipaddress.IPv6Address) and found.ipv4_mapped is None:
+        return ipaddress.IPv6Network(f"{found}/64", strict=False).network_address
+    return found
 
 
 async def check_attempt(engine: AsyncEngine, username: str, source: Address | None) -> None:
@@ -215,6 +228,15 @@ async def open_session(
                 },
             )
         ).one()
+        # At most fifty sessions: the least recently used gives way (ADR-0131).
+        await connection.execute(
+            text(
+                "UPDATE device_sessions SET revoked_at = now() WHERE user_id = :user AND revoked_at IS NULL"
+                " AND id NOT IN (SELECT id FROM device_sessions WHERE user_id = :user AND revoked_at IS NULL"
+                " ORDER BY last_used_at DESC, created_at DESC LIMIT :keep)"
+            ),
+            {"user": user.user_id, "keep": MAX_SESSIONS},
+        )
         row = (
             await connection.execute(text(f"SELECT {USER_COLUMNS} FROM users WHERE id = :id"), {"id": user.user_id})  # noqa: S608
         ).one()

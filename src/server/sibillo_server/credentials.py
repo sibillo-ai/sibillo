@@ -45,6 +45,14 @@ async def verify_password(password_hash: str | None, password: str) -> bool:
         return await asyncio.to_thread(verify)
 
 
+def needs_rehash(password_hash: str) -> bool:
+    """Whether a hash has older Argon2 parameters than this release uses (ADR-0131)."""
+    try:
+        return _HASHER.check_needs_rehash(password_hash)
+    except InvalidHashError:
+        return False
+
+
 def new_token() -> str:
     """An opaque session token of 256 random bits (ADR-0025)."""
     return secrets.token_urlsafe(TOKEN_BYTES)

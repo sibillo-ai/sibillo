@@ -257,6 +257,13 @@ def _public_origin(environment: Mapping[str, str]) -> str | None:
     secure = parts.scheme == "https" or (parts.scheme == "http" and host == "localhost")
     if not host or not secure or parts.path or parts.query or parts.fragment or "@" in parts.netloc:
         raise ConfigurationError(problem)
+    # A host, not an address: passkeys refuse an IP address as their relying party (ADR-0131).
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise ConfigurationError("SIBILLO_PUBLIC_ORIGIN must name a host, not an IP address: passkeys need one")
     default = 443 if parts.scheme == "https" else 80
     return f"{parts.scheme}://{host}" + ("" if port in (None, default) else f":{port}")
 

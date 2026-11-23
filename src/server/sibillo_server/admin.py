@@ -19,7 +19,7 @@ from sqlalchemy.exc import DBAPIError
 from sibillo_server import errors, schemas
 from sibillo_server.auth import USER_COLUMNS, Authenticated, Engine, user_response
 from sibillo_server.credentials import hash_password, uuid7
-from sibillo_server.database import UNIQUE_VIOLATION, sqlstate, transaction
+from sibillo_server.database import INSUFFICIENT_PRIVILEGE, UNIQUE_VIOLATION, sqlstate, transaction
 
 router = APIRouter()
 
@@ -102,6 +102,61 @@ async def list_users(
         ).all()
     items, next_cursor = _page(list(rows), limit, user_response)
     return schemas.UserPage(items=items, next_cursor=next_cursor)
+
+
+@router.patch("/tenant/users/{user_id}", response_model=schemas.User)
+async def update_user(
+    user_id: uuid.UUID, body: schemas.UpdateUserRequest, identity: Authenticated, engine: Engine
+) -> schemas.User:
+    """Disable or re-enable an account, or change its role (AUTH-008, ADR-0131).
+
+    Never one's own, never an instance admin's but by an instance admin, which the database checks too, and
+    never so that the tenant has no enabled tenant admin left.
+    """
+    present = body.model_fields_set
+    if not present:
+        raise errors.invalid("/", "empty")
+    for name in ("role", "disabled"):
+        if name in present and getattr(body, name) is None:
+            raise errors.invalid(f"/{name}", "null")
+    if not identity.tenant_admin or user_id == identity.user_id:
+        raise errors.permission_denied()
+    try:
+        async with transaction(engine, identity) as connection:
+            target = (
+                await connection.execute(
+                    text("SELECT role, instance_admin FROM users WHERE id = :id FOR UPDATE"), {"id": user_id}
+                )
+            ).one_or_none()
+            if target is None:
+                raise errors.not_found()
+            if target.instance_admin and not identity.instance_admin:
+                raise errors.permission_denied()
+            await connection.execute(
+                text(
+                    "UPDATE users SET role = coalesce(CAST(:role AS text), role),"
+                    " disabled_at = CASE WHEN CAST(:disabled AS boolean) IS NULL THEN disabled_at"
+                    " WHEN CAST(:disabled AS boolean) THEN coalesce(disabled_at, now()) ELSE NULL END"
+                    " WHERE id = :id"
+                ),
+                {"id": user_id, "role": body.role, "disabled": body.disabled},
+            )
+            # The household keeps an administrator (ADR-0131).
+            admins = (
+                await connection.execute(
+                    text("SELECT count(*) FROM users WHERE role = 'tenant_admin' AND disabled_at IS NULL")
+                )
+            ).scalar_one()
+            if admins == 0:
+                raise errors.conflict()
+            row = (
+                await connection.execute(text(f"SELECT {USER_COLUMNS} FROM users WHERE id = :id"), {"id": user_id})  # noqa: S608
+            ).one()
+    except DBAPIError as error:
+        if sqlstate(error) == INSUFFICIENT_PRIVILEGE:
+            raise errors.permission_denied() from None
+        raise
+    return user_response(row)
 
 
 @router.post("/instance/tenants", status_code=status.HTTP_201_CREATED, response_model=schemas.Tenant)
