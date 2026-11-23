@@ -89,6 +89,42 @@ class CheckWorkflowsTest(unittest.TestCase):
         self.assertProblem(GOOD.replace("  contents: read\n", "  contents: write\n"), "write permission")
         self.assertProblem(GOOD.replace("permissions:\n  contents: read\n", "permissions: write-all\n"), "write")
 
+    @mark.spec("REPO-007", "REPO-008")
+    def test_events_are_found_at_any_indentation(self) -> None:
+        deeper = GOOD.replace(
+            "on:\n  push:\n    branches: [master]\n  pull_request:\n", "on:\n    pull_request_target:\n"
+        )
+        self.assertProblem(deeper, "pull_request_target")
+
+    @mark.spec("REPO-007")
+    def test_workflow_run_and_issue_comment_are_refused(self) -> None:
+        for event in ("workflow_run", "issue_comment"):
+            with self.subTest(event=event):
+                self.assertProblem(GOOD.replace("  pull_request:\n", f"  pull_request:\n  {event}:\n"), event)
+
+    @mark.spec("REPO-007")
+    def test_untrusted_input_is_not_interpolated_into_inputs_of_actions(self) -> None:
+        step = (
+            f"      - uses: actions/github-script@{SHA} # v8\n"
+            "        with:\n"
+            "          script: console.log('${{ github.event.pull_request.title }}')\n"
+        )
+        self.assertProblem(GOOD.replace("      - name: Install\n", step + "      - name: Install\n"), "interpolated")
+
+    @mark.spec("REPO-007")
+    def test_write_all_is_refused_anywhere(self) -> None:
+        release = GOOD.replace("  pull_request:\n", "").replace(
+            "permissions:\n  contents: read\n", "permissions: write-all\n"
+        )
+        self.assertProblem(release, "write-all", name="release.yml")
+
+    @mark.spec("REPO-007")
+    def test_docker_actions_are_pinned_by_digest(self) -> None:
+        tagged = GOOD.replace(f"actions/checkout@{SHA}", "docker://alpine:3.22")
+        self.assertProblem(tagged, "not pinned")
+        pinned = GOOD.replace(f"actions/checkout@{SHA}", "docker://alpine:3.22@sha256:" + "a" * 64)
+        self.assertEqual(self.problems(pinned), [])
+
     @mark.spec("REPO-008")
     def test_secrets_are_allowed_where_pull_requests_cannot_reach(self) -> None:
         release = GOOD.replace("  pull_request:\n", "").replace(
