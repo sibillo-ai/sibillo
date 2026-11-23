@@ -7,9 +7,11 @@ specs/contracts/openapi.yaml, session lifetime as in ADR-0049.
 from __future__ import annotations
 
 import datetime
+import time
 from typing import Any
 
 import pytest
+from argon2 import PasswordHasher
 
 from tests.support.accounts import (
     Account,
@@ -107,6 +109,37 @@ def test_invalid_login_requests_are_rejected(server: Server, payload: dict[str, 
         response = client.post("/auth/login", json=payload)
     problem = assert_problem(response, 422, "request.validation_failed")
     assert problem["errors"]
+
+
+@pytest.mark.spec("AUTH-006")
+def test_an_attempt_over_the_limit_is_refused_without_checking_its_password(
+    database: Database, server: Server, account: Account
+) -> None:
+    # A password whose check takes about a second, so that skipping it shows in the time of the answer.
+    with database.superuser() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (PasswordHasher(time_cost=100).hash(account.password), account.id),
+        )
+    attempt = {"username": account.username, "password": account.password, "device_name": "x"}
+    with server.client() as client:
+        started = time.monotonic()
+        response = client.post("/auth/login", json=attempt)
+        checked = time.monotonic() - started
+    assert response.status_code == 201, response.text
+    with database.superuser() as conn:
+        for _ in range(5):
+            conn.execute(
+                "INSERT INTO login_attempts (username, source, success, created_at)"
+                " VALUES (%s, %s::inet, false, now())",
+                (account.username, fresh_source()),
+            )
+    with server.client() as client:
+        started = time.monotonic()
+        response = client.post("/auth/login", json=attempt)
+        refused = time.monotonic() - started
+    assert_problem(response, 429, "auth.rate_limited")
+    assert refused < checked / 2, (refused, checked)
 
 
 @pytest.mark.spec("AUTH-006")

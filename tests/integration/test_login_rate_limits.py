@@ -40,6 +40,17 @@ def _attempt(database: Database, username: str, source: str, *, success: bool) -
     return row
 
 
+def _check(database: Database, username: str, source: str) -> tuple[bool, int]:
+    """Whether an attempt would be allowed now, as the server asks before checking a password (ADR-0118)."""
+    with database.app() as conn:
+        row = conn.execute(
+            "SELECT allowed, retry_after_seconds FROM auth_check_login_attempt(%s, %s::inet)", (username, source)
+        ).fetchone()
+        conn.commit()
+    assert row is not None
+    return row
+
+
 def _arrange_failures(database: Database, username: str, source: str, minutes_ago: list[int]) -> None:
     with database.superuser() as conn:
         for minutes in minutes_ago:
@@ -135,3 +146,26 @@ def test_retry_waits_for_the_longer_limit_when_both_are_reached(database: Databa
     allowed, retry_after = _attempt(database, username, source, success=False)
     assert not allowed
     assert 590 <= retry_after <= 600
+
+
+@pytest.mark.spec("AUTH-006")
+def test_checking_an_attempt_answers_as_recording_it_would_and_records_nothing(database: Database) -> None:
+    username, source = _username(), _source()
+    assert _check(database, username, source) == (True, 0)
+    assert _recorded(database, username) == 0
+    # Over the username limit: refused, with the delay recording it would give.
+    _arrange_failures(database, username, _source(), [10, 9, 8, 7, 6])
+    allowed, retry_after = _check(database, username, source)
+    assert not allowed
+    # Called a moment apart, the delays may differ by a rounded-up second.
+    assert abs(retry_after - _attempt(database, username, source, success=True)[1]) <= 1
+    assert _recorded(database, username) == 5
+    # Over the source limit, for any username.
+    crowded = _source()
+    _arrange_failures(database, _username(), crowded, [5] * SOURCE_LIMIT)
+    assert _check(database, _username(), crowded)[0] is False
+    # Nothing is deleted either: a failure outside the window stays until an attempt is recorded.
+    old = _username()
+    _arrange_failures(database, old, _source(), [WINDOW_SECONDS // 60 + 1])
+    assert _check(database, old, _source()) == (True, 0)
+    assert _recorded(database, old) == 1
