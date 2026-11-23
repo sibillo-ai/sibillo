@@ -92,11 +92,21 @@ jobs:
               --ignore=tests/integration/test_ollama.py --ignore=tests/integration/test_skills.py
               --ignore=tests/integration/test_tasks.py --ignore=tests/integration/test_task_use.py
               --ignore=tests/integration/test_conversation_tools.py --ignore=tests/integration/test_change_stream.py
+              --ignore=tests/integration/test_workspaces.py --ignore=tests/integration/test_workspace_disks.py
+              --ignore=tests/integration/test_backups.py --ignore=tests/integration/test_operator_commands.py
             # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
             # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
             # Raised from 360 with the sandbox engine (ADR-0114), whose start adds 20 to 30 seconds to
             # the session, on runners whose time for the same tests varies by up to 80 seconds.
             budget: 420
+          # Workspaces, their disks, backups and the operator's commands, out of the core part, which
+          # took 437 seconds on a fast machine with them, over its budget; about 115 seconds, and the
+          # session's start.
+          - part: workspaces
+            paths: >-
+              tests/integration/test_workspaces.py tests/integration/test_workspace_disks.py
+              tests/integration/test_backups.py tests/integration/test_operator_commands.py
+            budget: 240
           - part: runs
             paths: tests/integration/test_runs_api.py tests/integration/test_agent_tools.py
             budget: 240
@@ -153,10 +163,17 @@ jobs:
           # The web client in Chromium, and its unit tests (ADR-0067). Its
           # browser tests grew with the daily-use conversations (ADR-0073).
           - part: web
-            paths: tests/web --ignore=tests/web/test_workspace_panel.py
+            paths: >-
+              tests/web --ignore=tests/web/test_workspace_panel.py --ignore=tests/web/test_web_client.py
             # Raised from 300 with the remote MCP servers' browser tests (UX-029), about 25 seconds,
             # and from 360 with the sandbox engine (ADR-0114), as the core part.
             budget: 420
+          # The conversation itself in Chromium, a third of the browser tests, out of the web part,
+          # which took 394 seconds on a fast machine with it and up to 454 on a runner; about 130
+          # seconds, and the session's start.
+          - part: web-chat
+            paths: tests/web/test_web_client.py
+            budget: 240
           # The workspace panel in Chromium (ADR-0079): its files live in a
           # sandbox, which each test starts.
           - part: web-files
