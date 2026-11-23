@@ -486,11 +486,15 @@ class ToolList(Response):
 
 class Allowances(Response):
     internet_access: bool
+    # The turn that is going on has internet access for the turn only (UX-042, ADR-0115).
+    turn_internet_access: bool = False
     tools: list[ToolName]
 
 
 class AllowancesUpdate(Request):
     internet_access: bool
+    # Read-only: what a client read back is accepted, and ignored (ADR-0115).
+    turn_internet_access: bool | None = None
     tools: DisabledTools
 
 
@@ -560,6 +564,8 @@ class CreateConversationRequest(Request):
     disabled_tools: DisabledTools | None = None
     disabled_servers: DisabledServers | None = None
     temporary: bool = False
+    # Turned on on the new-chat screen (UX-042, ADR-0115).
+    internet_access: bool = False
 
 
 class UpdateConversationRequest(Request):

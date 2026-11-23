@@ -35,16 +35,23 @@ from sibillo_server.plans import CONVERSATION_PLAN, copy_plan, plan_steps
 from sibillo_server.questions import interrupts
 from sibillo_server.sandbox import SandboxDriver, withdraw_network, workspace_request
 from sibillo_server.settings import new_conversation
+from sibillo_server.tool_policy import denies_internet_access
 
 router = APIRouter()
 
+# Whether the turn that is going on has internet access for the turn only, until its last run ends (ADR-0115).
+TURN_INTERNET_ACCESS = (
+    "coalesce((SELECT r.turn_allows_internet_access AND r.status IN ('queued', 'running', 'interrupted')"
+    " FROM runs r WHERE r.id = conversations.active_run_id), false) AS turn_internet_access"
+)
 CONVERSATION_COLUMNS = (
     "id, title, archived_at IS NOT NULL AS archived, temporary, task_id, task_name, active_run_id, connection_id,"
     " model, reasoning,"
     " disabled_tools, disabled_skills, disabled_servers, allowed_internet_access, allowed_tools, base_instructions,"
     " additional_instructions, folder_id,"
     " pinned_at IS NOT NULL AS pinned, forked_from_conversation_id, forked_from_run_id, last_message_at,"
-    f" pending_interrupts, approvals_expire_at, {CONVERSATION_PLAN}, created_at, updated_at, {CONVERSATION_COST}"
+    f" pending_interrupts, approvals_expire_at, {CONVERSATION_PLAN}, created_at, updated_at, {CONVERSATION_COST},"
+    f" {TURN_INTERNET_ACCESS}"
 )
 ACTIVE_STATUSES = ("queued", "running")
 # The most of a model's stated reason a failed run's error repeats (MOD-015).
@@ -80,7 +87,11 @@ def conversation_response(row: Any) -> schemas.Conversation:
         disabled_tools=list(row.disabled_tools),
         disabled_skills=list(row.disabled_skills),
         disabled_servers=list(row.disabled_servers),
-        allowances=schemas.Allowances(internet_access=row.allowed_internet_access, tools=list(row.allowed_tools)),
+        allowances=schemas.Allowances(
+            internet_access=row.allowed_internet_access,
+            turn_internet_access=row.turn_internet_access,
+            tools=list(row.allowed_tools),
+        ),
         base_instructions=row.base_instructions,
         additional_instructions=row.additional_instructions,
         folder_id=row.folder_id,
@@ -135,13 +146,17 @@ async def create_conversation(
         reasoning = body.reasoning if body is not None and body.reasoning is not None else defaults.reasoning
         disabled = body.disabled_tools if body is not None and body.disabled_tools is not None else None
         servers_off = body.disabled_servers if body is not None and body.disabled_servers is not None else None
+        # Internet access its user turned on for it, unless their permissions deny it (UX-042, ADR-0115).
+        internet = body is not None and body.internet_access
+        if internet and await _denies_internet_access(connection, identity):
+            raise errors.invalid("/internet_access", "denied")
         row = (
             await connection.execute(
                 text(
                     "INSERT INTO conversations (id, tenant_id, owner_id, title, connection_id, model, reasoning,"  # noqa: S608
-                    " disabled_tools, disabled_servers, temporary, last_message_at, created_at, updated_at) VALUES"
-                    " (:id, :tenant_id, :owner_id, :title, :connection_id, :model, :reasoning, :disabled_tools,"
-                    " :disabled_servers, :temporary, now(), now(), now())"
+                    " disabled_tools, disabled_servers, temporary, allowed_internet_access, last_message_at,"
+                    " created_at, updated_at) VALUES (:id, :tenant_id, :owner_id, :title, :connection_id, :model,"
+                    " :reasoning, :disabled_tools, :disabled_servers, :temporary, :internet, now(), now(), now())"
                     f" RETURNING {CONVERSATION_COLUMNS}"
                 ),
                 {
@@ -156,6 +171,7 @@ async def create_conversation(
                     "disabled_tools": defaults.disabled_tools if disabled is None else disabled,
                     "disabled_servers": defaults.disabled_servers if servers_off is None else servers_off,
                     "temporary": body is not None and body.temporary,
+                    "internet": internet,
                 },
             )
         ).one()
@@ -233,13 +249,23 @@ async def update_conversation(
         for name in ("pinned", "reasoning", "disabled_tools", "disabled_skills", "disabled_servers", "allowances"):
             if name in present and getattr(body, name) is None:
                 raise errors.invalid(f"/{name}", "null")
-        # Allowances are only withdrawn here; only an answered approval request creates one (AGT-006, AGT-012).
+        # Tools are only withdrawn here: only an answered approval request allows one (AGT-006, AGT-012). Internet
+        # access is turned on or off by its user (UX-042, ADR-0115).
         allowances = body.allowances
-        if allowances is not None and (
-            (allowances.internet_access and not conversation.allowed_internet_access)
-            or not set(allowances.tools) <= set(conversation.allowed_tools)
-        ):
+        if allowances is not None and not set(allowances.tools) <= set(conversation.allowed_tools):
             raise errors.invalid("/allowances", "only_withdrawn")
+        if (
+            allowances is not None
+            and allowances.internet_access
+            and await _denies_internet_access(connection, identity)
+        ):
+            raise errors.invalid("/allowances/internet_access", "denied")
+        if allowances is not None and not allowances.internet_access and conversation.active_run_id is not None:
+            # Off for the turn that is going on too.
+            await connection.execute(
+                text("UPDATE runs SET turn_allows_internet_access = false WHERE id = :id"),
+                {"id": conversation.active_run_id},
+            )
         changes = {
             "title": body.title if "title" in present else None,
             "archived": body.archived if "archived" in present else None,
@@ -288,7 +314,11 @@ async def update_conversation(
                 changes | {"id": conversation_id},
             )
         ).one()
-    if allowances is not None and conversation.allowed_internet_access and not allowances.internet_access:
+    if (
+        allowances is not None
+        and not allowances.internet_access
+        and (conversation.allowed_internet_access or conversation.turn_internet_access)
+    ):
         # Withdrawn: the conversation's sandbox loses its network at once (AGT-034, SBX-024).
         await withdraw_network(_driver(request), identity, conversation_id)
     return conversation_response(row)
@@ -438,6 +468,14 @@ async def fork_conversation(
         await workspace_request(_driver(request), identity, fork_id, "POST", source)
         await announce(connection, identity, event("conversation_created", conversation_id=fork_id))
     return conversation_response(row)
+
+
+async def _denies_internet_access(connection: AsyncConnection, identity: Identity) -> bool:
+    """Whether the user's permissions deny internet access (AGT-034, ADR-0113)."""
+    # Imported here: the permissions' routes use this module's cursors.
+    from sibillo_server.permissions import permissions_of
+
+    return denies_internet_access(await permissions_of(connection, identity.user_id))
 
 
 def _driver(request: Request) -> SandboxDriver:

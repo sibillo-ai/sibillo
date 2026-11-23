@@ -29,10 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
 from sibillo_server.gateway import RunDeps
+from sibillo_server.internet import current_allowances
 from sibillo_server.mcp_runs import offered_names, shown
 from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
     DENIED_INTERNET_ACCESS,
+    INTERNET_TOOLS,
     TASK_PROPOSALS,
     decide,
     denied,
@@ -131,6 +133,8 @@ class Approvals(AbstractCapability[RunDeps]):
     ) -> Any:
         deps = ctx.deps
         run_id = deps.run_id
+        # Internet access is read again before each call that needs it: its user may have changed it (ADR-0115).
+        allowances = await current_allowances(deps) if call.tool_name in INTERNET_TOOLS else deps.allowances
         if ctx.tool_call_approved:
             # Approved by the user: the call was made by the run the answer continues.
             metadata = cast(dict[str, Any], ctx.tool_call_metadata or {})
@@ -139,14 +143,14 @@ class Approvals(AbstractCapability[RunDeps]):
             if reason == "internet_access":
                 # Internet access covers the call's way out, not what else its tool needs, such as the
                 # approval its permission asks for (AGT-002, AGT-034).
-                again = decide(call.tool_name, deps.permissions, False, deps.allowances)
+                again = decide(call.tool_name, deps.permissions, False, allowances)
                 if again.request is not None:
                     raise ApprovalRequired(
                         metadata={"reason": again.request.reason, "scopes": list(again.request.scopes)}
                     )
         else:
             untrusted = deps.untrusted or has_untrusted_content(ctx.messages)
-            decision = decide(call.tool_name, deps.permissions, untrusted, deps.allowances)
+            decision = decide(call.tool_name, deps.permissions, untrusted, allowances)
             if decision.denied:
                 # The user denied internet access in this turn: denied again, without asking (AGT-034).
                 async with transaction(deps.engine, deps.identity) as connection:

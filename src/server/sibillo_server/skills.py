@@ -46,6 +46,7 @@ from sibillo_server.auth import Authenticated, Engine
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
 from sibillo_server.gateway import RunDeps
+from sibillo_server.internet import current_allowances
 from sibillo_server.sandbox import SandboxBackend, SandboxDriver, workspace_request
 from sibillo_server.tool_policy import SKILL_ORIGIN, has_untrusted_content
 
@@ -1031,12 +1032,19 @@ def sandbox_preparer(deps: RunDeps) -> Callable[[], Awaitable[None]]:
     """What gives the run's skills to its sandbox, once, before its first command (SBX-022, ADR-0096), then starts
     it, with network only when the run has internet access (SBX-024, AGT-034, ADR-0113)."""
     given = False
+    # Whether the driver was last told that the conversation has internet access (SBX-024, ADR-0115).
+    online = False
     lock = asyncio.Lock()
 
     async def prepare() -> None:
-        nonlocal given
+        nonlocal given, online
         async with lock:
+            # Its user may turn internet access on or off during the run: the next command follows it.
+            wanted = (await current_allowances(deps)).has_internet_access
             if given:
+                if wanted != online:
+                    await _ensure(deps, wanted)
+                    online = wanted
                 return
             skills: tuple[RunSkill, ...] = deps.skills or ()
             files: dict[str, Mapping[str, SkillFile]] = {}
@@ -1055,17 +1063,32 @@ def sandbox_preparer(deps: RunDeps) -> Callable[[], Awaitable[None]]:
                     response = await client.put(path, content=archive, headers={"Content-Type": "application/x-tar"})
                     if response.status_code == 204:
                         response = await client.post(
-                            path.removesuffix("/skills") + "/ensure",
-                            json={"internet_access": deps.allowances.has_internet_access},
+                            path.removesuffix("/skills") + "/ensure", json={"internet_access": wanted}
                         )
             except httpx.HTTPError as error:
                 raise WorkspaceUnavailableError(f"the sandbox driver is unreachable: {error}") from error
             if response.status_code != 200:
                 # As any other refusal of the driver, the sandbox is unavailable (SBX-023).
                 raise WorkspaceUnavailableError(f"the sandbox is unavailable ({response.status_code})")
-            given = True
+            given, online = True, wanted
 
     return prepare
+
+
+async def _ensure(deps: RunDeps, internet_access: bool) -> None:
+    """Tell the driver whether the conversation has internet access, so that its sandbox has network (SBX-024)."""
+    path = f"/sandboxes/{deps.identity.tenant_id}/{deps.identity.user_id}/{deps.conversation_id}/ensure"
+    try:
+        async with httpx.AsyncClient(
+            base_url=deps.sandboxd_url,
+            headers={"Authorization": f"Bearer {deps.sandboxd_token}"},
+            timeout=DRIVER_TIMEOUT_SECONDS,
+        ) as client:
+            response = await client.post(path, json={"internet_access": internet_access})
+    except httpx.HTTPError as error:
+        raise WorkspaceUnavailableError(f"the sandbox driver is unreachable: {error}") from error
+    if response.status_code != 200:
+        raise WorkspaceUnavailableError(f"the sandbox is unavailable ({response.status_code})")
 
 
 UNTRUSTED_MARK = "[Untrusted: written by someone other than the user]"
