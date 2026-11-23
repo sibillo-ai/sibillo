@@ -771,7 +771,7 @@ caught would be no approval at all.
 
 ## UX-042: A switch for internet access
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** e2e
