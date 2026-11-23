@@ -120,3 +120,20 @@ def test_each_service_holds_only_what_it_needs() -> None:
         assert "no-new-privileges:true" in services[name].get("security_opt", []), name
     # The driver has a ceiling of memory: what it reads of sandboxes cannot take the host's (ADR-0129).
     assert services["sandboxd"].get("mem_limit") == "1g"
+
+
+@pytest.mark.spec("OPS-003")
+def test_the_services_keep_only_what_they_need() -> None:
+    compose = cast(dict[str, Any], yaml.safe_load(COMPOSE.read_text()))
+    services = _services()
+    # The internal network reaches nothing outside; those that call out are also on egress (ADR-0134).
+    assert compose["networks"]["internal"].get("internal") is True
+    for name in ("api", "worker"):
+        assert "egress" in services[name]["networks"], name
+    for name in ("postgres", "sandboxd", "migrate"):
+        assert "egress" not in services[name].get("networks", ["internal"]), name
+    for name in ("api", "worker", "migrate", "sandboxd"):
+        assert services[name].get("cap_drop") == ["ALL"], name
+    for name in ("api", "worker", "migrate", "netguard"):
+        assert services[name].get("read_only") is True, name
+        assert services[name].get("tmpfs"), name
