@@ -154,6 +154,10 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **What runs on after untrusted content arrives.** A command started
+  before a run held untrusted content keeps running, and may run files
+  written under injection, such as a server that reloads its code; a
+  change of permissions or switches applies from the next run (ADR-0127).
 - **A link the assistant wrote.** Injected content can make an answer link
   to an address that carries private data in its path or query. Clients
   show the link's host before it is clicked, but not the rest of the

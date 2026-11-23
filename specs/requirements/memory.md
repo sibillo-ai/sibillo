@@ -99,6 +99,7 @@ untrusted content when it calls the tool (AGT-003) MUST be untrusted; a
 memory item the user writes or saves MUST be trusted. Untrusted memory items
 MUST be given to the model labeled as untrusted content, and a run given any
 untrusted memory item MUST count as having untrusted content from its start
-(AGT-004, ADR-0095).
+(AGT-004, ADR-0095). In a run with untrusted content, changing or deleting
+an item the user wrote MUST ask for approval (ADR-0127).
 
 Rationale: threat T-35.

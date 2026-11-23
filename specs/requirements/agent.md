@@ -111,7 +111,8 @@ user, and MUST NOT be copied into a fork (ADR-0090).
 An approval request that is not answered within 24 hours, or that cannot be
 delivered, MUST be treated as denied: a scheduled job MUST resume the
 conversation with its pending approvals denied and its pending questions
-declined. A denied call MUST NOT run, and the model MUST be told the user
+declined, or, when that run cannot be made, deny them without one, so that
+the conversation is never left waiting (ADR-0127). A denied call MUST NOT run, and the model MUST be told the user
 denied it. The approval request MUST show the tool, its arguments in full,
 what the call does, the data involved and its destination, and why it needs
 approval (ADR-0090).
@@ -241,7 +242,9 @@ Rationale: journey J7.
 When the history of a run would exceed 80% of the context window of the
 conversation's model, the system MUST compact the history sent to the model:
 the conversation's model summarizes the oldest turns, and the most recent
-ones stay as they are. The context window comes from the provider or, for a
+ones stay as they are. The summary MUST reach the model as the assistant's
+summary, which may repeat untrusted content, never as the user's words
+(ADR-0127). The context window comes from the provider or, for a
 connection to the household's own server, from the connection, which a
 tenant admin can set. Compaction MUST NOT change the stored conversation,
 which the user can still read, rewind and fork in full (ADR-0041, ADR-0073).

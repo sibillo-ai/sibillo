@@ -52,7 +52,8 @@ Three forces shape it:
 4. **Their declaration** (AGT-005): no capability classes, allowed by
    default. They change only the user's own memory, which the user sees,
    corrects and deletes; what they write is guarded by provenance
-   (point 5), not by approvals. Tool permissions reach them as any tool
+   (point 5), not by approvals. Amended by ADR-0127: in a run with
+   untrusted content, changing or deleting an item the user wrote asks. Tool permissions reach them as any tool
    (AGT-002), and clients list them in a group of their own, Memory, with a
    switch per tool, as ADR-0087 does for the others (CNV-013).
 5. **Provenance** (MEM-005, MEM-008). Each item records its origin: `user`
