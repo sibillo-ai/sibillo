@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 import pytest
 
-from tests.support.accounts import Account, create_account, create_tenant, login
+from tests.support.accounts import Account, assert_problem, create_account, create_tenant, login
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel, HouseholdModel
 from tests.support.model import saw
@@ -275,8 +275,14 @@ def test_a_web_page_is_served_to_run_in_an_opaque_origin_without_network(server:
         assert _put(client, conversation, "site/planner.html", page).status_code == 201
         assert _put(client, conversation, "notes.txt", b"plain").status_code == 201
         file = f"{_workspace(conversation)}/file"
-        served = client.get(file, params={"path": "site/planner.html", "page": "true"})
-        refused = client.get(file, params={"path": "notes.txt", "page": "true"})
+        framed = {"Sec-Fetch-Dest": "iframe"}
+        served = client.get(file, params={"path": "site/planner.html", "page": "true"}, headers=framed)
+        refused = client.get(file, params={"path": "notes.txt", "page": "true"}, headers=framed)
+        # Only to a frame: opened as a document of its own, as from a link, it is refused (ADR-0125).
+        unframed = [
+            client.get(file, params={"path": "site/planner.html", "page": "true"}, headers=headers)
+            for headers in ({}, {"Sec-Fetch-Dest": "document"})
+        ]
         preview = client.get(file, params={"path": "site/planner.html", "preview": "true"})
     assert served.status_code == 200, served.text
     assert served.content == page
@@ -292,9 +298,24 @@ def test_a_web_page_is_served_to_run_in_an_opaque_origin_without_network(server:
     assert policy["sandbox"] == ["allow-scripts"]
     # No network: inline code and styles, data and blobs, nothing from any address.
     assert policy["default-src"] == ["'none'"]
+    # No other way out it can be denied: forms, a base address, frames, WebRTC, DNS prefetching (ADR-0125).
+    for directive in ("form-action", "base-uri", "frame-src"):
+        assert policy[directive] == ["'none'"], directive
+    assert policy["webrtc"] == ["'block'"]
+    assert served.headers["x-dns-prefetch-control"] == "off"
+    for response in unframed:
+        assert_problem(response, 415, "file.not_previewable")
     for directive, values in policy.items():
         for value in values:
-            assert value in {"'none'", "'unsafe-inline'", "'unsafe-eval'", "data:", "blob:", "allow-scripts"}, (
+            assert value in {
+                "'none'",
+                "'unsafe-inline'",
+                "'unsafe-eval'",
+                "'block'",
+                "data:",
+                "blob:",
+                "allow-scripts",
+            }, (
                 directive,
                 value,
             )

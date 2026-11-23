@@ -65,7 +65,7 @@ def test_missing_files_are_not_found_and_nothing_outside_the_app_is_served(web: 
     assert httpx.get(f"{web}/..%2f..%2fetc%2fpasswd", timeout=10).text != "root"
 
 
-@pytest.mark.spec("UX-002")
+@pytest.mark.spec("UX-002", "ART-003")
 def test_the_app_runs_only_its_own_scripts(web: str) -> None:
     policy = httpx.get(f"{web}/", timeout=10).headers["content-security-policy"]
     directives = {part.strip().split(" ", 1)[0]: part.strip() for part in policy.split(";") if part.strip()}
@@ -73,6 +73,8 @@ def test_the_app_runs_only_its_own_scripts(web: str) -> None:
     assert directives["object-src"] == "object-src 'none'"
     assert directives["base-uri"] == "base-uri 'none'"
     assert directives["frame-ancestors"] == "frame-ancestors 'none'"
+    # The app frames only its own pages, which run in an opaque origin (ART-003, ADR-0125).
+    assert directives["frame-src"] == "frame-src 'self'"
 
 
 @pytest.mark.spec("UX-006")
