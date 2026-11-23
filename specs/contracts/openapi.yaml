@@ -1730,7 +1730,10 @@ paths:
         its messages, run events and durable workflow; `null` deletes every
         run, so that the next run is the first turn again (CNV-004,
         ADR-0068). Workspace files are not changed. Entries of the cost
-        ledger are kept, detached from the deleted runs. Refused with
+        ledger are kept, detached from the deleted runs. When a deleted run
+        held untrusted content, the conversation's allowances are withdrawn,
+        and its later runs hold untrusted content from their start
+        (ADR-0123). Refused with
         `run.interrupt_pending` while an interrupt is pending, and with
         `run.in_progress` while a run is queued or running.
       x-requirements: [CNV-004, TEN-006]

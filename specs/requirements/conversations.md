@@ -54,7 +54,11 @@ A user MUST be able to rewind a conversation to any earlier turn, or to
 before its first turn, and continue from there. What followed that turn MUST
 be deleted: its messages, runs and run events (ADR-0068). Rewinding MUST NOT
 change files in the conversation's workspace, and the API contract MUST say so;
-clients ask first and tell the user (UX-010).
+clients ask first and tell the user (UX-010). A rewind that deletes a run
+holding untrusted content (AGT-003) MUST withdraw the conversation's
+allowances, and every later run of that conversation MUST count as having
+untrusted content from its start, since its task list and workspace may
+carry that content (ADR-0123).
 
 Rationale: journey J2.
 
@@ -69,7 +73,10 @@ A user MUST be able to fork a conversation at any turn into a new
 conversation, which starts with a copy of the history up to that turn and
 then evolves independently. The fork MUST record the conversation and turn it
 came from, MUST be placed in the same folder (ADR-0073), and MUST start with a
-copy of the original conversation's workspace (SBX-010, ADR-0078).
+copy of the original conversation's workspace (SBX-010, ADR-0078). A fork of
+a conversation whose runs hold untrusted content anywhere, or whose rewinds
+left it untrusted, MUST count as having untrusted content from its start
+(ADR-0123).
 
 Rationale: journeys J2 and J3.
 
