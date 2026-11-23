@@ -337,7 +337,9 @@ each sandbox MUST have a sandbox bridge of its own. It
 MUST be applied and verified before any code runs (SBX-015); a sandbox whose
 state cannot be verified MUST have no network. Security tests MUST verify
 this from inside a running sandbox, and from a test container with network
-administration privileges attached like a sandbox (ADR-0113).
+administration privileges attached like a sandbox (ADR-0113). A sandbox of
+its own that downloads skills the user imports (AGT-025) has network: it
+fetches only the address the user gave, and holds nothing of theirs.
 
 Rationale: with a sandbox that always reaches the internet, a prompt is the
 only thing between injected instructions and the user's files (T-08, T-46).
