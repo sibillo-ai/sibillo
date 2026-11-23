@@ -344,7 +344,7 @@ only thing between injected instructions and the user's files (T-08, T-46).
 
 ## SBX-025: The sandbox engine
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** design, integration, security
