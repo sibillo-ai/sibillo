@@ -353,6 +353,9 @@ def test_sandbox_containers_follow_the_fixed_policy(sandboxes: Driver) -> None:
         assert host["Privileged"] is False
         assert host["Runtime"] == "runsc"
         assert not host.get("CapAdd")
+        # No raw packets on its link, and found by its image's name whatever its build (SBX-006, ADR-0129).
+        assert "NET_RAW" in (host.get("CapDrop") or [])
+        assert container["Config"]["Labels"].get("dev.sibillo.sandbox.image") == sandboxes.image
         assert host.get("PidMode", "") in {"", "private"}
         assert host.get("IpcMode", "") in {"", "private", "shareable", "none"}
         # A bridge of the engine's Docker, never the engine's own network namespace nor another container's.
@@ -807,3 +810,45 @@ def test_no_network_is_gained_by_posing_as_a_sandbox_that_has_it(sandboxes: Driv
     finally:
         docker("rm", "-f", sniffer, intruder, check=False)
         docker("network", "rm", bridge, check=False)
+
+
+@pytest.mark.spec("SBX-005")
+def test_the_table_blocks_the_special_ranges_too(sandboxes: Driver) -> None:
+    table = host_docker("exec", sandboxes.netguard, "nft", "list", "table", "inet", "sibillo")
+    # Azure's WireServer, protocol assignments, benchmarking and documentation ranges (ADR-0129).
+    for network in ("168.63.129.16", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24"):
+        assert network in table, network
+    assert "203.0.113.0/24" in table
+
+
+@pytest.mark.spec("SBX-011")
+def test_no_more_sandboxes_run_at_once_than_the_ceiling(sandboxes: Driver) -> None:
+    port = free_port()
+    process = start_driver_process(sandboxes.environment(port, SIBILLO_SANDBOX_MAX_RUNNING="1"))
+    try:
+        base = f"http://127.0.0.1:{port}/v1"
+        headers = {"Authorization": f"Bearer {sandboxes.token}"}
+        deadline = time.monotonic() + 120
+        while True:
+            try:
+                if httpx.get(f"{base}/health", headers=headers, timeout=10).status_code == 200:
+                    break
+            except httpx.TransportError:
+                pass
+            assert time.monotonic() < deadline, process.output()
+            time.sleep(0.5)
+        first, second = _sandbox(), _sandbox()
+        started = httpx.post(
+            f"{base}/sandboxes/{'/'.join(first)}/ensure", json={"internet_access": False}, headers=headers, timeout=60
+        )
+        assert started.status_code == 200, started.text
+        refused = httpx.post(
+            f"{base}/sandboxes/{'/'.join(second)}/ensure", json={"internet_access": False}, headers=headers, timeout=60
+        )
+        assert refused.status_code == 503, refused.text
+        assert refused.json()["code"] == "driver.isolation_unavailable"
+        httpx.post(f"{base}/sandboxes/{'/'.join(first)}/stop", headers=headers, timeout=60)
+    finally:
+        process.close()
+    # The session's driver starts its sandboxes again on demand.
+    sandboxes.wait_until_ready()

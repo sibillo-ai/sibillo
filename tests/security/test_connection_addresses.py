@@ -35,7 +35,8 @@ def tenant_admin(database: Database) -> Account:
 
 
 def _openai(base_url: str) -> dict[str, Any]:
-    return {"name": f"Server {uuid7()}", "kind": "openai", "base_url": base_url, "location": "local"}
+    # Remote: only the instance admin's addresses may be local (MOD-010, ADR-0128).
+    return {"name": f"Server {uuid7()}", "kind": "openai", "base_url": base_url, "location": "remote"}
 
 
 @pytest.mark.spec("MOD-009", "MOD-013")
@@ -80,7 +81,8 @@ def test_another_admin_keeps_a_private_connection_but_cannot_move_it(
         renamed = client.patch(path, json={"name": "Renamed"})
         assert renamed.status_code == 200, renamed.text
         assert body(renamed)["private_network"] is True
-        refused = client.patch(path, json={"base_url": moved})
+        # Moved by another admin, it can no longer be local, and its new address is checked.
+        refused = client.patch(path, json={"base_url": moved, "location": "remote"})
         problem = assert_problem(refused, 422, "connection.test_failed")
         assert problem["test"]["reason"] == "address_not_allowed"
         (kept,) = [c for c in body(client.get("/tenant/connections"))["items"] if c["id"] == household.connection_id]

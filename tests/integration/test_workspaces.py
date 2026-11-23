@@ -158,31 +158,54 @@ def _special(name: str, kind: bytes, target: str = "") -> tuple[tarfile.TarInfo,
 
 @pytest.mark.spec("SBX-020")
 @pytest.mark.parametrize(
-    "entry",
+    "entries",
     [
-        _file("../escaped"),
-        _file("/escaped"),
-        _file("folder/../../escaped"),
-        _special("passwd", tarfile.SYMTYPE, "/etc/passwd"),
-        _special("up", tarfile.SYMTYPE, "../../etc"),
-        _special("hard", tarfile.LNKTYPE, "/etc/passwd"),
-        _special("device", tarfile.CHRTYPE),
-        _special("pipe", tarfile.FIFOTYPE),
+        [_file("../escaped")],
+        [_file("/escaped")],
+        [_file("folder/../../escaped")],
+        [_special("hard", tarfile.LNKTYPE, "/etc/passwd")],
+        [_special("device", tarfile.CHRTYPE)],
+        [_special("pipe", tarfile.FIFOTYPE)],
+        # A member written through a link the archive made, whether it points out or a chain leads out (ADR-0129).
+        [_special("etc", tarfile.SYMTYPE, "/tmp"), _file("etc/escaped")],  # noqa: S108 - an attacker's target
+        [_special("l1", tarfile.SYMTYPE, "."), _special("l2", tarfile.SYMTYPE, "l1/.."), _file("l2/escaped")],
     ],
-    ids=["parent", "absolute", "nested-parent", "link-out", "relative-link-out", "hard-link", "device", "fifo"],
+    ids=["parent", "absolute", "nested-parent", "hard-link", "device", "fifo", "through-a-link", "chained-links"],
 )
 def test_an_archive_that_leaves_the_workspace_is_refused(
-    sandboxes: Driver, entry: tuple[tarfile.TarInfo, bytes | None]
+    sandboxes: Driver, entries: list[tuple[tarfile.TarInfo, bytes | None]]
 ) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
     sandboxes.sh(tenant_id, user_id, conversation_id, "echo before > /workspace/before.txt")
-    response = _import(sandboxes, tenant_id, user_id, conversation_id, _tar(_file("fine.txt"), entry))
+    response = _import(sandboxes, tenant_id, user_id, conversation_id, _tar(_file("fine.txt"), *entries))
     assert response.status_code == 422, response.text
     listed = sandboxes.sh(
         tenant_id, user_id, conversation_id, "ls -A /workspace; ls /escaped /tmp/escaped 2>/dev/null | wc -l"
     )
-    # The workspace is left empty, and nothing was written outside it.
-    assert listed.stdout.splitlines() == ["0"], listed.stdout
+    # Refused before the workspace changed, and nothing was written outside it (ADR-0129).
+    assert listed.stdout.splitlines() == ["before.txt", "0"], listed.stdout
+
+
+@pytest.mark.spec("SBX-020", "SBX-014")
+def test_a_workspace_with_links_anywhere_moves_without_starting_its_sandbox(sandboxes: Driver) -> None:
+    # A virtual environment holds a link to an absolute path (ADR-0129).
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(
+        tenant_id,
+        user_id,
+        conversation_id,
+        "mkdir -p /workspace/venv/bin && ln -s /usr/bin/python3 /workspace/venv/bin/python",
+    )
+    sandboxes.stop(tenant_id, user_id, conversation_id)
+    archive = _export(sandboxes, tenant_id, user_id, conversation_id)
+    # Exported without starting the conversation's sandbox.
+    assert sandboxes.running(conversation_id) == []
+    other_tenant, other_user, other_conversation = _sandbox()
+    response = _import(sandboxes, other_tenant, other_user, other_conversation, archive)
+    assert response.status_code == 204, response.text
+    assert sandboxes.running(other_conversation) == []
+    linked = sandboxes.sh(other_tenant, other_user, other_conversation, "readlink /workspace/venv/bin/python")
+    assert linked.stdout == "/usr/bin/python3\n"
 
 
 @pytest.fixture
@@ -320,3 +343,35 @@ def test_a_fork_starts_with_a_copy_of_the_workspace(
     assert copied.stdout == "original\n"
     # The copy goes its own way.
     assert sandboxes.sh(tenant, user, conversation["id"], "cat /workspace/notes.txt").stdout == "original\n"
+
+
+@pytest.mark.spec("SBX-011", "SBX-019")
+def test_the_drivers_own_commands_in_a_sandbox_are_bounded(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    # Code of the sandbox replaces what the driver runs to measure the workspace with a program that never ends
+    # (ADR-0129).
+    sandboxes.sh(
+        tenant_id,
+        user_id,
+        conversation_id,
+        "printf '#!/bin/sh\\nexec yes\\n' > /usr/local/bin/du && chmod +x /usr/local/bin/du",
+    )
+    started = time.monotonic()
+    result = sandboxes.sh(tenant_id, user_id, conversation_id, "echo still")
+    assert result.stdout == "still\n"
+    assert time.monotonic() - started < 90
+    assert result.workspace_bytes is None
+
+
+@pytest.mark.spec("SBX-014")
+def test_a_fifo_is_listed_as_other_and_never_read(sandboxes: Driver) -> None:
+    tenant_id, user_id, conversation_id = _sandbox()
+    sandboxes.sh(tenant_id, user_id, conversation_id, "mkfifo /workspace/pipe")
+    path = f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}"
+    with sandboxes.client() as client:
+        listed = client.get(f"{path}/entries", params={"path": "."})
+        assert listed.status_code == 200, listed.text
+        (entry,) = [item for item in listed.json()["entries"] if item["name"] == "pipe"]
+        assert entry["type"] == "other"
+        read = client.get(f"{path}/files", params={"path": "pipe"}, timeout=30)
+        assert read.status_code in (409, 422), read.text

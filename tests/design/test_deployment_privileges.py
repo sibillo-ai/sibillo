@@ -105,3 +105,17 @@ def test_the_engines_image_pins_gvisor_by_release_and_checksum() -> None:
         (line,) = [line for line in dockerfile.splitlines() if line.startswith(f"ARG GVISOR_SHA256_{architecture}=")]
         assert len(line.split("=", 1)[1]) == 64
     assert "sha256sum --check --strict" in dockerfile
+
+
+@pytest.mark.spec("SBX-025", "SBX-011")
+def test_each_service_holds_only_what_it_needs() -> None:
+    services = _services()
+    # The network guard: NET_ADMIN and nothing else, as its comment says (ADR-0129).
+    guard = services["netguard"]
+    assert guard.get("cap_drop") == ["ALL"]
+    assert guard.get("cap_add") == ["NET_ADMIN"]
+    # No process of these services gains privileges it did not start with.
+    for name in ("api", "worker", "sandboxd", "netguard"):
+        assert "no-new-privileges:true" in services[name].get("security_opt", []), name
+    # The driver has a ceiling of memory: what it reads of sandboxes cannot take the host's (ADR-0129).
+    assert services["sandboxd"].get("mem_limit") == "1g"
