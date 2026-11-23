@@ -28,13 +28,21 @@ READ_SECONDS = 60
 class PublicEndpointTransport(httpx2.AsyncBaseTransport):
     """Connects only to addresses that `allowed` accepts, among those the transport resolved itself."""
 
-    def __init__(self, *, resolve: Resolver = resolve, allowed: Callable[[Address], bool] = is_public) -> None:
+    def __init__(
+        self,
+        *,
+        resolve: Resolver = resolve,
+        allowed: Callable[[Address], bool] = is_public,
+        schemes: tuple[str, ...] = ("https",),
+    ) -> None:
         self._resolve = resolve
         self._allowed = allowed
+        # Only `https` but in tests of the transport against a server of their own (ADR-0128).
+        self._schemes = schemes
         self._transport = httpx2.AsyncHTTPTransport()
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
-        if request.url.scheme != "https":
+        if request.url.scheme not in self._schemes:
             raise httpx2.ConnectError(f"{request.url.host} is not reached over https", request=request)
         host = request.url.host
         port = request.url.port or (443 if request.url.scheme == "https" else 80)
@@ -73,10 +81,17 @@ class _BoundedStream(httpx2.AsyncByteStream):
 class _ServerTransport(httpx2.AsyncBaseTransport):
     """Any address for the origin the instance admin set, checked addresses for every other; bounded."""
 
-    def __init__(self, *, origin: str | None, resolve: Resolver, allowed: Callable[[Address], bool]) -> None:
+    def __init__(
+        self,
+        *,
+        origin: str | None,
+        resolve: Resolver,
+        allowed: Callable[[Address], bool],
+        schemes: tuple[str, ...] = ("https",),
+    ) -> None:
         self._origin = origin
         self._open = httpx2.AsyncHTTPTransport()
-        self._checked = PublicEndpointTransport(resolve=resolve, allowed=allowed)
+        self._checked = PublicEndpointTransport(resolve=resolve, allowed=allowed, schemes=schemes)
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         exempt = self._origin is not None and _origin(str(request.url)) == self._origin
@@ -110,6 +125,7 @@ def mcp_http_client(
     timeout: float | None = None,
     resolve: Resolver = resolve,
     allowed: Callable[[Address], bool] = is_public,
+    schemes: tuple[str, ...] = ("https",),
 ) -> httpx2.AsyncClient:
     """The client that reaches a server's address, and its authorization server's, by the server's rules.
 
@@ -119,7 +135,7 @@ def mcp_http_client(
     limit = httpx2.Timeout(timeout or READ_SECONDS, connect=CONNECT_SECONDS)
     origin = _origin(server_url) if private_network and server_url is not None else None
     return httpx2.AsyncClient(
-        transport=_ServerTransport(origin=origin, resolve=resolve, allowed=allowed),
+        transport=_ServerTransport(origin=origin, resolve=resolve, allowed=allowed, schemes=schemes),
         headers=headers,
         follow_redirects=False,
         timeout=limit,

@@ -121,14 +121,22 @@ async def resolve(host: str, port: int) -> list[Address]:
 class PublicEndpointTransport(httpx.AsyncBaseTransport):
     """Connects only to addresses that `allowed` accepts, among those the transport resolved itself."""
 
-    def __init__(self, *, resolve: Resolver = resolve, allowed: Callable[[Address], bool] = is_public) -> None:
+    def __init__(
+        self,
+        *,
+        resolve: Resolver = resolve,
+        allowed: Callable[[Address], bool] = is_public,
+        schemes: tuple[str, ...] = ("https",),
+    ) -> None:
         self._resolve = resolve
         self._allowed = allowed
+        # Only `https` but in tests of the transport against a server of their own (ADR-0128).
+        self._schemes = schemes
         self._transport = httpx.AsyncHTTPTransport()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         # A tenant admin's addresses are `https` only, whatever the caller checked (ADR-0128).
-        if request.url.scheme != "https":
+        if request.url.scheme not in self._schemes:
             raise httpx.ConnectError(f"{request.url.host} is not reached over https", request=request)
         host = request.url.host
         port = request.url.port or (443 if request.url.scheme == "https" else 80)
@@ -145,12 +153,15 @@ class PublicEndpointTransport(httpx.AsyncBaseTransport):
 
 
 def tenant_http_client(
-    *, resolve: Resolver = resolve, allowed: Callable[[Address], bool] = is_public
+    *,
+    resolve: Resolver = resolve,
+    allowed: Callable[[Address], bool] = is_public,
+    schemes: tuple[str, ...] = ("https",),
 ) -> httpx.AsyncClient:
     """The HTTP client of a tenant model: checked addresses only, no redirects, bounded (ADR-0061, ADR-0128)."""
     return httpx.AsyncClient(
         transport=BoundedTransport(
-            PublicEndpointTransport(resolve=resolve, allowed=allowed),
+            PublicEndpointTransport(resolve=resolve, allowed=allowed, schemes=schemes),
             limit=MODEL_RESPONSE_BYTES,
             seconds=MODEL_RESPONSE_SECONDS,
         ),
