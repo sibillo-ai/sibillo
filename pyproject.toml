@@ -23,7 +23,7 @@ dev = [
   "pyyaml==6.0.3",
   "ruff==0.17.3",
   "testcontainers==4.15.0",
-  "ty==0.0.95",
+  "ty==0.0.107",
   "types-jsonschema==4.26.0.20261006",
   "types-pyyaml==6.0.12.20260906",
 ]
