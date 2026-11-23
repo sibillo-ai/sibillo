@@ -33,6 +33,8 @@ DECLARED: dict[str, tuple[set[str], str]] = {
         for name in (
             "check_command",
             "read_file",
+            # It returns the command's output, as `check_command` does (ADR-0127).
+            "stop_command",
             "list_directory",
             "find_files",
             "search_files",
@@ -43,7 +45,7 @@ DECLARED: dict[str, tuple[set[str], str]] = {
     },
     **{
         name: ({"reads_private_data"}, "allow")
-        for name in ("stop_command", "write_file", "edit_file", "create_directory", "offer_download")
+        for name in ("write_file", "edit_file", "create_directory", "offer_download")
     },
     **{
         name: (set[str](), "allow")

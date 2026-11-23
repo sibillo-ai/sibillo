@@ -16,11 +16,22 @@ from typing import Any
 import pytest
 
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
-from tests.support.approvals import approving, asked, completed, fresh_query, holds_untrusted_content, search
+from tests.support.approvals import (
+    approval_of,
+    approve,
+    approving,
+    asked,
+    completed,
+    deny,
+    fresh_query,
+    holds_untrusted_content,
+    resumed,
+    search,
+)
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.model import ModelRequest
-from tests.support.runs import create_conversation, messages, text_of
+from tests.support.runs import create_conversation, messages, start_run, text_of, wait_for_run
 from tests.support.search import SearchServer
 from tests.support.server import Server
 
@@ -372,3 +383,38 @@ def test_items_of_others_cannot_be_read_changed_or_deleted(
             assert_problem(client.delete(f"/me/memory/items/{mine['id']}"), 404, "resource.not_found")
             assert client.delete("/me/memory/items").status_code == 204
     assert [item["id"] for item in _items(server, token)] == [mine["id"]]
+
+
+@pytest.mark.spec("MEM-008", "AGT-004")
+def test_an_untrusted_run_asks_before_it_changes_or_forgets_what_the_user_wrote(
+    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    mine = _add(server, token, _fact("own"))
+    for tool, arguments in (
+        ("forget", {"id": mine["id"]}),
+        ("update_memory", {"id": mine["id"], "text": _fact("planted")}),
+    ):
+        conversation_id = create_conversation(server, token)["id"]
+        chain = f"chain:web_search {json.dumps({'query': fresh_query('page')})} >>> {tool} {json.dumps(arguments)}"
+        _, internet = asked(server, token, conversation_id, chain)
+        # After the page, the change of an item the user wrote asks, and says what it says now (ADR-0127).
+        events = resumed(server, token, conversation_id, [approve(internet["id"], "turn")])
+        request = approval_of(events)
+        approval = request["metadata"]["approval"]
+        assert (approval["tool"], approval["reason"]) == (tool, "untrusted_content")
+        assert mine["text"] in json.dumps(approval)
+        resumed(server, token, conversation_id, [deny(request["id"])])
+        assert [item["text"] for item in _items(server, token)] == [mine["text"]]
+    # An item the assistant wrote from untrusted content is changed without asking.
+    conversation_id = create_conversation(server, token)["id"]
+    planted = _fact("planted")
+    approving(
+        server,
+        token,
+        conversation_id,
+        f"chain:web_search {json.dumps({'query': fresh_query('again')})} >>> remember {json.dumps({'text': planted})}",
+    )
+    (own,) = [item for item in _items(server, token) if item["text"] == planted]
+    run_id, _ = start_run(server, token, conversation_id, f"tool:forget {json.dumps({'id': own['id']})}")
+    assert wait_for_run(server, token, run_id)["status"] == "completed"
+    assert [item["text"] for item in _items(server, token)] == [mine["text"]]

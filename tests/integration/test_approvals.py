@@ -10,6 +10,7 @@ covers.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
@@ -162,3 +163,31 @@ def test_audit_events_are_visible_only_to_the_user_they_acted_for(
     for role in ("member", "tenant_admin"):
         other = login(server, create_account(database, account.tenant_id, role))
         assert activity(server, other, conversation_id=conversation_id) == []
+
+
+@pytest.mark.spec("AGT-007")
+def test_expired_requests_are_denied_even_when_no_run_can_be_made(
+    database: Database, server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    asked(server, token, conversation_id, search(fresh_query("stuck")))
+    # Its model is no longer offered, so the run that would deny the request cannot be made (ADR-0127).
+    with database.superuser() as conn:
+        conn.execute(
+            "UPDATE conversations SET model = 'gone-model', approvals_expire_at = now() - interval '1 second'"
+            " WHERE id = %s",
+            (conversation_id,),
+        )
+    deadline = time.monotonic() + 20
+    while True:
+        with database.superuser() as conn:
+            row = conn.execute(
+                "SELECT pending_interrupts IS NULL FROM conversations WHERE id = %s", (conversation_id,)
+            ).fetchone()
+        if row is not None and row[0]:
+            break
+        assert time.monotonic() < deadline, "the expired request stayed pending"
+        time.sleep(0.5)
+    with server.client(token) as client:
+        events = body(client.get("/me/activity", params={"conversation_id": conversation_id}))["items"]
+    assert [(event["tool"], event["outcome"]) for event in events] == [("web_search", "expired")]

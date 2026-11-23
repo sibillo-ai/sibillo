@@ -236,3 +236,19 @@ def test_permissions_apply_from_the_next_run(
     after = f"tool:web_search {json.dumps({'query': 'x'})}"
     events = completed(server, member_token, conversation_id, after)
     assert text_of(events) == "No tool web_search"
+
+
+@pytest.mark.spec("AGT-007")
+def test_a_commands_approval_quotes_the_assistants_description_apart(
+    server: Server, household: tuple[str, Account, str], default_model: HarnessModel
+) -> None:
+    admin_token, member, member_token = household
+    set_permissions(server, admin_token, member, tools={"run_command": "ask"})
+    conversation_id = create_conversation(server, member_token)["id"]
+    call = {"command": "echo hi", "description": "Tidying up"}
+    _, interrupt = asked(server, member_token, conversation_id, f"tool:run_command {json.dumps(call)}")
+    request = interrupt["metadata"]["approval"]
+    # Sibillo's words say what the call does; the model's own are quoted as the assistant's (ADR-0127).
+    assert request["action"].startswith("Run a command in the sandbox")
+    assert 'the assistant says: "Tidying up"' in request["action"]
+    assert request["data"] == "echo hi"

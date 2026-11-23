@@ -19,6 +19,9 @@ TITLE_SECONDS = 30
 # A window small enough that a few long turns exceed 80% of it.
 SMALL_WINDOW = 1200
 
+# How the compaction summary introduces itself to the model (ADR-0127).
+SUMMARY_LABEL = "[A summary the assistant wrote of the earlier conversation"
+
 
 @pytest.fixture
 def member(database: Database, server: Server, harness_model: HarnessModel) -> Member:
@@ -124,6 +127,8 @@ def test_a_long_conversation_is_compacted_for_the_model_only(
     # The model no longer receives the first turn as it was...
     (last,) = harness_model.endpoint.requests_with(texts[-1])
     assert texts[0] not in last.user_texts()
+    # ...but a summary that says it is the assistant's, not the user's words (AGT-016, ADR-0127).
+    assert any(text.startswith(SUMMARY_LABEL) for text in last.user_texts())
     # ...while the stored conversation keeps every message.
     stored = [
         m.get("content") for m in messages(server, member.token, conversation["id"])["items"] if m["role"] == "user"

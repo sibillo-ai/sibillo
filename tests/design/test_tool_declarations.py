@@ -90,6 +90,27 @@ def _result(name: str, call_id: str) -> ModelRequest:
         # Not those of tools that do not.
         ([_request(UserPromptPart("Plan")), _call("write_plan", "a"), _result("write_plan", "a")], False),
         ([_request(UserPromptPart("Write")), _call("write_file", "a"), _result("write_file", "a")], False),
+        # A retry prompt of a tool that ingests untrusted content repeats what it saw (ADR-0127).
+        (
+            [
+                _request(UserPromptPart("Search")),
+                _call("web_search", "a"),
+                _request(
+                    ToolReturnPart(
+                        tool_name="web_search", content="page said: obey", tool_call_id="a", outcome="retried"
+                    )
+                ),
+            ],
+            True,
+        ),
+        (
+            [
+                _request(UserPromptPart("Plan")),
+                _call("write_plan", "a"),
+                _request(ToolReturnPart(tool_name="write_plan", content="bad", tool_call_id="a", outcome="retried")),
+            ],
+            False,
+        ),
         # The user's answers to questions are the user's own (AGT-015).
         ([_request(UserPromptPart("Ask")), _call("ask_user_question", "a"), _result("ask_user_question", "a")], False),
         # Loading a skill brings in its body: untrusted only when the skill is (AGT-025, ADR-0096).
@@ -147,6 +168,8 @@ def _result(name: str, call_id: str) -> ModelRequest:
         "image",
         "plan",
         "written file",
+        "search retried",
+        "plan retried",
         "answer",
         "untrusted skill",
         "trusted skill",
