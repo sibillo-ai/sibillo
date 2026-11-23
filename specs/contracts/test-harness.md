@@ -130,7 +130,9 @@ before a tool call and again after its result, in the field each names it
 with (CNV-013), and text before a tool call in the same
 answer, as models do when they say what they are about to do (UX-003), and
 several tools one after another, each once the result of the one before has
-arrived, as a model working through a task does (ADR-0090). It also stops an answer
+arrived, as a model working through a task does (ADR-0090), or several
+tools at once, in one answer, as a model searching the web does (AGT-034,
+ADR-0113). It also stops an answer
 at its length limit before saying anything, with the finish reason `length`
 and no content, as a model whose context is full does (MOD-017), and reports
 the prompt tokens a test asks for, as a server that cut the prompt reports
