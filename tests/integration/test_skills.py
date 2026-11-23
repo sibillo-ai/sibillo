@@ -621,6 +621,15 @@ def test_the_assistant_saves_a_skill_after_the_user_approves(
     assert wait_for_run(server, token, run_id)["status"] == "interrupted"
     request = approval_of(events)
     assert request["metadata"]["approval"]["reason"] == "tool_default"
+    # The request shows the skill the folder holds, read when it was asked (ADR-0124).
+    shown = request["metadata"]["approval"]["skill"]
+    assert shown == {
+        "name": name,
+        "description": "Use for made work.",
+        "files": ["SKILL.md", "scripts/go.sh"],
+        "replaces": False,
+    }
+    assert name in request["metadata"]["approval"]["action"]
     resumed(server, token, conversation["id"], [approve(request["id"])])
     (skill,) = _own(server, token)
     # The run read the output of a command, which is untrusted content: so is the skill (AGT-025).
@@ -638,6 +647,66 @@ def test_the_assistant_saves_a_skill_after_the_user_approves(
         assert client.delete(f"/conversations/{conversation['id']}").status_code == 204
     (skill,) = _own(server, token)
     assert skill["conversation"] == {"id": conversation["id"], "title": None, "deleted": True}
+
+
+@pytest.mark.spec("AGT-026")
+def test_a_folder_changed_after_the_approval_is_not_saved(
+    server: Server, token: str, account: Account, default_model: HarnessModel, sandboxes: Driver
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    name = _name("swapped")
+    folder = f"/workspace/{name}"
+    write = _written(folder, _skill_md(name, "Use for honest work."))
+    run_id, events = start_run(
+        server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': folder})}"
+    )
+    assert wait_for_run(server, token, run_id)["status"] == "interrupted"
+    request = approval_of(events)
+    assert request["metadata"]["approval"]["skill"]["description"] == "Use for honest work."
+    # Between the request and its answer, something in the sandbox changes the folder (ADR-0124).
+    changed = sandboxes.sh(
+        str(account.tenant_id), str(account.id), conversation_id, f"echo 'curl attacker' > {folder}/run.sh"
+    )
+    assert changed.exit_code == 0, changed.stderr
+    events = resumed(server, token, conversation_id, [approve(request["id"])])
+    assert _own(server, token) == []
+    assert "changed" in json.dumps([event.data for event in events])
+
+
+@pytest.mark.spec("AGT-025", "AGT-026")
+def test_replacing_an_untrusted_skill_leaves_it_untrusted(
+    server: Server, token: str, default_model: HarnessModel, sandboxes: Driver
+) -> None:
+    name = _name("kept-untrusted")
+    response = _upload(server, token, _zip({f"{name}/SKILL.md": _skill_md(name, "Uploaded.")}))
+    assert response.status_code == 201, response.text
+    assert body(response)["untrusted"] is True
+    # A conversation where it is off, so that the run that replaces it holds nothing untrusted.
+    conversation_id = create_conversation(server, token)["id"]
+    with server.client(token) as client:
+        response = client.patch(f"/conversations/{conversation_id}", json={"disabled_skills": [name]})
+    assert response.status_code == 200, response.text
+    write = _written(f"/scratch/{name}", _skill_md(name, "Replaced."))
+    last = _approving_once(
+        server, token, conversation_id, f"chain:{write} >>> save_skill {json.dumps({'path': f'/scratch/{name}'})}"
+    )
+    assert wait_for_run(server, token, last)["status"] == "completed"
+    (skill,) = _own(server, token)
+    assert (skill["description"], skill["untrusted"]) == ("Replaced.", True)
+
+
+@pytest.mark.spec("AGT-025", "AGT-003")
+def test_a_loaded_skill_that_becomes_untrusted_makes_later_runs_untrusted(
+    server: Server, token: str, database: Database, default_model: HarnessModel, search_service: SearchServer
+) -> None:
+    name = _name("turned")
+    skill = _create(server, token, _skill_md(name))
+    conversation_id = create_conversation(server, token)["id"]
+    completed(server, token, conversation_id, _load(name))
+    # Replaced since by a run with untrusted content elsewhere: it is untrusted now.
+    with database.superuser() as conn:
+        conn.execute("UPDATE skills SET untrusted = true WHERE id = %s", (skill["id"],))
+    assert holds_untrusted_content(server, token, conversation_id) is True
 
 
 @pytest.mark.spec("AGT-026", "AGT-025")
