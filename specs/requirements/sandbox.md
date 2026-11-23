@@ -185,7 +185,9 @@ write. An operation outside an answer MUST NOT leave the sandbox running
 A sandbox's network restrictions MUST be applied and verified before any code
 runs in the sandbox. If they cannot be applied or verified, the sandbox MUST
 NOT start. If they stop being in place while sandboxes are running, the
-sandbox driver MUST stop those sandboxes.
+sandbox driver MUST stop those sandboxes, including any started while they
+were missing. Stopping, restarting or a failure of the component that
+applies them MUST NOT take them away (ADR-0120).
 
 ## SBX-016: Workspace disk limit
 

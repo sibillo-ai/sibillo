@@ -57,7 +57,8 @@ We will enforce sandbox egress **in the host kernel**, with a dedicated
    table is final, so other tables cannot override it.
 5. The rules live only in kernel memory: the network guard installs them at
    startup and reinstalls them if they disappear; uninstalling Sibillo
-   removes them.
+   removes them. Amended by ADR-0120: the guard never removes them; they go
+   with the sandbox engine's network namespace.
 6. The sandbox driver starts a sandbox only after verifying that the table is
    in place, and stops running sandboxes if it disappears (SBX-015).
 7. Sandboxes resolve names through a resolver chosen by the instance, written
