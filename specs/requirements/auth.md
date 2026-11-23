@@ -52,9 +52,10 @@ a revoked or expired token MUST be rejected on the next request (ADR-0025).
 - **Verification:** security
 
 When a session token is carried in a cookie, the cookie MUST be `HttpOnly`,
-`Secure` and `SameSite=Lax`, and every state-changing request authenticated by
-cookie MUST also carry a custom request header that cross-site requests cannot
-set.
+`Secure` and `SameSite=Lax`, named with the `__Host-` prefix, and every
+state-changing request authenticated by cookie MUST also carry a custom
+request header that cross-site requests cannot set. Answers MUST carry
+headers that keep them out of caches, frames and other origins (ADR-0131).
 
 ## AUTH-006: Login rate limiting
 
@@ -66,7 +67,8 @@ set.
 Login attempts MUST be rate-limited per account and per source address. An
 attempt over a limit MUST be refused before its password is checked, and the
 server MUST check a bounded number of passwords at a time (ADR-0047,
-ADR-0118).
+ADR-0118). The source MUST be read from every forwarding header line a
+trusted proxy sent, and an IPv6 source MUST count as its /64 (ADR-0131).
 
 ## AUTH-007: First administrator without default credentials
 
@@ -90,7 +92,10 @@ Changing a user's role, and disabling or re-enabling their account, MUST
 require a tenant admin of the user's tenant; changing the role or the account
 state of an instance admin MUST require an instance admin. Creating an
 instance admin MUST require an instance admin. A user MUST NOT be able to
-raise their own privileges or re-enable their own account.
+raise their own privileges or re-enable their own account. A tenant admin
+MUST be able to disable and re-enable an account of their tenant and change
+its role through the API, never their own, and never so that the tenant has
+no enabled tenant admin left (ADR-0131).
 
 ## AUTH-009: Disabling an account ends its sessions
 
@@ -114,7 +119,8 @@ the account MUST NOT restore any session.
 A user MUST be able to register any number of passkeys (WebAuthn), including
 ones that use the device's biometrics. Once a user has a passkey, signing in
 MUST require their password and one of their passkeys. A tenant admin MUST be
-able to remove the passkeys of a user of their tenant, and an operator
+able to remove the passkeys of another user of their tenant, never their own
+and never an instance admin's unless they are one, and an operator
 command MUST be able to remove the instance admin's, so that a lost passkey
 never locks a user out for good (ADR-0065). Passkeys MUST be bound to the
 configured origin of the instance, and registering or removing one's own

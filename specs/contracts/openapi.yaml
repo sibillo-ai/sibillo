@@ -20,6 +20,12 @@ info:
     - A session of a user whose password is an initial password is refused
       every operation with `403` and `auth.password_change_required`, except
       `getMe`, `changeMyPassword` and `logout` (AUTH-012, ADR-0105).
+    - Every answer carries `Referrer-Policy: no-referrer`,
+      `Cross-Origin-Opener-Policy: same-origin`,
+      `Cross-Origin-Resource-Policy: same-origin` and a `Permissions-Policy`;
+      the API's answers also `X-Content-Type-Options: nosniff` and
+      `Cache-Control: no-store`; with an `https` public origin,
+      `Strict-Transport-Security` (ADR-0131).
     - A request body larger than 1 MiB is refused with `413` and
       `request.too_large` before the operation runs, unless the operation
       states a larger limit: transcriptions 26 MiB, creating a skill 21 MiB,
@@ -66,7 +72,7 @@ paths:
         Attempts over the rate limits are refused with `429` and a
         `Retry-After` header, whether or not the password was right. With
         `session_delivery` set to `cookie`, the session is set as the
-        `sibillo_session` cookie and the token is not in the body (ADR-0067).
+        `__Host-sibillo_session` cookie and the token is not in the body (ADR-0067).
         For a user who has passkeys, a right password creates no session:
         the answer is `200` with a sign-in token for `POST
         /auth/login/passkey` (AUTH-010, ADR-0094).
@@ -87,7 +93,7 @@ paths:
           description: Session created. The token is returned only once, in the body or as a cookie.
           headers:
             Set-Cookie:
-              description: The `sibillo_session` cookie, when `session_delivery` is `cookie`.
+              description: The `__Host-sibillo_session` cookie, when `session_delivery` is `cookie`.
               schema: { type: string }
           content:
             application/json:
@@ -121,7 +127,7 @@ paths:
           description: Session created. The token is returned only once, in the body or as a cookie.
           headers:
             Set-Cookie:
-              description: The `sibillo_session` cookie, when `session_delivery` is `cookie`.
+              description: The `__Host-sibillo_session` cookie, when `session_delivery` is `cookie`.
               schema: { type: string }
           content:
             application/json:
@@ -940,6 +946,38 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
 
+  /tenant/users/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [administration]
+      operationId: updateUser
+      summary: Disable or re-enable a user's account, or change their role (tenant admin only).
+      description: |
+        Disabling ends every session of the account (AUTH-009). A tenant
+        admin cannot change their own account, nor an instance admin's
+        unless they are one, and a change that would leave the tenant
+        without an enabled tenant admin is refused with `resource.conflict`
+        (AUTH-008, ADR-0131).
+      x-requirements: [AUTH-008, AUTH-009, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200":
+          description: The user, changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
   /tenant/users/{user_id}/passkeys:
     parameters:
       - $ref: "#/components/parameters/UserId"
@@ -963,7 +1001,9 @@ paths:
       summary: Remove every passkey of a user (tenant admin only).
       description: |
         The user then signs in with their password alone. Their sessions stay
-        open (ADR-0094).
+        open (ADR-0094). A tenant admin cannot remove their own passkeys
+        here, nor an instance admin's unless they are one: `forbidden`
+        (ADR-0131).
       x-requirements: [AUTH-010, UX-026, TEN-006]
       responses:
         "204": { description: Passkeys removed, if there were any. }
@@ -2891,7 +2931,8 @@ paths:
       operationId: getHealth
       summary: Readiness of the instance.
       description: |
-        Anonymous callers receive only `status`. Instance admins also receive
+        Anonymous callers receive only `status`, as found at most five
+        seconds before (ADR-0131). Instance admins also receive
         the individual checks (OPS-002). The status is `unavailable` when the
         database is unreachable or the sandbox driver refuses sandboxes, then
         the answer is `503`; `degraded` when no tenant has a default model
@@ -2920,7 +2961,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: sibillo_session
+      name: __Host-sibillo_session
       description: |
         The same session token, in an `HttpOnly`, `Secure`, `SameSite=Lax`
         cookie set by `login` for the web app (ADR-0025, ADR-0067). A request
@@ -3499,7 +3540,7 @@ components:
 
     User:
       type: object
-      required: [id, tenant_id, username, display_name, role, instance_admin, password_change_required, created_at]
+      required: [id, tenant_id, username, display_name, role, instance_admin, password_change_required, disabled, created_at]
       properties:
         id: { $ref: "#/components/schemas/Id" }
         tenant_id: { $ref: "#/components/schemas/Id" }
@@ -3510,7 +3551,16 @@ components:
         password_change_required:
           type: boolean
           description: The user must replace an initial password before anything else (AUTH-012, ADR-0105).
+        disabled: { type: boolean, description: "The account is disabled, and cannot sign in (AUTH-009)." }
         created_at: { $ref: "#/components/schemas/Timestamp" }
+
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+        disabled: { type: boolean }
 
     UserPage:
       type: object

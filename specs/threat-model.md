@@ -154,6 +154,11 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **What a household can learn of names.** Usernames are unique in the
+  instance, so a tenant admin creating a user learns whether a name is taken
+  in another household; members see the names and roles of their own
+  household's users; an attacker who fails on purpose can keep a known
+  username from signing in for 15 minutes at a time (ADR-0047, ADR-0131).
 - **One key for every secret.** Connection keys, credentials, client
   secrets and the notification key all come from one key, without a
   version; a leak of it exposes all of them, and rotating it needs every
