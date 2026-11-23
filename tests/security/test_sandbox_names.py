@@ -1,8 +1,9 @@
 """Sandboxes resolve names only through the instance's resolver (SBX-007, ADR-0098).
 
 The session's resolver is the default, 9.9.9.9. Other public resolvers are
-probed from inside a sandbox, where root can choose any: their DNS ports are
-blocked, while the same addresses stay reachable on other ports.
+probed from inside a sandbox whose conversation has internet access
+(SBX-024), where root can choose any: their DNS ports are blocked, while the
+same addresses stay reachable on other ports.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import httpx
 import pytest
 
 from tests.support.database import uuid7
-from tests.support.sandbox import Driver, free_port, start_driver_process
+from tests.support.sandbox import Driver, free_port, online_sandbox, start_driver_process
 
 RESOLVER = "9.9.9.9"
 OTHER_RESOLVERS = ("1.1.1.1", "8.8.8.8")
@@ -47,18 +48,13 @@ CONNECT = (
 )
 
 
-def _sandbox() -> tuple[str, str, str]:
-    """A tenant, a user and a conversation of theirs: one sandbox (SBX-001)."""
-    return str(uuid7()), str(uuid7()), str(uuid7())
-
-
 def _answered(driver: Driver, servers: tuple[str, ...]) -> set[str]:
-    result = driver.sh(*_sandbox(), f"{QUERY} {' '.join(servers)}", timeout_seconds=8)
+    result = driver.sh(*online_sandbox(driver), f"{QUERY} {' '.join(servers)}", timeout_seconds=8)
     return {line.split()[1] for line in result.stdout.splitlines() if line.startswith("answered ")}
 
 
 def _connected(driver: Driver, targets: tuple[str, ...]) -> set[str]:
-    result = driver.sh(*_sandbox(), f"{CONNECT} {' '.join(targets)}", timeout_seconds=8)
+    result = driver.sh(*online_sandbox(driver), f"{CONNECT} {' '.join(targets)}", timeout_seconds=8)
     return {line.split()[1] for line in result.stdout.splitlines() if line.startswith("connected ")}
 
 
@@ -82,7 +78,7 @@ def test_dns_over_tls_reaches_only_the_instances_resolver(sandboxes: Driver) -> 
 
 @pytest.mark.spec("SBX-007")
 def test_sandboxes_resolve_names_through_the_instances_resolver(sandboxes: Driver) -> None:
-    result = sandboxes.sh(*_sandbox(), "getent hosts example.com", timeout_seconds=8)
+    result = sandboxes.sh(*online_sandbox(sandboxes), "getent hosts example.com", timeout_seconds=8)
     assert result.exit_code == 0, result
     assert result.stdout.strip()
 

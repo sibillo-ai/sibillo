@@ -43,7 +43,7 @@ def test_every_request_needs_the_control_plane_secret(sandboxes: Driver, token: 
         headers = {"Authorization": ""} if token is None else {"Authorization": f"Bearer {token}"}
         for method, path, body in (
             ("GET", "/health", None),
-            ("POST", f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", None),
+            ("POST", f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", {"internet_access": False}),
             ("POST", f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/exec", {"argv": ["true"]}),
             ("POST", f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/stop", None),
         ):
@@ -56,8 +56,12 @@ def test_every_request_needs_the_control_plane_secret(sandboxes: Driver, token: 
 def test_ensure_starts_one_sandbox_per_user(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
     with sandboxes.client() as client:
-        first = client.post(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure")
-        again = client.post(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure")
+        first = client.post(
+            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", json={"internet_access": False}
+        )
+        again = client.post(
+            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", json={"internet_access": False}
+        )
     assert first.status_code == 200, first.text
     assert again.status_code == 200, again.text
     assert first.json()["state"] == "running"
@@ -170,7 +174,7 @@ def test_invalid_exec_requests_are_rejected(sandboxes: Driver, request_body: dic
 )
 def test_sandboxes_are_addressed_only_by_identifiers(sandboxes: Driver, path: str) -> None:
     with sandboxes.client() as client:
-        response = client.post(f"/sandboxes/{path}/ensure")
+        response = client.post(f"/sandboxes/{path}/ensure", json={"internet_access": False})
     assert response.status_code in {404, 422}, response.text
 
 
@@ -208,6 +212,7 @@ def test_the_driver_refuses_a_gvisor_release_older_than_its_minimum(sandboxes: D
         assert "gvisor.dev" not in release["detail"]
         refused = httpx.post(
             f"http://127.0.0.1:{port}/v1/sandboxes/{uuid7()}/{uuid7()}/{uuid7()}/ensure",
+            json={"internet_access": False},
             headers={"Authorization": f"Bearer {sandboxes.token}"},
             timeout=30,
         )

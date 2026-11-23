@@ -36,7 +36,9 @@ def _sandbox() -> tuple[str, str, str]:
 def test_commands_start_in_the_scratch_folder(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
     with sandboxes.client() as client:
-        response = client.post(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure")
+        response = client.post(
+            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", json={"internet_access": False}
+        )
     assert response.status_code == 200, response.text
     assert response.json()["working_dir"] == "/scratch"
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "pwd").stdout == "/scratch\n"

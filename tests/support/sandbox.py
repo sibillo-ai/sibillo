@@ -27,12 +27,15 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from tests.support.database import ROOT
+from tests.support.database import ROOT, uuid7
 from tests.support.server import Process
 
 READY_TIMEOUT_SECONDS = 120
 BUILD_TIMEOUT_SECONDS = 900
-SANDBOX_NETWORK = "sibillo-sandboxes"
+# The prefix of the interface names of the sandbox bridges (SBX-024, ADR-0113).
+BRIDGE_PREFIX = "sbx"
+# The range the sandbox bridges take their subnets from, by default.
+SANDBOX_SUBNETS = "10.213.0.0/16"
 EGRESS_TABLE = "inet sibillo"
 # The sandbox image as the engine names it (ADR-0114).
 ENGINE_SANDBOX_IMAGE = "sibillo/sandbox:engine"
@@ -158,6 +161,23 @@ class Driver:
     def sh(self, tenant_id: str, user_id: str, conversation_id: str, command: str, **options: Any) -> ExecResult:
         return self.exec(tenant_id, user_id, conversation_id, {"shell_command": command} | options)
 
+    def ensure(
+        self, tenant_id: str, user_id: str, conversation_id: str, *, internet_access: bool = False
+    ) -> dict[str, Any]:
+        """Start a conversation's sandbox, or find it running, saying whether it has internet access (SBX-024)."""
+        with self.client() as client:
+            response = client.post(
+                f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/ensure", json={"internet_access": internet_access}
+            )
+        assert response.status_code == 200, response.text
+        return cast(dict[str, Any], response.json())
+
+    def withdraw_network(self, tenant_id: str, user_id: str, conversation_id: str) -> None:
+        """Take the network from a conversation's sandbox, if it runs (SBX-024)."""
+        with self.client() as client:
+            response = client.delete(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/network")
+        assert response.status_code == 204, response.text
+
     def stop(self, tenant_id: str, user_id: str, conversation_id: str) -> None:
         with self.client() as client:
             assert client.post(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/stop").status_code == 204
@@ -195,6 +215,13 @@ class Driver:
                 last = repr(error)
             time.sleep(0.5)
         raise RuntimeError(f"the sandbox driver was not ready: {last}\n{self.process.output()}")
+
+
+def online_sandbox(driver: Driver) -> tuple[str, str, str]:
+    """A tenant, a user and a conversation with internet access, whose sandbox runs with network (SBX-004)."""
+    sandbox = str(uuid7()), str(uuid7()), str(uuid7())
+    driver.ensure(*sandbox, internet_access=True)
+    return sandbox
 
 
 def _free_port() -> int:
