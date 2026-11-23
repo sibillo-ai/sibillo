@@ -227,7 +227,7 @@ export function ConversationView() {
       if (!interrupt) return;
       const decide = (entry: ResumeEntry) => {
         const all = [...entries, entry];
-        if (all.length >= approvals.length) start({ conversationId, text: "", resume: all, voice: "hands_free" });
+        if (all.length >= approvals.length) resumeWith(all, "hands_free");
         else ask(index + 1, all);
       };
       const tool = interrupt.metadata?.approval?.tool;
@@ -250,12 +250,24 @@ export function ConversationView() {
   const allowances = conversation.data?.allowances;
   const [wanted, setWanted] = useState<{ key: string; on: boolean } | null>(null);
   const [switching, setSwitching] = useState(false);
-  const stateKey = `${conversationId}:${allowances?.internet_access}:${allowances?.turn_internet_access}`;
+  // What the user chose holds until the conversation is read again.
+  const stateKey = `${conversationId}:${conversation.dataUpdatedAt}`;
   const online = wanted?.key === stateKey ? wanted.on : Boolean(allowances?.internet_access || allowances?.turn_internet_access);
-  // The turn's internet access shows while the turn goes on: read again as a run starts.
+  // The turn's internet access shows while the turn goes on: read again once the server has started the run, and
+  // recorded the answers it brings.
+  const liveStarted = live?.started === true;
   useEffect(() => {
-    if (running) void queries.invalidateQueries({ queryKey: ["conversation", conversationId] });
-  }, [running, queries, conversationId]);
+    if (liveStarted) void queries.invalidateQueries({ queryKey: ["conversation", conversationId] });
+  }, [liveStarted, queries, conversationId]);
+  // Answers that allow internet access turn the switch on at once: the conversation is read again only once the
+  // server has recorded them (UX-042).
+  function resumeWith(entries: ResumeEntry[], voice?: VoiceMode) {
+    const internet = new Set(approvals.filter((interrupt) => interrupt.metadata?.internet_access).map((interrupt) => interrupt.id));
+    if (entries.some((entry) => internet.has(entry.interruptId) && entry.payload && "approved" in entry.payload && entry.payload.approved)) {
+      setWanted({ key: stateKey, on: true });
+    }
+    start({ conversationId, text: "", resume: entries, ...(voice ? { voice } : {}) });
+  }
   async function switchInternet(on: boolean) {
     setWanted({ key: stateKey, on });
     const waiting = approvals.find((interrupt) => interrupt.metadata?.internet_access);
@@ -528,10 +540,10 @@ export function ConversationView() {
             <ApprovalCard
               key={pendingKey}
               interrupts={approvals}
-              onDecided={(entries) => (questions.length > 0 ? setDecided({ key: pendingKey, entries }) : start({ conversationId, text: "", resume: entries }))}
+              onDecided={(entries) => (questions.length > 0 ? setDecided({ key: pendingKey, entries }) : resumeWith(entries))}
             />
           ) : !running && questions.length > 0 ? (
-            <QuestionCard key={questions.map((question) => question.id).join()} interrupts={questions} onAnswer={(resume) => start({ conversationId, text: "", resume: [...(decisions ?? []), ...resume] })} />
+            <QuestionCard key={questions.map((question) => question.id).join()} interrupts={questions} onAnswer={(resume) => resumeWith([...(decisions ?? []), ...resume])} />
           ) : (
             <Composer
               onSend={(text, files, voice) => start({ conversationId, text, attachments: files, ...(voice ? { voice } : {}) })}

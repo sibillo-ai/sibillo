@@ -21,6 +21,8 @@ export interface LiveRun {
   status: "running" | "finished" | "failed";
   // Whether it finished asking the user: a question or an approval request (UX-041).
   interrupted?: boolean;
+  // Whether the server has started it: what it recorded as the run began, such as an answer, is in place (UX-042).
+  started?: boolean;
   errorCode?: string;
   // What the provider said, when it refused the request (MOD-014).
   reason?: string;
@@ -84,6 +86,8 @@ export function apply(run: LiveRun, event: RunEvent): LiveRun {
         return { ...run, parts, plan: (event.value as { steps: PlanStep[] }).steps };
       }
       break;
+    case "RUN_STARTED":
+      return { ...run, parts, started: true };
     case "RUN_FINISHED": {
       const outcome = event["outcome"] as { type?: string } | undefined;
       return { ...run, parts, status: "finished", interrupted: outcome?.type === "interrupt" };
