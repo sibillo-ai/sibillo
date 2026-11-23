@@ -59,6 +59,8 @@ MISBEHAVIOURS = frozenset(
         "wrong_iss",
         # Renewing a token fails.
         "refuse_refresh",
+        # The authorization server is named at another origin, `localhost` for the service's address (ADR-0128).
+        "foreign_issuer",
     }
 )
 
@@ -339,6 +341,11 @@ def deliver(
     return httpx.post(subscription.url, content=body, headers=headers, timeout=30)
 
 
+def _foreign(address: str) -> str:
+    """The same address at another origin: `localhost` for `127.0.0.1`, which reaches the same service."""
+    return address.replace("://127.0.0.1:", "://localhost:", 1)
+
+
 def follow_sign_in(authorization_url: str) -> dict[str, str]:
     """Open a sign-in page as a browser would, and return what the web app's page at the redirect address sends:
     the server of that address, `/mcp-sign-in/{server_id}`, and the query the redirect carried (ADR-0122)."""
@@ -548,9 +555,10 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
                 if "other_resource" in server.misbehaviours
                 else server.protected_resource
             )
+            issuer = _foreign(server.issuer) if "foreign_issuer" in server.misbehaviours else server.issuer
             self._json(
                 200,
-                {"resource": resource, "authorization_servers": [server.issuer], "scopes_supported": SCOPE.split()},
+                {"resource": resource, "authorization_servers": [issuer], "scopes_supported": SCOPE.split()},
             )
 
         def _authorization_metadata(self, segment: str) -> None:
@@ -558,8 +566,9 @@ def _handler(service: McpService) -> type[BaseHTTPRequestHandler]:
             if server is None:
                 self._json(404, {"error": "not found"})
                 return
+            named = _foreign(server.issuer) if "foreign_issuer" in server.misbehaviours else server.issuer
             metadata: dict[str, Any] = {
-                "issuer": f"{server.service.url}/s/other" if "other_issuer" in server.misbehaviours else server.issuer,
+                "issuer": f"{server.service.url}/s/other" if "other_issuer" in server.misbehaviours else named,
                 "authorization_endpoint": f"{server.issuer}/authorize",
                 "token_endpoint": f"{server.issuer}/token",
                 "response_types_supported": ["code"],

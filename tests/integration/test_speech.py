@@ -176,8 +176,9 @@ def test_recordings_are_bounded_and_failures_say_so(server: Server, household: H
     )
     assert_problem(_transcribe(server, household.token, b"x" * (25 * 1024 * 1024 + 1)), 413, "file.too_large")
     failed = assert_problem(_transcribe(server, household.token, b"fail"), 502, "model.request_failed")
-    # It says why.
+    # It says why, in Sibillo's words: the status, not what the provider wrote (ADR-0128).
     assert "500" in failed["detail"]
+    assert "scripted" not in failed["detail"].lower()
     with server.client(household.token) as client:
         assert_problem(client.post("/speech/transcriptions", files={}), 422, "request.validation_failed")
 
