@@ -14,10 +14,19 @@ import httpx
 import pytest
 
 from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
-from tests.support.approvals import approving
+from tests.support.approvals import (
+    approve,
+    approving,
+    fresh_query,
+    holds_untrusted_content,
+    internet_request,
+    resumed,
+    search,
+)
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.runs import create_conversation, messages, replay, start_run, text_of, wait_for_run
+from tests.support.search import SearchServer
 from tests.support.server import Server
 
 
@@ -175,3 +184,66 @@ def test_message_ids_are_stable_across_reads(server: Server, token: str) -> None
     once, twice = messages(server, token, conversation["id"]), messages(server, token, conversation["id"])
     assert [item["id"] for item in once["items"]] == [item["id"] for item in twice["items"]]
     assert [run["message_ids"] for run in once["runs"]] == [run["message_ids"] for run in twice["runs"]]
+
+
+def _conversation(server: Server, token: str, conversation_id: str) -> dict[str, Any]:
+    with server.client(token) as client:
+        response = client.get(f"/conversations/{conversation_id}")
+    assert response.status_code == 200, response.text
+    return body(response)
+
+
+@pytest.mark.spec("CNV-004", "AGT-003", "AGT-004")
+def test_a_rewind_past_untrusted_content_leaves_the_conversation_untrusted_without_its_allowances(
+    server: Server, token: str, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    first, _ = start_run(server, token, conversation_id, "a trusted turn")
+    assert wait_for_run(server, token, first)["status"] == "completed"
+    # A search, allowed in the conversation: its results are untrusted content, and could have asked for anything.
+    first_search, events = start_run(server, token, conversation_id, search(fresh_query("injected")))
+    assert wait_for_run(server, token, first_search)["status"] == "interrupted"
+    resumed(server, token, conversation_id, [approve(internet_request(events)["id"], scope="conversation")])
+    assert _conversation(server, token, conversation_id)["allowances"]["internet_access"] is True
+    # Rewound past it: what it left in the task list and the workspace stays untrusted, and its allowances go
+    # (ADR-0123).
+    assert _rewind(server, token, conversation_id, first).status_code == 200
+    assert _conversation(server, token, conversation_id)["allowances"]["internet_access"] is False
+    assert holds_untrusted_content(server, token, conversation_id) is True
+
+
+@pytest.mark.spec("CNV-004")
+def test_a_rewind_past_trusted_turns_alone_changes_nothing_else(server: Server, token: str) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    with server.client(token) as client:
+        response = client.patch(
+            f"/conversations/{conversation_id}", json={"allowances": {"internet_access": True, "tools": []}}
+        )
+    assert response.status_code == 200, response.text
+    first, _ = start_run(server, token, conversation_id, "one")
+    second, _ = start_run(server, token, conversation_id, "two")
+    assert wait_for_run(server, token, second)["status"] == "completed"
+    assert _rewind(server, token, conversation_id, first).status_code == 200
+    assert _conversation(server, token, conversation_id)["allowances"]["internet_access"] is True
+    # Withdrawn by the user, so that a search asks: the request says nothing untrusted is held.
+    with server.client(token) as client:
+        response = client.patch(
+            f"/conversations/{conversation_id}", json={"allowances": {"internet_access": False, "tools": []}}
+        )
+    assert response.status_code == 200, response.text
+    assert holds_untrusted_content(server, token, conversation_id) is False
+
+
+@pytest.mark.spec("CNV-005", "AGT-003")
+def test_a_fork_of_a_conversation_with_untrusted_content_is_untrusted_even_before_it(
+    server: Server, token: str, search_service: SearchServer
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    first, _ = start_run(server, token, conversation_id, "a trusted turn")
+    assert wait_for_run(server, token, first)["status"] == "completed"
+    approving(server, token, conversation_id, search(fresh_query("later")))
+    # Forked at the trusted turn, it copies the workspace as it is now (ADR-0123).
+    with server.client(token) as client:
+        forked = client.post(f"/conversations/{conversation_id}/fork", json={"run_id": first})
+    assert forked.status_code == 201, forked.text
+    assert holds_untrusted_content(server, token, body(forked)["id"]) is True
