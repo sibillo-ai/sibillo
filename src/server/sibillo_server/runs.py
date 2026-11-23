@@ -33,7 +33,6 @@ from sibillo_server.questions import Answers, answer
 from sibillo_server.sandbox import SandboxDriver, stop_conversation_sandbox
 from sibillo_server.settings import new_conversation
 from sibillo_server.tasks import finish_firing
-from sibillo_server.tool_policy import WEB_AND_COMMANDS
 from sibillo_server.workflow_input import RunWorkflowInput
 from sibillo_server.workspace import attachment_entries
 
@@ -218,17 +217,23 @@ async def create_run(
     model = await _run_model(connection, conversation)
     base, additional, language = await _instructions(connection, conversation)
     resuming = answers is not None
-    turn = False
+    # Internet access for the turn, and whether it was denied in the turn (AGT-034, ADR-0113).
+    turn = denied = False
     # A run that resumes a task's first turn follows its grants too (TSK-004, ADR-0106).
     task_grants = False
     if resuming and parent is not None:
         inherited = (
             await connection.execute(
-                text("SELECT turn_allows_web_and_commands, task_grants FROM runs WHERE id = :id"), {"id": parent}
+                text(
+                    "SELECT turn_allows_internet_access, turn_denied_internet_access, task_grants FROM runs"
+                    " WHERE id = :id"
+                ),
+                {"id": parent},
             )
         ).one_or_none()
         if inherited is not None:
-            turn, task_grants = bool(inherited.turn_allows_web_and_commands), bool(inherited.task_grants)
+            turn, denied = bool(inherited.turn_allows_internet_access), bool(inherited.turn_denied_internet_access)
+            task_grants = bool(inherited.task_grants)
     approvals: dict[str, Any] = {}
     for decision in answers.approvals if answers is not None else []:
         approvals[decision.tool_call_id] = {
@@ -238,17 +243,19 @@ async def create_run(
             "expired": expired,
             "tool": decision.tool,
         }
+        internet = decision.reason == "internet_access"
+        if internet and not decision.approved:
+            denied = True
         if decision.scope == "turn":
             turn = True
         elif decision.scope == "conversation":
-            together = decision.reason == "untrusted_content" and decision.tool in WEB_AND_COMMANDS
             await connection.execute(
                 text(
-                    "UPDATE conversations SET allowed_web_and_commands = allowed_web_and_commands OR :together,"
-                    " allowed_tools = CASE WHEN :together OR :tool = ANY(allowed_tools) THEN allowed_tools"
+                    "UPDATE conversations SET allowed_internet_access = allowed_internet_access OR :internet,"
+                    " allowed_tools = CASE WHEN :internet OR :tool = ANY(allowed_tools) THEN allowed_tools"
                     " ELSE array_append(allowed_tools, CAST(:tool AS text)) END WHERE id = :id"
                 ),
-                {"together": together, "tool": decision.tool, "id": conversation.id},
+                {"internet": internet, "tool": decision.tool, "id": conversation.id},
             )
         if not decision.approved and parent is not None:
             # The call never runs: its audit event is written now, for the run that made it (AGT-008).
@@ -265,9 +272,9 @@ async def create_run(
     await connection.execute(
         text(
             "INSERT INTO runs (id, tenant_id, owner_id, conversation_id, parent_run_id, kind, status,"
-            " turn_allows_web_and_commands, task_grants, connection_id, model_provider, model_name, last_event_seq,"
-            " created_at) VALUES (:id, :tenant_id, :owner_id, :conversation, :parent, :kind, 'queued', :turn,"
-            " :task_grants, :connection, :provider, :model, 0, now())"
+            " turn_allows_internet_access, turn_denied_internet_access, task_grants, connection_id, model_provider,"
+            " model_name, last_event_seq, created_at) VALUES (:id, :tenant_id, :owner_id, :conversation, :parent,"
+            " :kind, 'queued', :turn, :denied, :task_grants, :connection, :provider, :model, 0, now())"
         ),
         {
             "kind": "resume" if resuming else "message",
@@ -277,6 +284,7 @@ async def create_run(
             "conversation": conversation.id,
             "parent": parent,
             "turn": turn,
+            "denied": denied,
             "task_grants": task_grants,
             "connection": model.id,
             "provider": urlsplit(str(model.base_url)).netloc,

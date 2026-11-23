@@ -920,6 +920,9 @@ async def _download(driver: SandboxDriver, identity: Identity, source: Source) -
     sandbox_id = uuid7()
     backend = SandboxBackend(driver, str(identity.tenant_id), str(identity.user_id), str(sandbox_id))
     try:
+        # The user's own request to fetch the address, in a sandbox that holds nothing of theirs: it has network
+        # (SBX-024).
+        await _online(driver, backend.path)
         script = _download_script(source)
         result = await backend.run(script, shell=True, timeout=DRIVER_TIMEOUT_SECONDS)  # noqa: S604 - in the sandbox
         if result.exit_code != 0:
@@ -930,6 +933,19 @@ async def _download(driver: SandboxDriver, identity: Identity, source: Source) -
         raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable") from error
     finally:
         await workspace_request(driver, identity, sandbox_id, "DELETE")
+
+
+async def _online(driver: SandboxDriver, sandbox_path: str) -> None:
+    """Start the import's sandbox with network; refused as unavailable."""
+    try:
+        async with httpx.AsyncClient(
+            base_url=driver.url, headers={"Authorization": f"Bearer {driver.token}"}, timeout=DRIVER_TIMEOUT_SECONDS
+        ) as client:
+            response = await client.post(f"{sandbox_path}/ensure", json={"internet_access": True})
+    except httpx.HTTPError as error:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable") from error
+    if response.status_code != 200:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable")
 
 
 def _driver(request: Request) -> SandboxDriver:
@@ -1012,7 +1028,8 @@ def _tar(skills: Mapping[str, Mapping[str, SkillFile]]) -> bytes:
 
 
 def sandbox_preparer(deps: RunDeps) -> Callable[[], Awaitable[None]]:
-    """What gives the run's skills to its sandbox, once, before its first command (SBX-022, ADR-0096)."""
+    """What gives the run's skills to its sandbox, once, before its first command (SBX-022, ADR-0096), then starts
+    it, with network only when the run has internet access (SBX-024, AGT-034, ADR-0113)."""
     given = False
     lock = asyncio.Lock()
 
@@ -1036,9 +1053,14 @@ def sandbox_preparer(deps: RunDeps) -> Callable[[], Awaitable[None]]:
                     timeout=DRIVER_TIMEOUT_SECONDS,
                 ) as client:
                     response = await client.put(path, content=archive, headers={"Content-Type": "application/x-tar"})
+                    if response.status_code == 204:
+                        response = await client.post(
+                            path.removesuffix("/skills") + "/ensure",
+                            json={"internet_access": deps.allowances.has_internet_access},
+                        )
             except httpx.HTTPError as error:
                 raise WorkspaceUnavailableError(f"the sandbox driver is unreachable: {error}") from error
-            if response.status_code != 204:
+            if response.status_code != 200:
                 # As any other refusal of the driver, the sandbox is unavailable (SBX-023).
                 raise WorkspaceUnavailableError(f"the sandbox is unavailable ({response.status_code})")
             given = True

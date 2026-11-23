@@ -392,6 +392,7 @@ type Reasoning = Literal["off", "on", "deep"]
 type ToolName = Literal[
     "web_search",
     "read_page",
+    "request_internet_access",
     "run_command",
     "start_command",
     "check_command",
@@ -448,7 +449,7 @@ type ApprovalOutcome = Literal[
     "not_needed", "allowed", "approved", "denied", "expired", "refused", "granted", "not_granted"
 ]
 type ApprovalReason = Literal[
-    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal"
+    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal", "internet_access"
 ]
 
 
@@ -484,12 +485,12 @@ class ToolList(Response):
 
 
 class Allowances(Response):
-    web_and_commands: bool
+    internet_access: bool
     tools: list[ToolName]
 
 
 class AllowancesUpdate(Request):
-    web_and_commands: bool
+    internet_access: bool
     tools: DisabledTools
 
 
@@ -1186,6 +1187,7 @@ class Task(Response):
     paused: bool
     triggers: list[TaskTrigger]
     grants: list[TaskGrantOut]
+    internet_access: bool
     grant_check: GrantCheck
     skipped: TaskSkipped
     last_fired_at: Timestamp | None
@@ -1209,6 +1211,7 @@ class CreateTaskRequest(Request):
     time_zone: TimeZone
     triggers: Annotated[list[TaskTriggerInput], Field(min_length=1, max_length=5)]
     grants: Annotated[list[TaskGrant], Field(max_length=20)] = Field(default_factory=list[TaskGrant])
+    internet_access: bool = False
 
 
 class UpdateTaskRequest(Request):
@@ -1223,6 +1226,7 @@ class UpdateTaskRequest(Request):
     time_zone: TimeZone | None = None
     paused: bool | None = None
     grants: Annotated[list[TaskGrant], Field(max_length=20)] | None = None
+    internet_access: bool | None = None
 
 
 class TaskConversation(Response):

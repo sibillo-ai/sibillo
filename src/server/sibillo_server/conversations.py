@@ -33,7 +33,7 @@ from sibillo_server.credentials import uuid7
 from sibillo_server.database import Identity, transaction
 from sibillo_server.plans import CONVERSATION_PLAN, copy_plan, plan_steps
 from sibillo_server.questions import interrupts
-from sibillo_server.sandbox import SandboxDriver, workspace_request
+from sibillo_server.sandbox import SandboxDriver, withdraw_network, workspace_request
 from sibillo_server.settings import new_conversation
 
 router = APIRouter()
@@ -41,7 +41,7 @@ router = APIRouter()
 CONVERSATION_COLUMNS = (
     "id, title, archived_at IS NOT NULL AS archived, temporary, task_id, task_name, active_run_id, connection_id,"
     " model, reasoning,"
-    " disabled_tools, disabled_skills, disabled_servers, allowed_web_and_commands, allowed_tools, base_instructions,"
+    " disabled_tools, disabled_skills, disabled_servers, allowed_internet_access, allowed_tools, base_instructions,"
     " additional_instructions, folder_id,"
     " pinned_at IS NOT NULL AS pinned, forked_from_conversation_id, forked_from_run_id, last_message_at,"
     f" pending_interrupts, approvals_expire_at, {CONVERSATION_PLAN}, created_at, updated_at, {CONVERSATION_COST}"
@@ -80,7 +80,7 @@ def conversation_response(row: Any) -> schemas.Conversation:
         disabled_tools=list(row.disabled_tools),
         disabled_skills=list(row.disabled_skills),
         disabled_servers=list(row.disabled_servers),
-        allowances=schemas.Allowances(web_and_commands=row.allowed_web_and_commands, tools=list(row.allowed_tools)),
+        allowances=schemas.Allowances(internet_access=row.allowed_internet_access, tools=list(row.allowed_tools)),
         base_instructions=row.base_instructions,
         additional_instructions=row.additional_instructions,
         folder_id=row.folder_id,
@@ -210,7 +210,11 @@ async def get_conversation(conversation_id: uuid.UUID, identity: Authenticated, 
 
 @router.patch("/conversations/{conversation_id}", response_model=schemas.Conversation)
 async def update_conversation(
-    conversation_id: uuid.UUID, body: schemas.UpdateConversationRequest, identity: Authenticated, engine: Engine
+    conversation_id: uuid.UUID,
+    body: schemas.UpdateConversationRequest,
+    identity: Authenticated,
+    engine: Engine,
+    request: Request,
 ) -> schemas.Conversation:
     present = body.model_fields_set
     if not present:
@@ -232,7 +236,7 @@ async def update_conversation(
         # Allowances are only withdrawn here; only an answered approval request creates one (AGT-006, AGT-012).
         allowances = body.allowances
         if allowances is not None and (
-            (allowances.web_and_commands and not conversation.allowed_web_and_commands)
+            (allowances.internet_access and not conversation.allowed_internet_access)
             or not set(allowances.tools) <= set(conversation.allowed_tools)
         ):
             raise errors.invalid("/allowances", "only_withdrawn")
@@ -248,7 +252,7 @@ async def update_conversation(
             "disabled_tools": body.disabled_tools,
             "disabled_skills": body.disabled_skills,
             "disabled_servers": body.disabled_servers,
-            "allowed_web_and_commands": None if allowances is None else allowances.web_and_commands,
+            "allowed_internet_access": None if allowances is None else allowances.internet_access,
             "allowed_tools": None if allowances is None else list(allowances.tools),
             # Present and null uses the user's defaults again (CNV-014).
             "set_base": "base_instructions" in present,
@@ -272,8 +276,8 @@ async def update_conversation(
                     " disabled_tools = coalesce(CAST(:disabled_tools AS text[]), disabled_tools),"
                     " disabled_skills = coalesce(CAST(:disabled_skills AS text[]), disabled_skills),"
                     " disabled_servers = coalesce(CAST(:disabled_servers AS uuid[]), disabled_servers),"
-                    " allowed_web_and_commands = coalesce(CAST(:allowed_web_and_commands AS boolean),"
-                    " allowed_web_and_commands),"
+                    " allowed_internet_access = coalesce(CAST(:allowed_internet_access AS boolean),"
+                    " allowed_internet_access),"
                     " allowed_tools = coalesce(CAST(:allowed_tools AS text[]), allowed_tools),"
                     " base_instructions = CASE WHEN CAST(:set_base AS boolean) THEN CAST(:base_instructions AS text)"
                     " ELSE base_instructions END,"
@@ -284,6 +288,9 @@ async def update_conversation(
                 changes | {"id": conversation_id},
             )
         ).one()
+    if allowances is not None and conversation.allowed_internet_access and not allowances.internet_access:
+        # Withdrawn: the conversation's sandbox loses its network at once (AGT-034, SBX-024).
+        await withdraw_network(_driver(request), identity, conversation_id)
     return conversation_response(row)
 
 

@@ -32,6 +32,7 @@ from sibillo_server.gateway import RunDeps
 from sibillo_server.mcp_runs import offered_names, shown
 from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
+    DENIED_INTERNET_ACCESS,
     TASK_PROPOSALS,
     decide,
     denied,
@@ -135,9 +136,31 @@ class Approvals(AbstractCapability[RunDeps]):
             metadata = cast(dict[str, Any], ctx.tool_call_metadata or {})
             outcome, scope, reason = "approved", metadata.get("scope"), metadata.get("reason")
             run_id = deps.parent_run_id or run_id
+            if reason == "internet_access":
+                # Internet access covers the call's way out, not what else its tool needs, such as the
+                # approval its permission asks for (AGT-002, AGT-034).
+                again = decide(call.tool_name, deps.permissions, False, deps.allowances)
+                if again.request is not None:
+                    raise ApprovalRequired(
+                        metadata={"reason": again.request.reason, "scopes": list(again.request.scopes)}
+                    )
         else:
             untrusted = deps.untrusted or has_untrusted_content(ctx.messages)
             decision = decide(call.tool_name, deps.permissions, untrusted, deps.allowances)
+            if decision.denied:
+                # The user denied internet access in this turn: denied again, without asking (AGT-034).
+                async with transaction(deps.engine, deps.identity) as connection:
+                    await record(
+                        connection,
+                        deps.identity,
+                        conversation_id=deps.conversation_id,
+                        run_id=run_id,
+                        tool_call_id=call.tool_call_id,
+                        tool=call.tool_name,
+                        outcome="denied",
+                        reason="internet_access",
+                    )
+                return DENIED_INTERNET_ACCESS
             if decision.request is not None and deps.unattended:
                 # Nobody watches a task's run: a grant covers the call, or it is denied without asking (TSK-004).
                 if _granted(deps, call.tool_name, args) is None:
@@ -156,6 +179,10 @@ class Approvals(AbstractCapability[RunDeps]):
                 outcome, scope, reason = "granted", None, decision.request.reason
             elif decision.request is not None:
                 metadata: dict[str, Any] = {"reason": decision.request.reason, "scopes": list(decision.request.scopes)}
+                if decision.request.reason == "internet_access":
+                    # One request of the run for all its calls that need internet access (AGT-034, ADR-0113).
+                    metadata["run_id"] = str(deps.run_id)
+                    metadata["untrusted_content"] = untrusted
                 # A remote MCP server's tool says what it is and where the call goes (AGT-018, ADR-0099).
                 if (described := shown(deps, call.tool_name)) is not None:
                     metadata["approval"] = described

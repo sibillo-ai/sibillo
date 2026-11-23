@@ -195,6 +195,20 @@ async def workspace_request(
         raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable")
 
 
+async def withdraw_network(driver: SandboxDriver, identity: Identity, conversation_id: uuid.UUID) -> None:
+    """Take the network from a conversation's sandbox, at once, as its user withdraws internet access (SBX-024)."""
+    path = f"/sandboxes/{identity.tenant_id}/{identity.user_id}/{conversation_id}/network"
+    try:
+        async with httpx.AsyncClient(
+            base_url=driver.url, headers={"Authorization": f"Bearer {driver.token}"}, timeout=DRIVER_TIMEOUT_SECONDS
+        ) as client:
+            response = await client.delete(path)
+    except httpx.HTTPError as error:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable") from error
+    if response.status_code != 204:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable")
+
+
 async def stop_conversation_sandbox(driver: SandboxDriver, identity: Identity, conversation_id: uuid.UUID) -> None:
     """Remove a conversation's sandbox, as its run is stopped (SBX-018); the driver's idle limit is the safety net."""
     path = f"/sandboxes/{identity.tenant_id}/{identity.user_id}/{conversation_id}/stop"

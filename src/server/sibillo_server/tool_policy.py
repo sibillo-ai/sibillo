@@ -5,7 +5,8 @@ tenant admin's tool permissions change the default, or take the tool away.
 A call needs approval for its classes, its permission or its default, or,
 once the conversation has untrusted content, because it communicates
 externally; allowances the user gave in the conversation, or for the turn,
-cover some of these.
+cover some of these. The web tools need internet access instead, one
+permission of the conversation (AGT-034, ADR-0113).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ type CapabilityClass = Literal[
 ]
 type Setting = Literal["allow", "ask", "deny"]
 type ApprovalReason = Literal[
-    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal"
+    "untrusted_content", "tool_default", "permission", "consequential", "device", "task_proposal", "internet_access"
 ]
 type Scope = Literal["once", "turn", "conversation"]
 
@@ -39,8 +40,9 @@ STRICTNESS: dict[Setting, int] = {"allow": 0, "ask": 1, "deny": 2}
 CONSEQUENTIAL: frozenset[CapabilityClass] = frozenset({"irreversible", "physical"})
 # The classes whose calls have effects outside Sibillo, and record an idempotency key (AGT-008).
 EXTERNAL_EFFECTS: frozenset[CapabilityClass] = frozenset({"external_communication", "irreversible", "physical"})
-# The tools that one approval covers together under the trifecta rule (AGT-004, ADR-0090).
-WEB_AND_COMMANDS = frozenset({"web_search", "read_page", "run_command", "start_command"})
+# The tool that asks for internet access, and the tools that need it (AGT-034, ADR-0113).
+REQUEST_INTERNET_ACCESS = "request_internet_access"
+INTERNET_TOOLS = frozenset({"web_search", "read_page", REQUEST_INTERNET_ACCESS})
 # The classes of every tool of a remote MCP server (AGT-005, ADR-0099).
 SERVER_CLASSES: frozenset[CapabilityClass] = frozenset(
     {"reads_private_data", "ingests_untrusted", "external_communication"}
@@ -62,6 +64,15 @@ SKILL_ORIGIN = "sibillo.skill"
 # What the model is told of a call the user did not approve.
 DENIED = "The user denied this call, so it did not run. Do not try it again unless the user asks."
 EXPIRED = "Nobody approved this call within a day, so it was denied and did not run."
+# What the model is told of a call that needs internet access after the user denied it in the turn (AGT-034).
+DENIED_INTERNET_ACCESS = (
+    "The user denied internet access in this turn, so this call did not run. Do not ask for it again in this"
+    " turn; work without the internet, or tell the user what you would need it for."
+)
+# What `request_internet_access` answers once the conversation has internet access (AGT-034).
+INTERNET_ACCESS_GIVEN = (
+    "The conversation has internet access: the web tools run, and the sandbox reaches public addresses."
+)
 
 
 @dataclass(frozen=True)
@@ -76,18 +87,20 @@ def _declare(*classes: CapabilityClass) -> Declaration:
     return Declaration(frozenset(classes))
 
 
-_COMMAND = _declare("reads_private_data", "ingests_untrusted", "external_communication")
 _READS = _declare("reads_private_data", "ingests_untrusted")
 _WRITES = _declare("reads_private_data")
 _OWN = _declare()
 
-# Every tool of the assistant, in the order of the API contract's `ToolName` (ADR-0090). Web and command
-# tools are allowed by default: the trifecta rule guards them where it matters.
+# Every tool of the assistant, in the order of the API contract's `ToolName` (ADR-0090). Web tools are
+# allowed by default: internet access guards them (AGT-034, ADR-0113).
 DECLARATIONS: Mapping[str, Declaration] = {
     "web_search": _declare("ingests_untrusted", "external_communication"),
     "read_page": _declare("ingests_untrusted", "external_communication"),
-    "run_command": _COMMAND,
-    "start_command": _COMMAND,
+    # Asks for internet access, and does nothing else.
+    REQUEST_INTERNET_ACCESS: _OWN,
+    # A command's only way out is the sandbox's network, which internet access governs (ADR-0113).
+    "run_command": _READS,
+    "start_command": _READS,
     "check_command": _READS,
     "stop_command": _WRITES,
     "read_file": _READS,
@@ -140,9 +153,14 @@ def ingests_untrusted(tool: str) -> bool:
     return declaration is None or "ingests_untrusted" in declaration.classes
 
 
+# Commands reach the internet once the conversation has internet access: a call that may have run twice after a
+# crash is shown as such, as for the tools that communicate externally (AGT-008, ADR-0113).
+COMMANDS = frozenset({"run_command", "start_command"})
+
+
 def has_external_effects(tool: str) -> bool:
     declaration = DECLARATIONS.get(tool)
-    return declaration is None or bool(EXTERNAL_EFFECTS & declaration.classes)
+    return declaration is None or tool in COMMANDS or bool(EXTERNAL_EFFECTS & declaration.classes)
 
 
 def _untrusted_skill(part: ToolReturnPart) -> bool:
@@ -210,6 +228,11 @@ class Permissions:
         return server_id in self.servers or any(self.classes.get(name) == "deny" for name in SERVER_CLASSES)
 
 
+def denies_internet_access(permissions: Permissions) -> bool:
+    """Whether the user's permissions deny internet access: never asked, never given (AGT-034, ADR-0113)."""
+    return permissions.classes.get("external_communication") == "deny"
+
+
 @dataclass(frozen=True)
 class Effective:
     """What applies to a tool for a user, and where it comes from: a permission's subject, or the default."""
@@ -219,7 +242,10 @@ class Effective:
 
 
 def effective(tool: str, permissions: Permissions) -> Effective:
-    """A tool's setting wins over its classes'; among its classes the strictest wins (AGT-002)."""
+    """A tool's setting wins over its classes'; among its classes the strictest wins (AGT-002). A user denied
+    the `external_communication` class has no internet access, whatever the web tools' settings (AGT-034)."""
+    if tool in INTERNET_TOOLS and denies_internet_access(permissions):
+        return Effective("deny", "external_communication")
     if tool in permissions.tools:
         return Effective(permissions.tools[tool], tool)
     declaration = DECLARATIONS[tool]
@@ -241,11 +267,20 @@ def denied(permissions: Permissions) -> frozenset[str]:
 
 @dataclass(frozen=True)
 class Allowances:
-    """What the user allowed: the web and commands for the turn or the conversation, and tools in it (AGT-006)."""
+    """What the user allowed: internet access for the turn or the conversation, and tools in it (AGT-006, AGT-034).
 
-    turn_web_and_commands: bool = False
-    web_and_commands: bool = False
+    `turn_denied_internet_access` says that the user denied internet access in the turn, or let its request
+    expire: later calls that need it are denied without asking.
+    """
+
+    turn_internet_access: bool = False
+    internet_access: bool = False
     tools: frozenset[str] = frozenset()
+    turn_denied_internet_access: bool = False
+
+    @property
+    def has_internet_access(self) -> bool:
+        return self.turn_internet_access or self.internet_access
 
 
 @dataclass(frozen=True)
@@ -258,10 +293,11 @@ class Request:
 
 @dataclass(frozen=True)
 class Decision:
-    """A call runs (`allowed` when an allowance let it), or needs approval (`request`)."""
+    """A call runs (`allowed` when an allowance let it), needs approval (`request`), or is denied without asking."""
 
     request: Request | None = None
     allowed: Scope | None = None
+    denied: bool = False
 
 
 def decide(tool: str, permissions: Permissions, untrusted: bool, allowances: Allowances) -> Decision:
@@ -277,19 +313,25 @@ def decide(tool: str, permissions: Permissions, untrusted: bool, allowances: All
     if CONSEQUENTIAL & declaration.classes:
         return Decision(Request("consequential", ("once",)))
     allowed: Scope | None = None
+    if tool in INTERNET_TOOLS:
+        # Internet access first, whether or not the run has untrusted content (AGT-034, ADR-0113).
+        if allowances.turn_internet_access:
+            allowed = "turn"
+        elif allowances.internet_access:
+            allowed = "conversation"
+        elif allowances.turn_denied_internet_access:
+            return Decision(denied=True)
+        else:
+            return Decision(Request("internet_access", ("turn", "conversation")))
+        if tool == REQUEST_INTERNET_ACCESS:
+            return Decision(allowed=allowed)
     setting = effective(tool, permissions)
     if setting.setting == "ask":
         if tool not in allowances.tools:
             reason: ApprovalReason = "tool_default" if setting.subject is None else "permission"
             return Decision(Request(reason, ("once", "conversation")))
         allowed = "conversation"
-    if untrusted and "external_communication" in declaration.classes:
-        if tool in WEB_AND_COMMANDS:
-            if allowances.turn_web_and_commands:
-                return Decision(allowed="turn")
-            if allowances.web_and_commands:
-                return Decision(allowed="conversation")
-            return Decision(Request("untrusted_content", ("once", "turn", "conversation")))
+    if untrusted and "external_communication" in declaration.classes and tool not in INTERNET_TOOLS:
         return Decision(Request("untrusted_content", ("once",)))
     return Decision(allowed=allowed)
 
@@ -310,7 +352,7 @@ def describe(tool: str, arguments: Mapping[str, Any]) -> tuple[str, str, str]:
         command = str(arguments.get("command", ""))
         purpose = str(arguments.get("description", "") or arguments.get("purpose", ""))
         action = "Run a command in the sandbox" if tool == "run_command" else "Start a command in the sandbox"
-        return (f"{action}: {purpose}" if purpose else action), command, "The internet, from the conversation's sandbox"
+        return (f"{action}: {purpose}" if purpose else action), command, "The conversation's sandbox"
     if tool == UPDATE_TASK:
         return (
             "Change one of your tasks, with what the change lists",

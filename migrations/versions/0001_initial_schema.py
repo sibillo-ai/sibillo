@@ -90,6 +90,7 @@ TOOL_NAMES = (
     "ARRAY["
     "'web_search', "
     "'read_page', "
+    "'request_internet_access', "
     "'run_command', "
     "'start_command', "
     "'check_command', "
@@ -417,6 +418,8 @@ TABLES = [
       disabled_skills text[] NOT NULL DEFAULT '{{}}',
       disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
       uses_memory boolean NOT NULL DEFAULT false,
+      -- The grant of internet access (TSK-004, AGT-034, ADR-0113).
+      internet_access boolean NOT NULL DEFAULT false,
       time_zone text NOT NULL CHECK (char_length(time_zone) BETWEEN 1 AND 64),
       paused_at timestamptz,
       skipped_count integer NOT NULL DEFAULT 0 CHECK (skipped_count >= 0),
@@ -436,7 +439,9 @@ TABLES = [
       tenant_id uuid NOT NULL,
       owner_id uuid NOT NULL,
       task_id uuid NOT NULL,
-      tool text NOT NULL CHECK (tool ~ '^[A-Za-z0-9_-]{1,64}$'),
+      tool text NOT NULL CHECK (tool ~ '^[A-Za-z0-9_-]{1,64}$'
+        -- These follow the task's grant of internet access (ADR-0113).
+        AND tool NOT IN ('web_search', 'read_page', 'request_internet_access')),
       server_id uuid,
       arguments jsonb CHECK (arguments IS NULL OR (jsonb_typeof(arguments) = 'object'
         AND octet_length(arguments::text) <= 4096)),
@@ -611,7 +616,7 @@ TABLES = [
       -- The remote MCP servers off in it, without a reference (AGT-029, ADR-0099).
       disabled_servers uuid[] NOT NULL DEFAULT '{{}}',
       -- What its user allowed by answering approval requests (AGT-004, AGT-006, ADR-0090).
-      allowed_web_and_commands boolean NOT NULL DEFAULT false,
+      allowed_internet_access boolean NOT NULL DEFAULT false,
       allowed_tools text[] NOT NULL DEFAULT '{{}}' CHECK (allowed_tools <@ {TOOL_NAMES}),
       base_instructions text,
       additional_instructions text,
@@ -656,7 +661,8 @@ TABLES = [
       parent_run_id uuid,
       kind text NOT NULL CHECK (kind IN ('message', 'resume')),
       -- The web and commands allowed for the rest of the turn (ADR-0090).
-      turn_allows_web_and_commands boolean NOT NULL DEFAULT false,
+      turn_allows_internet_access boolean NOT NULL DEFAULT false,
+      turn_denied_internet_access boolean NOT NULL DEFAULT false,
       -- The calls of the run follow its conversation's task's grants (TSK-004, ADR-0106).
       task_grants boolean NOT NULL DEFAULT false,
       status text NOT NULL CHECK (status IN ('queued', 'running', 'interrupted', 'completed', 'failed', 'cancelled')),
@@ -890,7 +896,7 @@ TABLES = [
       scope text CHECK (scope IN ('once', 'turn', 'conversation')),
       reason text
         CHECK (reason IN ('untrusted_content', 'tool_default', 'permission', 'consequential', 'device',
-                          'task_proposal')),
+                          'task_proposal', 'internet_access')),
       attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
       created_at timestamptz NOT NULL,
       UNIQUE (run_id, tool_call_id),

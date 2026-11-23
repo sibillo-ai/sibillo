@@ -6,6 +6,10 @@ image's reader in the conversation's sandbox, which fetches the page under the
 sandbox's egress rules. Both return untrusted content (AGT-003), which the
 tool output limits bound like any other result (AGT-014), and tell the model
 what went wrong instead of failing the run.
+
+Both need internet access, which `request_internet_access` asks for: the
+Approvals capability asks the user before either runs without it (AGT-034,
+ADR-0113).
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from pydantic_ai.workspaces import WorkspaceError
 
 from sibillo_server.gateway import RunDeps
 from sibillo_server.sandbox import backend_for
+from sibillo_server.tool_policy import INTERNET_ACCESS_GIVEN
 
 MAX_RESULTS = 10
 SEARCH_TIMEOUT_SECONDS = 20
@@ -98,4 +103,14 @@ async def read_page(ctx: RunContext[RunDeps], url: str) -> str:
     )
 
 
-TOOLS = (Tool(web_search, prepare=_searchable), Tool(read_page))
+async def request_internet_access(ctx: RunContext[RunDeps]) -> str:
+    """Ask the user for internet access, which the web tools and the sandbox's network need.
+
+    Ask once, when the work needs the internet, and say in your answer why. Without it the sandbox has no
+    network, and web_search and read_page do not run.
+    """
+    # Runs only once the conversation has internet access: the user was asked before it ran (AGT-034).
+    return INTERNET_ACCESS_GIVEN
+
+
+TOOLS = (Tool(web_search, prepare=_searchable), Tool(read_page), Tool(request_internet_access))

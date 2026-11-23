@@ -28,6 +28,7 @@ async def propose_task(
     triggers: list[dict[str, Any]],
     grants: list[dict[str, Any]] | None = None,
     uses_memory: bool = False,
+    internet_access: bool = False,
     reasoning: str | None = None,
     disabled_tools: list[str] | None = None,
 ) -> str:
@@ -45,7 +46,9 @@ async def propose_task(
             recurrence for once, at the start. Or `{"kind": "webhook"}`.
         grants: The calls it may make without asking, nobody being there to approve: `{"tool": "<tool>",
             "arguments": null}` for any arguments, or with the exact arguments. Grant only what it needs.
+            The web tools take no grants: they follow `internet_access`.
         uses_memory: Whether it uses what you remember about the user.
+        internet_access: Whether its runs have internet access, for the web tools and the sandbox's network.
         reasoning: `off`, `on` or `deep`.
         disabled_tools: Tools it does without.
     """
@@ -56,6 +59,7 @@ async def propose_task(
         "triggers": triggers,
         "grants": grants or [],
         "uses_memory": uses_memory,
+        "internet_access": internet_access,
     }
     if reasoning is not None:
         fields["reasoning"] = reasoning
@@ -91,6 +95,7 @@ async def update_task(
     paused: bool | None = None,
     grants: list[dict[str, Any]] | None = None,
     uses_memory: bool | None = None,
+    internet_access: bool | None = None,
     reasoning: str | None = None,
     disabled_tools: list[str] | None = None,
 ) -> str:
@@ -106,6 +111,7 @@ async def update_task(
         paused: Whether it stops firing, or fires again.
         grants: Its grants, all of them, as `propose_task` takes them.
         uses_memory: Whether it uses what you remember about the user.
+        internet_access: Whether its runs have internet access.
         reasoning: `off`, `on` or `deep`.
         disabled_tools: Tools it does without.
     """
@@ -116,6 +122,7 @@ async def update_task(
         "paused": paused,
         "grants": grants,
         "uses_memory": uses_memory,
+        "internet_access": internet_access,
         "reasoning": reasoning,
         "disabled_tools": disabled_tools,
     }

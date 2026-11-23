@@ -25,10 +25,12 @@ from pydantic_ai_harness.ask_user import (
 )
 
 from sibillo_server import errors
-from sibillo_server.tool_policy import describe
+from sibillo_server.tool_policy import REQUEST_INTERNET_ACCESS, describe
 
 INTERRUPT_PREFIX = "int-"
 APPROVAL_PREFIX = "apr-"
+# One request for internet access for all the calls of a run that need it, by the run's ID (AGT-034, ADR-0113).
+INTERNET_PREFIX = "apr-internet-"
 # The most of the user's own words one answer carries.
 CUSTOM_ANSWER_CHARS = 2000
 
@@ -72,6 +74,42 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
     return request
 
 
+def _internet(requests: DeferredToolRequests, call: Any) -> str | None:
+    """The ID of the request for internet access the call waits for; None when it waits for its own."""
+    metadata: Any = requests.metadata.get(call.tool_call_id)
+    if not isinstance(metadata, dict) or cast(dict[str, Any], metadata).get("reason") != "internet_access":
+        return None
+    return f"{INTERNET_PREFIX}{cast(dict[str, Any], metadata).get('run_id', '')}"
+
+
+def _groups(requests: DeferredToolRequests) -> dict[str, list[Any]]:
+    """The approval requests, by interrupt ID, in the order of the calls: the calls of a request for internet
+    access together, every other call on its own."""
+    groups: dict[str, list[Any]] = {}
+    for call in requests.approvals:
+        groups.setdefault(_internet(requests, call) or f"{APPROVAL_PREFIX}{call.tool_call_id}", []).append(call)
+    return groups
+
+
+def internet_access_request(requests: DeferredToolRequests, calls: list[Any]) -> dict[str, Any]:
+    """What the user is asked, for internet access, from the stored calls (AGT-034, ADR-0113)."""
+    first: dict[str, Any] = requests.metadata.get(calls[0].tool_call_id) or {}
+    waiting: list[dict[str, Any]] = []
+    for call in calls:
+        if call.tool_name == REQUEST_INTERNET_ACCESS:
+            continue
+        arguments = call.args_as_dict()
+        _, data, destination = describe(call.tool_name, arguments)
+        waiting.append({"tool": call.tool_name, "arguments": arguments, "data": data, "destination": destination})
+    return {
+        "untrusted_content": any(
+            bool((requests.metadata.get(call.tool_call_id) or {}).get("untrusted_content")) for call in calls
+        ),
+        "calls": waiting,
+        "scopes": list(first.get("scopes") or ["turn", "conversation"]),
+    }
+
+
 def interrupts(stored: Any, expires_at: datetime.datetime | None = None) -> list[dict[str, Any]]:
     """The AG-UI interrupts of the stored requests: the questions, as the model asked them, and the approvals."""
     if stored is None:
@@ -90,13 +128,21 @@ def interrupts(stored: Any, expires_at: datetime.datetime | None = None) -> list
         }
         for call in requests.calls
     ]
-    for call in requests.approvals:
-        interrupt: dict[str, Any] = {
-            "id": f"{APPROVAL_PREFIX}{call.tool_call_id}",
-            "reason": "approval",
-            "toolCallId": call.tool_call_id,
-            "metadata": {"approval": approval_request(requests, call)},
-        }
+    for interrupt_id, calls in _groups(requests).items():
+        if interrupt_id.startswith(INTERNET_PREFIX):
+            interrupt: dict[str, Any] = {
+                "id": interrupt_id,
+                "reason": "approval",
+                "metadata": {"internet_access": internet_access_request(requests, calls)},
+            }
+        else:
+            (call,) = calls
+            interrupt = {
+                "id": interrupt_id,
+                "reason": "approval",
+                "toolCallId": call.tool_call_id,
+                "metadata": {"approval": approval_request(requests, call)},
+            }
         if expires_at is not None:
             interrupt["expiresAt"] = _rfc3339(expires_at)
         found.append(interrupt)
@@ -153,7 +199,11 @@ class Answers:
 
 def _decision(requests: DeferredToolRequests, call: Any, entry: dict[str, Any]) -> Decision:
     """The user's decision on one stored approval request; refused unless its scope was offered (AGT-012)."""
-    offered = approval_request(requests, call)
+    offered: dict[str, Any] = (
+        {"reason": "internet_access", **internet_access_request(requests, [call])}
+        if _internet(requests, call) is not None
+        else approval_request(requests, call)
+    )
     reason = str(offered["reason"])
     if entry.get("status") == "cancelled":
         return Decision(call.tool_call_id, call.tool_name, reason, approved=False)
@@ -180,9 +230,8 @@ def answer(stored: Any, resume: list[dict[str, Any]], expires_at: datetime.datet
     if requests.approvals and expires_at is not None and expires_at <= datetime.datetime.now(datetime.UTC):
         raise _invalid("The approval request has expired")
     entries = {str(entry.get("interruptId")): entry for entry in resume}
-    expected = {f"{INTERRUPT_PREFIX}{call.tool_call_id}" for call in requests.calls} | {
-        f"{APPROVAL_PREFIX}{call.tool_call_id}" for call in requests.approvals
-    }
+    groups = _groups(requests)
+    expected = {f"{INTERRUPT_PREFIX}{call.tool_call_id}" for call in requests.calls} | set(groups)
     if set(entries) != expected or len(entries) != len(resume):
         raise _invalid("Answer every pending request, and nothing else")
     results: dict[str, Any] = {}
@@ -194,8 +243,9 @@ def answer(stored: Any, resume: list[dict[str, Any]], expires_at: datetime.datet
             results[call.tool_call_id] = ask_user_result(request, response)
         except ValueError:
             raise _invalid("The answer does not fit its question") from None
+    # A request for internet access is answered once, for every call that waits for it (AGT-034).
     decisions = [
-        _decision(requests, call, entries[f"{APPROVAL_PREFIX}{call.tool_call_id}"]) for call in requests.approvals
+        _decision(requests, call, entries[interrupt_id]) for interrupt_id, calls in groups.items() for call in calls
     ]
     return Answers(results, decisions)
 

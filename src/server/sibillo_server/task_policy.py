@@ -5,7 +5,9 @@ arguments; an open grant covers the tool with any arguments. A grant never
 covers a consequential tool, a tool a tool permission asks or denies, the
 tool that proposes a task, or an open call to a remote MCP server's tool.
 Together, a task's grants, its memory and its event triggers never reach
-private data, untrusted content and an open way out at once.
+private data, untrusted content and an open way out at once. The web tools
+take no grants: they follow the task's grant of internet access, which counts
+as untrusted content and as a way out (ADR-0113).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Any
 from sibillo_server.tool_policy import (
     CONSEQUENTIAL,
     DECLARATIONS,
+    INTERNET_TOOLS,
     PROPOSE_TASK,
     SERVER_CLASSES,
     UPDATE_TASK,
@@ -28,10 +31,12 @@ from sibillo_server.tool_policy import (
 
 # Tools of the agent that a user has no switch for, and that a grant never names.
 # The assistant's tool that proposes a task is never granted, so that a task never creates tasks (TSK-006).
-UNGRANTABLE = frozenset({PROPOSE_TASK, UPDATE_TASK, "read_tool_result", "load_capability"})
+# The web tools follow the task's grant of internet access instead (ADR-0113).
+UNGRANTABLE = frozenset({PROPOSE_TASK, UPDATE_TASK, "read_tool_result", "load_capability"}) | INTERNET_TOOLS
 # The names `GrantCheck` gives the sources that are not tools.
 MEMORY = "memory"
 EVENT_TRIGGER = "event_trigger"
+INTERNET_ACCESS = "internet_access"
 # What the model is told of a call that needed approval in a task's run, with no grant covering it.
 NOT_GRANTED = (
     "This call needs the user's approval, and this task's grants do not cover it, so it was denied without asking:"
@@ -104,9 +109,9 @@ def _unique(names: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(names))
 
 
-def check(grants: Iterable[Grant], *, memory: bool, event_trigger: bool) -> Check:
+def check(grants: Iterable[Grant], *, memory: bool, event_trigger: bool, internet_access: bool = False) -> Check:
     """The check of TSK-005: `memory` when the task uses it and it is on for the user; `event_trigger` when it has
-    a webhook trigger or a trigger on an event."""
+    a webhook trigger or a trigger on an event; `internet_access` when it has the grant of internet access."""
     grants = list(grants)
     private = [grant.tool for grant in grants if "reads_private_data" in classes_of(grant.tool)]
     untrusted = [grant.tool for grant in grants if "ingests_untrusted" in classes_of(grant.tool)]
@@ -117,6 +122,9 @@ def check(grants: Iterable[Grant], *, memory: bool, event_trigger: bool) -> Chec
     if event_trigger:
         private.append(EVENT_TRIGGER)
         untrusted.append(EVENT_TRIGGER)
+    if internet_access:
+        untrusted.append(INTERNET_ACCESS)
+        outward.append(INTERNET_ACCESS)
     return Check(_unique(private), _unique(untrusted), _unique(outward))
 
 

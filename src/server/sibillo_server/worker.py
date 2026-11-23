@@ -110,7 +110,16 @@ from sibillo_server.task_runner import sweep as sweep_tasks
 from sibillo_server.task_tools import TOOLS as TASK_TOOLS
 from sibillo_server.tasks import finish_firing
 from sibillo_server.tool_policy import ATTACHMENTS_ORIGIN as POLICY_ATTACHMENTS_ORIGIN
-from sibillo_server.tool_policy import DENIED, EVENT_ORIGIN, EXPIRED, Allowances, has_untrusted_content, is_server_tool
+from sibillo_server.tool_policy import (
+    DENIED,
+    EVENT_ORIGIN,
+    EXPIRED,
+    INTERNET_TOOLS,
+    Allowances,
+    denies_internet_access,
+    has_untrusted_content,
+    is_server_tool,
+)
 from sibillo_server.web_tools import TOOLS as WEB_TOOLS
 from sibillo_server.workflow_input import RunWorkflowInput
 
@@ -193,7 +202,19 @@ TOOLBOX_INSTRUCTIONS = (
     " pandoc, typst, ImageMagick (magick), ffmpeg, ffprobe, jq, sqlite3, file, zip, unzip, node and npm, and"
     " python3 with pandas, numpy, matplotlib, Pillow, pypdf, python-docx, openpyxl and python-pptx; there is no"
     " office suite and no text recognition. The built-in skills say how to use them for each kind of file."
-    " Use them before installing anything, and install only what is missing: it lasts for this answer only."
+    " Use them before installing anything, and install only what is missing: installing needs internet access,"
+    " and what you install lasts for this answer only."
+)
+# Internet access, one permission of the conversation (AGT-034, ADR-0113).
+OFFLINE_INSTRUCTIONS = (
+    "This conversation has no internet access: the sandbox has no network at all, not even to resolve names, and"
+    " web_search and read_page do not run without it. The tools of the sandbox need no network, so do ordinary"
+    " work without it. When the work needs the internet, ask for it once with request_internet_access, saying in"
+    " your answer why; do not try commands that need the network before you have it, since they fail."
+)
+ONLINE_INSTRUCTIONS = (
+    "This conversation has internet access: web_search and read_page run, and the sandbox reaches public"
+    " addresses. Use it only for what the work needs."
 )
 
 
@@ -233,6 +254,13 @@ def language_instructions(language: str | None) -> str:
     )
 
 
+def _network_instructions(deps: RunDeps, on: frozenset[str]) -> str:
+    """What the run says of internet access, while a tool that uses it is on (AGT-034, ADR-0113)."""
+    if not on & (INTERNET_TOOLS | {"run_command", "start_command"}) or denies_internet_access(deps.permissions):
+        return ""
+    return ONLINE_INSTRUCTIONS if deps.allowances.has_internet_access else OFFLINE_INSTRUCTIONS
+
+
 def instructions(ctx: RunContext[RunDeps]) -> str:
     """The base instructions, the preferred language, the working instructions for the tools that are on, then
     the user's additions."""
@@ -242,6 +270,7 @@ def instructions(ctx: RunContext[RunDeps]) -> str:
         WORKSPACE_INSTRUCTIONS if on & (COMMAND_TOOLS | FILE_TOOLS) else "",
         DOWNLOAD_INSTRUCTIONS if "offer_download" in on else "",
         TOOLBOX_INSTRUCTIONS if on & {"run_command", "start_command"} else "",
+        _network_instructions(deps, on),
     ]
     base = BUILT_IN_BASE_INSTRUCTIONS if deps.base_instructions is None else deps.base_instructions
     # Memory: how to keep it while its tools are on, then what the user's memory holds (MEM-007, ADR-0095).
@@ -251,6 +280,7 @@ def instructions(ctx: RunContext[RunDeps]) -> str:
         language_instructions(deps.language),
         " ".join(part for part in working[:2] if part),
         working[2],
+        working[3],
         VOICE_INSTRUCTIONS.get(deps.voice or "", ""),
         TASK_INSTRUCTIONS if deps.unattended else "",
         MEMORY_INSTRUCTIONS if keeping else "",
@@ -494,16 +524,18 @@ async def run_workflow(serialized_input: str) -> None:
         attribution = (
             await connection.execute(
                 text(
-                    "SELECT model_provider, model_name, turn_allows_web_and_commands, task_grants FROM runs"
-                    " WHERE id = :id"
+                    "SELECT model_provider, model_name, turn_allows_internet_access, turn_denied_internet_access,"
+                    " task_grants FROM runs WHERE id = :id"
                 ),
                 {"id": run_id},
             )
         ).one()
-        unattended, grants = await _task_turn(connection, conversation_id, run_id, attribution.task_grants)
+        unattended, grants, task_internet = await _task_turn(
+            connection, conversation_id, run_id, attribution.task_grants
+        )
         allowed = (
             await connection.execute(
-                text("SELECT allowed_web_and_commands, allowed_tools FROM conversations WHERE id = :id"),
+                text("SELECT allowed_internet_access, allowed_tools FROM conversations WHERE id = :id"),
                 {"id": conversation_id},
             )
         ).one()
@@ -537,9 +569,11 @@ async def run_workflow(serialized_input: str) -> None:
         voice=run.voice,
         permissions=permissions,
         allowances=Allowances(
-            turn_web_and_commands=attribution.turn_allows_web_and_commands,
-            web_and_commands=allowed.allowed_web_and_commands,
+            # The runs of a task's first turn have internet access when the task grants it (TSK-004, ADR-0113).
+            turn_internet_access=attribution.turn_allows_internet_access or task_internet,
+            internet_access=allowed.allowed_internet_access,
             tools=frozenset(allowed.allowed_tools),
+            turn_denied_internet_access=attribution.turn_denied_internet_access,
         ),
         # An untrusted memory item makes the run untrusted from its start (MEM-008, ADR-0095).
         untrusted=untrusted or any(item.untrusted for item in memory or ()),
@@ -589,22 +623,26 @@ async def run_workflow(serialized_input: str) -> None:
 
 async def _task_turn(
     connection: Any, conversation_id: uuid.UUID, run_id: uuid.UUID, task_grants: bool
-) -> tuple[bool, tuple[Grant, ...]]:
-    """Whether the run is of a task's first turn, which nobody watches, and the grants it follows (ADR-0106)."""
+) -> tuple[bool, tuple[Grant, ...], bool]:
+    """Whether the run is of a task's first turn, which nobody watches, the grants it follows, and whether it
+    has the task's grant of internet access (ADR-0106, ADR-0113)."""
     task_id = (
         await connection.execute(text("SELECT task_id FROM conversations WHERE id = :id"), {"id": conversation_id})
     ).scalar_one_or_none()
     if task_id is None:
-        return False, ()
+        return False, (), False
     path = await path_runs(connection, conversation_id, run_id)
     if sum(1 for item in path if item.kind == "message") != 1:
-        return False, ()
+        return False, (), False
     if not task_grants:
-        return True, ()
+        return True, (), False
+    internet = (
+        await connection.execute(text("SELECT internet_access FROM tasks WHERE id = :id"), {"id": task_id})
+    ).scalar_one_or_none()
     rows = await connection.execute(
         text("SELECT tool, arguments FROM task_grants WHERE task_id = :id ORDER BY created_at, id"), {"id": task_id}
     )
-    return True, tuple(Grant(row.tool, row.arguments) for row in rows)
+    return True, tuple(Grant(row.tool, row.arguments) for row in rows), bool(internet)
 
 
 # Labels the part of a user's message that lists its attachments, apart from what they wrote (CNV-017).

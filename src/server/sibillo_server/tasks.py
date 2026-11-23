@@ -46,6 +46,7 @@ from sibillo_server.recurrence import RecurrenceError, next_occurrence, parse_st
 from sibillo_server.recurrence import check as check_recurrence
 from sibillo_server.settings import new_conversation
 from sibillo_server.task_policy import Check, Grant, check, refusal
+from sibillo_server.tool_policy import denies_internet_access
 
 router = APIRouter()
 
@@ -69,7 +70,7 @@ MIN_POLL_SECONDS = 60
 
 TASK_COLUMNS = (
     "id, name, instructions, connection_id, model, reasoning, disabled_tools, disabled_skills, disabled_servers,"
-    " uses_memory, time_zone, paused_at, skipped_count, last_skipped_at, created_at, updated_at"
+    " uses_memory, internet_access, time_zone, paused_at, skipped_count, last_skipped_at, created_at, updated_at"
 )
 TRIGGER_COLUMNS = (
     "id, task_id, kind, schedule_start, recurrence, next_fire_at, token_hash, server_id, server_generation, event_name,"
@@ -189,7 +190,12 @@ def has_event_trigger(kinds: Sequence[str]) -> bool:
 async def grant_check(connection: AsyncConnection, state: TaskState) -> Check:
     """The check of TSK-005 as the task and its user's memory stand now."""
     memory = bool(state.row.uses_memory) and await memory_enabled(connection)
-    return check(state.grants, memory=memory, event_trigger=has_event_trigger([t.kind for t in state.triggers]))
+    return check(
+        state.grants,
+        memory=memory,
+        event_trigger=has_event_trigger([t.kind for t in state.triggers]),
+        internet_access=bool(state.row.internet_access),
+    )
 
 
 def _check_out(found: Check) -> schemas.GrantCheck:
@@ -244,6 +250,7 @@ async def task_response(
             schemas.TaskGrantOut(tool=grant.tool, arguments=None if grant.arguments is None else dict(grant.arguments))
             for grant in state.grants
         ],
+        internet_access=row.internet_access,
         grant_check=_check_out(await grant_check(connection, state)),
         skipped=schemas.TaskSkipped(count=row.skipped_count, last_at=row.last_skipped_at),
         last_fired_at=last,
@@ -295,6 +302,17 @@ async def _check_grants(
             )
         checked.append((grant, tools.get(grant.tool)))
     return checked
+
+
+async def _check_internet_access(connection: AsyncConnection, identity: Identity) -> None:
+    """Refused when the user's permissions deny internet access (AGT-034, ADR-0113)."""
+    if denies_internet_access(await permissions_of(connection, identity.user_id)):
+        raise errors.ApiError(
+            422,
+            "task.grant_not_allowed",
+            "Grant not allowed",
+            detail="internet access cannot be granted: permission",
+        )
 
 
 def trifecta(found: Check) -> errors.ApiError:
@@ -467,9 +485,14 @@ async def create(
         for index, item in enumerate(body.triggers)
     ]
     grants = await _check_grants(connection, identity, body.grants)
+    if body.internet_access:
+        await _check_internet_access(connection, identity)
     memory = body.uses_memory and await memory_enabled(connection)
     found = check(
-        [grant for grant, _ in grants], memory=memory, event_trigger=has_event_trigger([t.kind for t in triggers])
+        [grant for grant, _ in grants],
+        memory=memory,
+        event_trigger=has_event_trigger([t.kind for t in triggers]),
+        internet_access=body.internet_access,
     )
     if not found.passes:
         raise trifecta(found)
@@ -478,9 +501,10 @@ async def create(
     await connection.execute(
         text(
             "INSERT INTO tasks (id, tenant_id, owner_id, name, instructions, connection_id, model, reasoning,"
-            " disabled_tools, disabled_skills, disabled_servers, uses_memory, time_zone, created_at, updated_at)"
-            " VALUES (:id, :tenant, :owner, :name, :instructions, :connection, :model, :reasoning, :disabled_tools,"
-            " :disabled_skills, :disabled_servers, :uses_memory, :time_zone, now(), now())"
+            " disabled_tools, disabled_skills, disabled_servers, uses_memory, internet_access, time_zone, created_at,"
+            " updated_at) VALUES (:id, :tenant, :owner, :name, :instructions, :connection, :model, :reasoning,"
+            " :disabled_tools, :disabled_skills, :disabled_servers, :uses_memory, :internet_access, :time_zone, now(),"
+            " now())"
         ),
         {
             "id": task_id,
@@ -497,6 +521,7 @@ async def create(
                 body.disabled_servers if body.disabled_servers is not None else defaults.disabled_servers
             ),
             "uses_memory": body.uses_memory,
+            "internet_access": body.internet_access,
             "time_zone": body.time_zone,
         },
     )
@@ -584,22 +609,26 @@ async def change(
         else [(grant, None) for grant in state.grants]
     )
     uses_memory = body.uses_memory if body.uses_memory is not None else row.uses_memory
+    internet_access = body.internet_access if body.internet_access is not None else row.internet_access
+    if body.internet_access:
+        await _check_internet_access(connection, identity)
     memory = uses_memory and await memory_enabled(connection)
     found = check(
         [grant for grant, _ in grants],
         memory=memory,
         event_trigger=has_event_trigger([t.kind for t in state.triggers]),
+        internet_access=internet_access,
     )
     # A change that would complete the trifecta is refused; a task that no longer passes for other
     # reasons keeps its other changes (TSK-005).
-    if not found.passes and bool(present & {"grants", "uses_memory"}):
+    if not found.passes and bool(present & {"grants", "uses_memory", "internet_access"}):
         raise trifecta(found)
     await connection.execute(
         text(
             "UPDATE tasks SET name = :name, instructions = :instructions, connection_id = :connection,"
             " model = :model, reasoning = :reasoning, disabled_tools = :disabled_tools,"
             " disabled_skills = :disabled_skills, disabled_servers = :disabled_servers,"
-            " uses_memory = :uses_memory, time_zone = :time_zone,"
+            " uses_memory = :uses_memory, internet_access = :internet_access, time_zone = :time_zone,"
             " paused_at = CASE WHEN CAST(:paused AS boolean) IS NULL THEN paused_at"
             " WHEN CAST(:paused AS boolean) THEN coalesce(paused_at, now())"
             " ELSE NULL END, updated_at = now() WHERE id = :id"
@@ -617,6 +646,7 @@ async def change(
                 body.disabled_servers if body.disabled_servers is not None else row.disabled_servers
             ),
             "uses_memory": uses_memory,
+            "internet_access": internet_access,
             "time_zone": zone,
             "paused": body.paused,
         },
@@ -746,6 +776,7 @@ async def add_task_trigger(
             state.grants,
             memory=memory,
             event_trigger=has_event_trigger([t.kind for t in state.triggers] + [trigger.kind]),
+            internet_access=bool(state.row.internet_access),
         )
         if not found.passes:
             raise trifecta(found)
