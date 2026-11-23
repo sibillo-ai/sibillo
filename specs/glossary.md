@@ -64,6 +64,8 @@ new entry here first (ADR-0005).
 | Notification subscription | The Web Push subscription of one device session, saved when the user turns notifications on in that client (UX-004, ADR-0101). |
 | Agent | The component that turns a user request into model calls and tool calls. |
 | Run | One execution of the agent in response to a message, including all its model and tool calls. |
+| Delegation | A self-contained piece of work that a run hands, with the `delegate` tool, to a delegated run: its brief, what the delegated run did, and the report it returns (AGT-035, ADR-0136). |
+| Delegated run | An execution of the agent on a delegation's brief, with a fresh context: it works in the conversation's sandbox, never asks the user, and ends with a report; it is not part of the conversation's tree of runs (AGT-035 to AGT-038, ADR-0136). |
 | Run event | An AG-UI event produced during a run (text, tool call, result, interrupt, completion), stored durably with a sequence number and streamed to clients (ADR-0032, ADR-0034). |
 | Worker | A server process that executes runs, and fires tasks, as durable workflows (ADR-0034, ADR-0106). |
 | Durable execution engine | The library that checkpoints runs so they survive crashes and restarts: DBOS (ADR-0034). |

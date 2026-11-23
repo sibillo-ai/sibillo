@@ -464,6 +464,25 @@ it was compacted (AGT-016, ADR-0041). The stored messages never change.
 | `messages` | jsonb | the compacted `ModelMessage`s that replace the history up to the run |
 | `created_at` | timestamptz | not null |
 
+### `delegations` (private)
+
+Each delegation of a run to a delegated run (AGT-035 to AGT-038, ADR-0136).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | primary key; the delegated run's DBOS workflow ID, derived from `run_id` and `tool_call_id` (UUID version 5), so that a run started again after a crash finds it |
+| `tenant_id`, `owner_id` | uuid | as in `runs` |
+| `conversation_id` | uuid | not null; (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete cascade |
+| `run_id` | uuid | not null; the delegating run; (`tenant_id`, `owner_id`, `conversation_id`, `run_id`) references `runs` on delete cascade; indexed |
+| `tool_call_id` | text | not null; the call of `delegate`; unique with `run_id` |
+| `brief` | text | not null |
+| `status` | text | `queued`, `running`, `completed`, `failed` or `cancelled` |
+| `error_code` | text | stable error code when failed (API-007) |
+| `untrusted` | boolean | not null, default false; the delegated run held untrusted content: from its start, or at its end (AGT-037) |
+| `report` | text | what the delegating run was given; null until the delegated run ends |
+| `messages` | jsonb | not null, default `[]`; the delegated run's messages, without instructions, as `conversation_messages.message` keeps them |
+| `created_at`, `started_at`, `finished_at` | timestamptz | `created_at` not null |
+
 ### `runs` (private)
 
 | Column | Type | Notes |
@@ -517,7 +536,7 @@ It never contains content.
 | `tenant_id`, `owner_id` | uuid | the user the request was made for; (`tenant_id`, `owner_id`) references `users` |
 | `conversation_id` | uuid | null for requests outside a conversation; (`tenant_id`, `owner_id`, `conversation_id`) references `conversations` on delete set null (`conversation_id`) |
 | `run_id` | uuid | null outside a run; (`tenant_id`, `owner_id`, `run_id`) references `runs` on delete set null (`run_id`) |
-| `purpose` | text | `run`, `title`, `compaction`, `speech` or `memory` |
+| `purpose` | text | `run`, `title`, `compaction`, `speech`, `memory` or `delegation` (a delegated run's request, with the delegating run's `run_id`, ADR-0136) |
 | `provider`, `model` | text | not null; the host of the connection's address and the model's name (MOD-005) |
 | `input_tokens`, `cached_input_tokens`, `cache_write_tokens`, `output_tokens` | bigint | not null, default 0 |
 | `cost` | numeric(20, 10) | null when the price is unknown |
@@ -588,7 +607,7 @@ rewinding a conversation keeps them; they are deleted with their user.
 |---|---|---|
 | `id` | uuid | primary key |
 | `tenant_id`, `owner_id` | uuid | the user the call acted for; (`tenant_id`, `owner_id`) references `users` on delete cascade |
-| `conversation_id`, `run_id` | uuid | not null; identifiers only |
+| `conversation_id`, `run_id` | uuid | not null; identifiers only; for a call of a delegated run, `run_id` is the delegation's `id` (ADR-0136) |
 | `tool_call_id` | text | not null; unique with `run_id`: the idempotency key of the call |
 | `tool` | text | not null; the tool's name: one of `ToolName`, or a tool without a switch, such as `read_tool_result` |
 | `outcome` | text | `not_needed`, `allowed`, `approved`, `denied`, `expired`, `refused`, `granted` (a task grant covered it) or `not_granted` (it needed approval in a task's run and no grant covered it, ADR-0106) |
@@ -896,7 +915,7 @@ tenant and user. Payloads carry no content.
 ### Policies for private tables
 
 `device_sessions`, `notification_subscriptions`, `passkey_challenges`, `folders`, `user_settings`, `memory_items`, `skills`, `skill_files`, `conversations`,
-`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `runs`, `run_followers`, `usage_ledger`,
+`conversation_plans`, `conversation_messages`, `compaction_checkpoints`, `delegations`, `runs`, `run_followers`, `usage_ledger`,
 `audit_events`, `mcp_credentials`, `mcp_sign_ins`, `tasks`, `task_grants`,
 `task_triggers` and `task_firings` use the same policy for
 every operation:
@@ -933,6 +952,7 @@ keys, not by privileges of `sibillo_app`.
 | `conversation_plans` | `SELECT`, `INSERT`, `UPDATE` |
 | `compaction_checkpoints` | `SELECT`, `INSERT`: checkpoints never change (ADR-0041) |
 | `conversation_messages` | `SELECT`, `INSERT`: stored messages never change (ADR-0041) |
+| `delegations` | `SELECT`, `INSERT`, `UPDATE` |
 | `runs` | `SELECT`, `INSERT`, `UPDATE`, `DELETE`: rewinding deletes runs (ADR-0068) |
 | `run_followers` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `usage_ledger` | `SELECT`, `INSERT`: entries never change (ADR-0042) |

@@ -116,6 +116,8 @@ beyond keeping them configurable and updatable.
 | T-45 | Injected instructions read in one conversation reach another, unseen, when the assistant searches or reads the user's earlier conversations | X1 | AGT-003, AGT-004, AGT-032, AGT-033 |
 | T-46 | Injected instructions make the assistant ask for internet access, again and again or at a moment the user expects it, so that what the conversation holds can then be sent out | X1 | AGT-034, SBX-024, UX-022, UX-041 |
 | T-47 | Code in a sandbox reaches the sandbox engine's container runtime or the network guard over the network, and takes over the engine, which is privileged | X3 | SBX-005, SBX-015, SBX-025 |
+| T-48 | Injected instructions read by a delegated run reach the delegating run through its report, or travel from the delegating run into a delegated run through its brief, unseen, and lead it to send data out | X1 | AGT-003, AGT-004, AGT-037 |
+| T-49 | Injected instructions use a delegated run, which nobody watches, to make calls that the delegating run would have had to ask the user for | X1 | AGT-006, AGT-036 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |

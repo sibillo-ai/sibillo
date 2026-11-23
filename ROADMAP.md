@@ -102,6 +102,13 @@ language (I18N-002, I18N-004 to I18N-006, ADR-0135). It moved here from
 phase 4, ahead of the devices, so that households beyond the first use
 Sibillo in their own language.
 
+**Then:** delegation, so that the assistant hands self-contained pieces of
+work to delegated runs with a fresh context, several at once, and receives
+their reports, with provenance that follows the brief and the report
+(AGT-035 to AGT-038, ADR-0136). It was not planned; the first long pieces of
+work showed that one context fills up, and that independent parts wait for
+each other.
+
 **Goal:** the assistant helps with the household's own machines: diagnosing a
 server, installing updates, checking logs and firewall rules, editing files,
 from any device where the user is signed in.

@@ -47,12 +47,13 @@ external files, sandbox output, connector data from third parties). The
 results of tools in the `ingests_untrusted` class, attachments given to
 a run, untrusted memory items (MEM-008), and
 the loaded bodies of untrusted skills (AGT-025), and what a tool reads of
-another conversation that holds untrusted content (AGT-033), MUST be
+another conversation that holds untrusted content (AGT-033), and the
+report of a delegated run that held untrusted content (AGT-037), MUST be
 untrusted; the user's messages,
 their answers to questions (AGT-015) and the instructions MUST be trusted. A
 run MUST count as having untrusted content when the conversation's active
 path, up to and including that run, holds any, also after compaction and in
-a fork (ADR-0090, ADR-0107).
+a fork (ADR-0090, ADR-0107, ADR-0136).
 
 ## AGT-004: Breaking the lethal trifecta
 
@@ -625,3 +626,86 @@ it once, when the work needs it, rather than trying commands that fail
 Rationale: one question the user can predict and understand, in place of a
 prompt for each call; and a sandbox without network cannot complete the
 lethal trifecta, whatever the run has read (T-08).
+
+## AGT-035: Delegating work
+
+- **Status:** accepted
+- **Priority:** SHOULD
+- **Phase:** 3
+- **Verification:** integration
+
+The assistant SHOULD have a tool, `delegate`, that hands a self-contained
+brief to a delegated run of the agent and returns its report: the delegated
+run's final answer, bounded as tool results are (AGT-014). A delegated run
+MUST be given its brief as its only message, without the conversation's
+history, its task list, the user's memory or the conversation's additional
+instructions; it MUST run on the delegating run's model. Calls of `delegate`
+made in one answer MUST run at the same time, at most four of one run at
+once, the others waiting their turn, and a run MUST make at most ten
+delegations; a call beyond them MUST NOT start a delegated run, and the model
+MUST be told. A delegated run MUST NOT be offered `delegate`. The tool MUST
+be in the `reads_private_data` class, allowed by default, and the user MUST
+be able to switch it off (CNV-013) (ADR-0136).
+
+Rationale: independent parts of a piece of work run at the same time, a long
+piece leaves only its report in the delegating run's context, and a second
+opinion is formed from the brief alone.
+
+## AGT-036: What a delegated run may do
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+A delegated run MUST work in its conversation's sandbox, with the delegating
+run's tools as the user's permissions and switches leave them (AGT-002,
+CNV-013), except `delegate`, `ask_user_question`, the task list's tools,
+`offer_download`, the memory tools, `save_skill`, `propose_task`,
+`update_task`, `request_internet_access` and the tools of remote MCP
+servers, which it MUST NOT be offered. A delegated run MUST NOT ask the user
+anything: a call of it that needs approval MUST run only when a task grant
+of the delegating run covers it (TSK-004), and MUST otherwise be denied,
+recorded as `not_granted` (AGT-008), with the model told that it did not run
+and that it should say what it needed in its report. A delegated run MUST
+have the internet access of its conversation and of the delegating run's
+turn, read again before each call that needs it (AGT-034), and none other
+(ADR-0136).
+
+Rationale: nobody can answer a delegated run, and delegation must not become
+a way to act without the approvals the delegating run would need (T-49).
+
+## AGT-037: Provenance through delegation
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+A delegated run MUST count as having untrusted content from its start when
+the delegating run holds untrusted content at the call (AGT-003). The report
+of a delegated run that holds untrusted content at its end MUST be untrusted
+content of the delegating run, also when the report is written in the
+delegated run's own words (ADR-0136).
+
+Rationale: a brief can carry injected instructions into a delegated run, and
+a report can carry them back; neither may pass unseen (T-48).
+
+## AGT-038: Delegated runs end, fail and survive with their run
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration
+
+A delegated run MUST end when its delegating run is stopped (CNV-003),
+fails or ends. A delegated run that
+fails, or reaches the limit of model requests of a run (AGT-027), MUST give
+a report that says so with its error code, and the delegating run MUST go
+on. A delegated run MUST be durable on its own: a delegating run that starts
+again after a crash MUST wait for the delegated run of the same call, not
+start another. The model requests of a delegated run MUST be recorded in the
+cost ledger (MOD-006) with the purpose `delegation` and the delegating run's
+ID, and its tool calls MUST be audited (AGT-008). Each delegation MUST be
+kept with its delegating run, with its brief, status and report, and deleted
+with it (ADR-0136).
