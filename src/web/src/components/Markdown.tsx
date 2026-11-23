@@ -30,12 +30,22 @@ const HEADING = "mt-2 text-title";
 const SUBHEADING = "mt-2 text-reading font-semibold";
 
 const COMPONENTS: Components = {
-  // The accent is not for links: they are ink, underlined.
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-ink underline underline-offset-2">
-      {children}
-    </a>
-  ),
+  // The accent is not for links: they are ink, underlined. One to another site shows where it goes (ADR-0126).
+  a: ({ href, children }) => {
+    const host = externalHost(href, children);
+    return (
+      <>
+        <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-ink underline underline-offset-2">
+          {children}
+        </a>
+        {host && (
+          <span data-link-host className="ml-1 text-caption text-ink-3">
+            ({host})
+          </span>
+        )}
+      </>
+    );
+  },
   // No remote resources: an image is shown as its description.
   img: ({ alt }) => <ImageText alt={alt} />,
   table: ({ children }) => (
@@ -123,3 +133,19 @@ function TaskBox({ done }: { done: boolean }) {
     </span>
   );
 }
+
+/** The host a link goes to, when it is another site's and its text does not say it already. */
+function externalHost(href: string | undefined, children: ReactNode): string | null {
+  if (!href) return null;
+  let url: URL;
+  try {
+    url = new URL(href, window.location.href);
+  } catch {
+    return null;
+  }
+  if (url.origin === window.location.origin || !["http:", "https:"].includes(url.protocol)) return null;
+  const text = typeof children === "string" ? children : Array.isArray(children) && children.every((child) => typeof child === "string") ? children.join("") : null;
+  if (text !== null && (text.trim() === href || text.trim().replace(/^https?:\/\//, "").startsWith(url.host))) return null;
+  return url.host;
+}
+
