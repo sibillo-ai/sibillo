@@ -340,10 +340,11 @@ skills for that chat alone.
 A skill's files are in the sandbox, read-only, at `/skills`: the assistant
 runs a skill's scripts there, like any command, and cannot change them. A
 skill someone else wrote, uploaded, imported, or saved by the assistant after
-it read a web page or a command's output, is marked untrusted: using one
-makes the chat count as holding content from elsewhere, which a request for
-internet access then says, until its owner reads its files and marks it
-trusted. Imports are downloaded in a
+it read a web page or a command's output, is marked untrusted: while one is
+on, every chat that is offered it counts as holding content from elsewhere,
+because its description reaches the assistant whether or not it is used. A
+request for internet access then says so, until its owner reads its files
+and marks it trusted, or turns it off (ADR-0116). Imports are downloaded in a
 sandbox of their own, never by the server. Skills are kept in the database,
 so backups hold them.
 
