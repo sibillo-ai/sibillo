@@ -561,9 +561,17 @@ before backups gets its key with `docker compose run --rm --no-deps init`,
 which adds only missing secrets. `/health` reports `degraded` when the last
 backup failed or is more than two days old.
 
+A backup waits up to ten minutes for answers in progress, then goes on, and
+its manifest names the chats that were still answering. Nothing unencrypted
+is ever written to the backup folder, even when a backup is stopped halfway
+(ADR-0130).
+
 Copy the archives elsewhere too, for example with restic:
 `restic -r sftp:nas:/backups/sibillo backup deploy/backups`. They are
-already encrypted.
+already encrypted, and authenticated with your backup key: a restore refuses
+an archive that was not made with it, so a copy someone else changed cannot
+be restored. Archives made before this check cannot be restored by this
+version.
 
 **Restore**
 
