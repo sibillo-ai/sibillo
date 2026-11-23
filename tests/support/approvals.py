@@ -177,8 +177,17 @@ def activity(server: Server, token: str, **params: str) -> list[dict[str, Any]]:
     return items
 
 
+def _broadest(interrupt: dict[str, Any]) -> str:
+    """For the turn when the request offers it; otherwise the one scope it offers, such as `once` (ADR-0127)."""
+    metadata: dict[str, Any] = interrupt["metadata"]
+    request: dict[str, Any] = metadata.get("approval") or metadata.get("internet_access") or {}
+    scopes = [str(scope) for scope in request.get("scopes", ["turn"])]
+    return "turn" if "turn" in scopes else scopes[0]
+
+
 def approving(server: Server, token: str, conversation_id: str, text: str) -> tuple[str, list[Event], str]:
-    """Run `text`, approving for the turn every request it makes (ADR-0090): its first run, every event, its last run.
+    """Run `text`, approving every request it makes, for the turn where it may be (ADR-0090): its first run, every
+    event, its last run.
 
     For tests of other things that search the web or read pages, which ask for internet access (AGT-034).
     """
@@ -186,9 +195,9 @@ def approving(server: Server, token: str, conversation_id: str, text: str) -> tu
     seen = list(events)
     last = run_id
     while wait_for_run(server, token, last)["status"] == "interrupted":
-        pending = [interrupt["id"] for interrupt in interrupts(events) if interrupt["reason"] == "approval"]
+        pending = [interrupt for interrupt in interrupts(events) if interrupt["reason"] == "approval"]
         assert pending, "the run asks a question, not for approval"
-        events = resumed(server, token, conversation_id, [approve(interrupt_id, "turn") for interrupt_id in pending])
+        events = resumed(server, token, conversation_id, [approve(i["id"], _broadest(i)) for i in pending])
         seen += events
         last = events[0].data["runId"]
     return run_id, seen, last
