@@ -23,3 +23,12 @@
 /.devcontainer/     @tapionx
 /tools/             @tapionx
 /tests/tooling/     @tapionx
+
+# What builds and runs the instance, and what pins its dependencies (ADR-0121)
+/deploy/            @tapionx
+/pyproject.toml     @tapionx
+/uv.lock            @tapionx
+/src/web/package.json   @tapionx
+/src/web/pnpm-lock.yaml @tapionx
+/tests/conftest.py  @tapionx
+/tests/__init__.py  @tapionx
