@@ -213,7 +213,7 @@ def test_a_backup_goes_on_past_runs_still_answering(
     default_model.connect(instance_admin.tenant_id)
     token = login(server, instance_admin)
     conversation_id = create_conversation(server, token)["id"]
-    start_run(server, token, conversation_id, "slow:8")
+    start_run(server, token, conversation_id, "slow:8", stop_after=1)
 
     async def wait() -> list[str]:
         engine = create_engine(database.superuser_url)

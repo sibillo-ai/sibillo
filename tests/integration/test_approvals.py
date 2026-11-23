@@ -201,7 +201,7 @@ def test_calls_to_tools_that_are_off_or_unknown_are_audited(
     with server.client(token) as client:
         response = client.patch(f"/conversations/{conversation_id}", json={"disabled_tools": ["run_command"]})
     assert response.status_code == 200, response.text
-    for text in ("run:echo off", 'tool:no_such_tool {"x": 1}'):
+    for text in ('anyway:run_command {"command": "echo off"}', 'anyway:no_such_tool {"x": 1}'):
         run_id, _ = start_run(server, token, conversation_id, text)
         wait_for_run(server, token, run_id)
     # Refusals leave an event too (ADR-0132).

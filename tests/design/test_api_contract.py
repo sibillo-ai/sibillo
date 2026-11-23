@@ -20,7 +20,7 @@ SERVER = ROOT / "src" / "server" / "sibillo_server"
 HTTP_METHODS = ("get", "put", "post", "delete", "patch")
 # Dotted names in the server that are not error codes: names of its own, and file names.
 # Names and file names, such as the entries of a backup archive (ADR-0077), are not error codes.
-NOT_ERROR_CODES = re.compile(r"^(sibillo|sibillo)\.|\.(html|js|css|json|webmanifest|tar|dump)$")
+NOT_ERROR_CODES = re.compile(r"^(sibillo|sibillo|http)\.|\.(html|js|css|json|webmanifest|tar|dump|mac)$")
 DOTTED = re.compile(r"^[a-z]+\.[a-z_]+$")
 
 

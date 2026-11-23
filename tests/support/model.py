@@ -494,6 +494,15 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
                 name, _, arguments = last.removeprefix("tool:").partition(" ")
                 self._named_tool_turn(body, name, arguments or "{}")
                 return
+            if last.startswith("anyway:"):
+                # A call of a tool whether or not it was offered, as a model may make (ADR-0132).
+                messages = cast(list[dict[str, Any]], body.get("messages", []))
+                name, _, arguments = last.removeprefix("anyway:").partition(" ")
+                if messages and messages[-1].get("role") == "tool":
+                    self._answer(body, [("Done.", 0.0)])
+                else:
+                    self._call(body, name, arguments or "{}")
+                return
             if last == "refuse":
                 self._refuse(body)
                 return

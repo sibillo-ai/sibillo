@@ -93,7 +93,7 @@ def test_sign_out_clears_the_cookie_and_ends_the_session(browser: httpx.Client, 
     response = browser.post("/auth/logout", headers={REQUEST_HEADER: "1"})
     assert response.status_code == 204
     cleared = response.headers.get("set-cookie", "").lower()
-    assert cleared.startswith(f"{COOKIE}=")
+    assert cleared.startswith(f"{COOKIE.lower()}=")
     assert "max-age=0" in cleared or "expires=" in cleared
     # The old cookie, sent again: its session is over.
     browser.cookies.clear()
