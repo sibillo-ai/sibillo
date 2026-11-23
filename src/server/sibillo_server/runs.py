@@ -302,8 +302,6 @@ async def create_run(
     return RunWorkflowInput(
         tenant_id=str(identity.tenant_id),
         user_id=str(identity.user_id),
-        role=identity.role,
-        instance_admin=identity.instance_admin,
         conversation_id=str(conversation.id),
         run_id=str(run_id),
         parent_run_id=None if parent is None else str(parent),
@@ -454,7 +452,10 @@ async def cancel_run(
     async with transaction(engine, identity) as connection:
         stopped = await connection.execute(
             text(
-                "UPDATE runs SET status = 'cancelled', finished_at = now()"
+                # A run that had started has finished once its workflow ended, which its worker records: until
+                # then a rewind waits (ADR-0132).
+                "UPDATE runs SET status = 'cancelled',"
+                " finished_at = CASE WHEN status = 'queued' THEN now() ELSE NULL END"
                 " WHERE id = :id AND status IN ('queued', 'running')"
             ),
             {"id": run_id},

@@ -507,14 +507,51 @@ def _error_code(error: BaseException) -> str:
 @DBOS.workflow(name=RUN_WORKFLOW)
 async def run_workflow(serialized_input: str) -> None:
     run = RunWorkflowInput.from_json(serialized_input)
-    identity = Identity(
+    try:
+        await _run(run)
+    finally:
+        # A cancelled run has finished once its workflow ended, as now (ADR-0132).
+        await _ended(run)
+
+
+async def _ended(run: RunWorkflowInput) -> None:
+    owner = Identity(
         session_id=uuid.UUID(int=0),
         user_id=uuid.UUID(run.user_id),
         tenant_id=uuid.UUID(run.tenant_id),
-        role=run.role,
-        instance_admin=run.instance_admin,
+        role="member",
+        instance_admin=False,
     )
+    async with transaction(_engine(), owner) as connection:
+        await connection.execute(
+            text("UPDATE runs SET finished_at = now() WHERE id = :id AND status = 'cancelled' AND finished_at IS NULL"),
+            {"id": uuid.UUID(run.run_id)},
+        )
+
+
+async def _run(run: RunWorkflowInput) -> None:
     run_id, conversation_id = uuid.UUID(run.run_id), uuid.UUID(run.conversation_id)
+    # The user as they are now, never as the stored input says: the durable schema is outside row-level
+    # security (TEN-009, ADR-0132).
+    plain = Identity(
+        session_id=uuid.UUID(int=0),
+        user_id=uuid.UUID(run.user_id),
+        tenant_id=uuid.UUID(run.tenant_id),
+        role="member",
+        instance_admin=False,
+    )
+    async with transaction(_engine(), plain) as connection:
+        user = (
+            await connection.execute(
+                text("SELECT role, instance_admin, disabled_at IS NOT NULL AS disabled FROM users WHERE id = :id"),
+                {"id": plain.user_id},
+            )
+        ).one_or_none()
+    if user is None or user.disabled:
+        # A disabled account's runs do not start (AUTH-009).
+        await _set_status(plain, run_id, "failed", "internal.error")
+        return
+    identity = replace(plain, role=user.role, instance_admin=user.instance_admin)
     await _set_status(identity, run_id, "running")
     parent_run_id = None if run.parent_run_id is None else uuid.UUID(run.parent_run_id)
     history, untrusted = await _history(
@@ -596,6 +633,7 @@ async def run_workflow(serialized_input: str) -> None:
         public_origin=_WORKER.public_origin,
     )
     deps = replace(deps, prepare_sandbox=sandbox_preparer(deps))
+    await _audit_changed(run, deps)
     encoder: AGUIEventStream[Any, Any] = AGUIEventStream(thread_id=run.conversation_id, run_id=run.run_id)
     _ENCODERS[run.run_id] = encoder
     asking = False
@@ -817,6 +855,32 @@ async def _notify(identity: Identity, run: RunWorkflowInput, kind: Kind, followe
 APPROVAL_HOURS = 24
 
 
+async def _audit_changed(run: RunWorkflowInput, deps: RunDeps) -> None:
+    """An approved call to a remote MCP server's tool that changed since does not run: it is audited as refused
+    (AGT-008, ADR-0132)."""
+    offered = offered_names(deps)
+    changed = [
+        (tool_call_id, str(decision.get("tool") or ""))
+        for tool_call_id, decision in run.approvals.items()
+        if decision.get("approved")
+        and is_server_tool(str(decision.get("tool") or ""))
+        and decision.get("tool") not in offered
+    ]
+    if not changed:
+        return
+    async with transaction(_engine(), deps.identity) as connection:
+        for tool_call_id, tool in changed:
+            await record(
+                connection,
+                deps.identity,
+                conversation_id=deps.conversation_id,
+                run_id=deps.parent_run_id or deps.run_id,
+                tool_call_id=tool_call_id,
+                tool=tool,
+                outcome="refused",
+            )
+
+
 def _deferred_results(run: RunWorkflowInput, offered: frozenset[str] = frozenset()) -> DeferredToolResults | None:
     """The answers a resume run brings: to questions, and the user's decision on each approval request.
 
@@ -966,8 +1030,10 @@ async def _fail_abandoned_runs() -> None:
         async with transaction(_engine(), owner) as connection:
             await connection.execute(
                 text(
-                    "UPDATE runs SET status = 'failed', error_code = 'internal.error', finished_at = now()"
-                    " WHERE id = :id AND status IN ('queued', 'running')"
+                    "UPDATE runs SET status = CASE WHEN status = 'cancelled' THEN status ELSE 'failed' END,"
+                    " error_code = CASE WHEN status = 'cancelled' THEN error_code ELSE 'internal.error' END,"
+                    " finished_at = now()"
+                    " WHERE id = :id AND (status IN ('queued', 'running') OR finished_at IS NULL)"
                 ),
                 {"id": row.run_id},
             )

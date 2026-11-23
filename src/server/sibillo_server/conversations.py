@@ -343,6 +343,7 @@ async def rewind_conversation(
     async with transaction(engine, identity) as connection:
         await find_conversation(connection, conversation_id, lock=True)
         await _refuse_while_active(connection, conversation_id)
+        await _refuse_while_stopping(connection, conversation_id)
         pending = (
             await connection.execute(
                 text("SELECT pending_interrupts IS NOT NULL FROM conversations WHERE id = :id"), {"id": conversation_id}
@@ -499,9 +500,16 @@ async def fork_conversation(
                 {"last": new_ids[path[-1].id], "fork": fork_id, "untrusted": untrusted},
             )
         ).one()
-        source = {"from_conversation_id": str(conversation_id)}
-        await workspace_request(_driver(request), identity, fork_id, "POST", source)
         await announce(connection, identity, event("conversation_created", conversation_id=fork_id))
+    # The copy takes as long as the workspace is large: after the transaction, so that it holds no connection
+    # meanwhile; without the copy there is no fork (CNV-005, ADR-0132).
+    source = {"from_conversation_id": str(conversation_id)}
+    try:
+        await workspace_request(_driver(request), identity, fork_id, "POST", source)
+    except BaseException:
+        async with transaction(engine, identity) as connection:
+            await connection.execute(text("DELETE FROM conversations WHERE id = :id"), {"id": fork_id})
+        raise
     return conversation_response(row)
 
 
@@ -516,6 +524,22 @@ async def _denies_internet_access(connection: AsyncConnection, identity: Identit
 def _driver(request: Request) -> SandboxDriver:
     configuration = request.app.state.configuration
     return SandboxDriver(configuration.sandboxd_url, configuration.sandboxd_token)
+
+
+async def _refuse_while_stopping(connection: AsyncConnection, conversation_id: uuid.UUID) -> None:
+    """Refused while a cancelled run's workflow is still ending, which its worker records as it ends: what the run
+    does now must not outlive a rewind or a deletion (CNV-004, ADR-0132)."""
+    stopping = (
+        await connection.execute(
+            text(
+                "SELECT 1 FROM runs WHERE conversation_id = :id AND status = 'cancelled' AND finished_at IS NULL"
+                " LIMIT 1"
+            ),
+            {"id": conversation_id},
+        )
+    ).one_or_none()
+    if stopping is not None:
+        raise errors.ApiError(409, "run.in_progress", "Run in progress")
 
 
 async def _refuse_while_active(connection: AsyncConnection, conversation_id: uuid.UUID) -> None:
@@ -536,6 +560,7 @@ async def delete_conversation(
     async with transaction(engine, identity) as connection:
         await find_conversation(connection, conversation_id, lock=True)
         await _refuse_while_active(connection, conversation_id)
+        await _refuse_while_stopping(connection, conversation_id)
         await delete_everything(connection, durable.delete_workflows_async, _driver(request), identity, conversation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

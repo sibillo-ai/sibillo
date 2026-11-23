@@ -1121,7 +1121,8 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     SET search_path = pg_catalog, pg_temp
     AS $$
       SELECT r.id, r.tenant_id, r.owner_id FROM public.runs r
-      WHERE r.status IN ('queued', 'running') AND r.created_at < now() - make_interval(hours => $1)
+      WHERE (r.status IN ('queued', 'running') OR (r.status = 'cancelled' AND r.finished_at IS NULL))
+        AND r.created_at < now() - make_interval(hours => $1)
     $$
     """,
     # Temporary conversations to delete (CNV-011, ADR-0082): identifiers only,

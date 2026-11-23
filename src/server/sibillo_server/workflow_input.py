@@ -8,7 +8,7 @@ row-level security (TEN-009).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 
@@ -16,8 +16,7 @@ from typing import Any
 class RunWorkflowInput:
     tenant_id: str
     user_id: str
-    role: str
-    instance_admin: bool
+    # No role: the worker reads the user's from the database when the run starts (TEN-009, ADR-0132).
     conversation_id: str
     run_id: str
     parent_run_id: str | None
@@ -58,4 +57,6 @@ class RunWorkflowInput:
 
     @classmethod
     def from_json(cls, value: str) -> RunWorkflowInput:
-        return cls(**json.loads(value))
+        # An input stored by an earlier release may carry fields this one no longer reads, such as `role`.
+        known = {item.name for item in fields(cls)}
+        return cls(**{name: item for name, item in json.loads(value).items() if name in known})

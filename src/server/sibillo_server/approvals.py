@@ -34,6 +34,7 @@ from sibillo_server.mcp_runs import offered_names, shown
 from sibillo_server.skills import save_preview
 from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
+    DECLARATIONS,
     DENIED_INTERNET_ACCESS,
     INTERNET_TOOLS,
     TASK_PROPOSALS,
@@ -126,22 +127,33 @@ class Approvals(AbstractCapability[RunDeps]):
     async def after_model_request(
         self, ctx: RunContext[RunDeps], *, request_context: ModelRequestContext, response: ModelResponse
     ) -> ModelResponse:
-        # A call to a tool the user's permissions deny is refused, and recorded as such.
-        away = denied(ctx.deps.permissions)
-        refused = [part for part in response.parts if isinstance(part, ToolCallPart) and part.tool_name in away]
+        # A call to a tool the user's permissions deny is refused, and recorded as such; so is a call to a tool that
+        # is off, for the user or the conversation, or that no one offered (AGT-008, ADR-0132).
+        deps = ctx.deps
+        away = denied(deps.permissions)
+        offered = offered_names(deps)
+        refused: list[tuple[ToolCallPart, str | None]] = []
+        for part in response.parts:
+            if not isinstance(part, ToolCallPart):
+                continue
+            if part.tool_name in away:
+                refused.append((part, "permission"))
+            elif part.tool_name in deps.disabled_tools or (
+                part.tool_name not in DECLARATIONS and part.tool_name not in offered
+            ):
+                refused.append((part, None))
         if refused:
-            deps = ctx.deps
             async with transaction(deps.engine, deps.identity) as connection:
-                for part in refused:
+                for part, reason in refused:
                     await record(
                         connection,
                         deps.identity,
                         conversation_id=deps.conversation_id,
                         run_id=deps.run_id,
                         tool_call_id=part.tool_call_id,
-                        tool=part.tool_name,
+                        tool=part.tool_name[:64],
                         outcome="refused",
-                        reason="permission",
+                        reason=reason,
                     )
         return response
 

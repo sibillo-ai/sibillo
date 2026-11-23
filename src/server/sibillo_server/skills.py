@@ -65,6 +65,9 @@ PATH_CHARS = 255
 TEXT_BYTES = 1024 * 1024
 # The most an import's source may hold, zipped by the driver.
 IMPORT_BYTES = 64 * 1024 * 1024
+IMPORT_FILES = 2_000
+# The users whose import runs now, in this process (ADR-0132).
+_IMPORTING: set[uuid.UUID] = set()
 DRIVER_TIMEOUT_SECONDS = 120
 SKILL_MD = "SKILL.md"
 # Where the files of a run's skills are in its sandbox (SBX-022).
@@ -170,6 +173,27 @@ class SkillFiles:
         raise WorkspaceReadOnlyError("skills are read-only")
 
 
+# What a skill's front matter may hold, read before any YAML parser builds it (ADR-0132).
+FRONT_MATTER_CHARS = 16 * 1024
+
+
+def check_front_matter(skill_md: str) -> None:
+    """Refuse front matter longer than 16 KiB, or with anchors and aliases, which can make a parser build
+    billions of items from a few lines: scanning tokens builds nothing (ADR-0132)."""
+    if not skill_md.startswith("---"):
+        return
+    head = skill_md[3:].partition("\n---")[0]
+    if len(head) > FRONT_MATTER_CHARS:
+        raise SkillError(f"SKILL.md's frontmatter holds at most {FRONT_MATTER_CHARS:,} characters.")
+    try:
+        tokens = cast(Iterable[object], yaml.scan(head))  # pyright: ignore[reportUnknownMemberType]
+        for token in tokens:
+            if isinstance(token, yaml.AliasToken | yaml.AnchorToken):
+                raise SkillError("SKILL.md's frontmatter may not use YAML anchors or aliases.")
+    except yaml.YAMLError as error:
+        raise SkillError(f"SKILL.md's frontmatter is not YAML: {error}") from None
+
+
 def _frontmatter_name(skill_md: str) -> str | None:
     """The `name` of a `SKILL.md`'s frontmatter, to know its folder; the harness's loader checks the rest."""
     if not skill_md.startswith("---"):
@@ -216,7 +240,9 @@ async def validated(files: Mapping[str, SkillFile], folder: str | None = None) -
         raise SkillError("SKILL.md is not UTF-8 text.") from error
     if len(skill_md) > SKILL_MD_CHARS:
         raise SkillError(f"SKILL.md holds at most {SKILL_MD_CHARS:,} characters.", too_large=True)
-    folder = folder or _frontmatter_name(skill_md)
+    # Bounded before any parser reads it, and read off the event loop (ADR-0132).
+    await asyncio.to_thread(check_front_matter, skill_md)
+    folder = folder or await asyncio.to_thread(_frontmatter_name, skill_md)
     if not folder:
         raise SkillError("SKILL.md needs frontmatter with a name and a description.")
     valid, problems = await definitions({folder: files[SKILL_MD].content})
@@ -320,11 +346,15 @@ def _read_builtin() -> dict[str, dict[str, SkillFile]]:
 BUILTIN_FILES = _read_builtin()
 
 
-def _builtin_description(files: Mapping[str, SkillFile]) -> str:
+def _builtin_description_raw(files: Mapping[str, SkillFile]) -> object:
     skill_md = files[SKILL_MD].content.decode()
     head = skill_md[3:].partition("\n---")[0]
     data: Any = yaml.safe_load(head)
-    return str(data["description"]).strip()
+    return cast(dict[str, Any], data)["description"]
+
+
+def _builtin_description(files: Mapping[str, SkillFile]) -> str:
+    return str(_builtin_description_raw(files)).strip()
 
 
 BUILTIN_DESCRIPTIONS = {name: _builtin_description(files) for name, files in BUILTIN_FILES.items()}
@@ -897,7 +927,8 @@ def _skill_folders(entries: Mapping[str, SkillFile]) -> dict[str, dict[str, Skil
 
 async def _found(source: Source, data: bytes) -> list[tuple[schemas.FoundSkill, SkillPackage | None]]:
     try:
-        entries = await asyncio.to_thread(zip_entries, data, limit_files=20_000, limit_bytes=IMPORT_BYTES * 4)
+        # At most 2,000 files and 64 MiB unpacked (ADR-0132).
+        entries = await asyncio.to_thread(zip_entries, data, limit_files=IMPORT_FILES, limit_bytes=IMPORT_BYTES)
     except SkillError as error:
         raise errors.skill_import_failed(str(error)) from error
     results: list[tuple[schemas.FoundSkill, SkillPackage | None]] = []
@@ -908,8 +939,11 @@ async def _found(source: Source, data: bytes) -> list[tuple[schemas.FoundSkill, 
         except SkillError as error:
             description = ""
             try:
-                description = str(_builtin_description(files))
-            except (KeyError, TypeError, ValueError, yaml.YAMLError, UnicodeDecodeError):
+                # Only when it is text, cut to its limit, and never from front matter that failed its bounds.
+                await asyncio.to_thread(check_front_matter, files[SKILL_MD].content.decode())
+                said: Any = await asyncio.to_thread(_builtin_description_raw, files)
+                description = said.strip()[:DESCRIPTION_CHARS] if isinstance(said, str) else ""
+            except (KeyError, TypeError, ValueError, yaml.YAMLError, UnicodeDecodeError, SkillError):
                 description = ""
             item = schemas.FoundSkill(name=name or folder, description=description, valid=False, problem=str(error))
             results.append((item, None))
@@ -962,11 +996,18 @@ async def import_skills(
 ) -> schemas.SkillImport:
     """Skills from a GitHub repository, a folder of one, or an archive's address; untrusted (AGT-025)."""
     source = source_of(body.url)
+    # One import of a user's at a time, each a sandbox of its own (ADR-0132).
+    if identity.user_id in _IMPORTING:
+        raise errors.skill_import_failed("An import of yours is still running: wait for it to end.")
+    _IMPORTING.add(identity.user_id)
     try:
-        data = await _download(_driver(request), identity, source)
-    except SkillError as error:
-        raise _problem(error) from error
-    found = await _found(source, data)
+        try:
+            data = await _download(_driver(request), identity, source)
+        except SkillError as error:
+            raise _problem(error) from error
+        found = await _found(source, data)
+    finally:
+        _IMPORTING.discard(identity.user_id)
     if not found:
         raise errors.skill_import_failed("The source holds no skill.")
     packages = {item.name: package for item, package in found if package is not None}

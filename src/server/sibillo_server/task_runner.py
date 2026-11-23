@@ -404,8 +404,6 @@ async def _first_run_input(connection: AsyncConnection, identity: Identity, firi
     workflow_input = RunWorkflowInput(
         tenant_id=str(identity.tenant_id),
         user_id=str(identity.user_id),
-        role=identity.role,
-        instance_admin=identity.instance_admin,
         conversation_id=str(conversation.id),
         run_id=str(run.id),
         parent_run_id=None,
