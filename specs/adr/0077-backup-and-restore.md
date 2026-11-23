@@ -42,7 +42,8 @@ other component can read a workspace volume.
    to ten minutes, then dumps the database and exports the workspaces right
    away. A run started during the export may leave a workspace a few
    seconds newer than the database; the archive says when each part was
-   taken.
+   taken. Amended by ADR-0130: after the wait the backup goes on, and the
+   manifest lists the conversations still answering.
 4. **Encrypted with a backup key** (`age`): `init` writes a new age
    identity into `.env` as `SIBILLO_BACKUP_KEY`, and archives are encrypted to
    its recipient. The household must keep a copy of it away from the

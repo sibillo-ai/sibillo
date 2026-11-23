@@ -73,7 +73,11 @@ holding its database, its secret key and its conversations' workspaces, and anot
 MUST restore it into a fresh installation with only the archive and its
 backup key; a single user's workspaces MUST be restorable from an archive into
 a running instance. Backup and restore MUST be documented, and CI MUST verify
-that a backup can be restored into a working instance (ADR-0077).
+that a backup can be restored into a working instance (ADR-0077). A run that
+is still active MUST NOT stop a backup; nothing unencrypted MUST reach the
+backup folder; and a restore MUST refuse an archive it cannot authenticate
+with the backup key, or one with entries its manifest does not list
+(ADR-0130).
 
 ## OPS-007: Verifiable release images
 
