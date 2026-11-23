@@ -52,7 +52,11 @@ def _pnpm(*args: str) -> None:
 
 @pytest.fixture(scope="session")
 def web_build() -> Path:
-    """The app, installed from its lock file and built."""
+    """The app, installed from its lock file and built; or the build `TEST_WEB_BUILD` names, used as it is, so
+    that test sessions running at once share one build (specs/contracts/test-harness.md, ADR-0137)."""
+    given = os.environ.get("TEST_WEB_BUILD")
+    if given:
+        return Path(given)
     _pnpm("install", "--frozen-lockfile")
     _pnpm("build")
     return WEB / "dist"
