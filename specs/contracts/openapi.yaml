@@ -5132,8 +5132,11 @@ components:
       properties:
         name: { type: string }
         path: { type: string, description: Relative to the workspace's root. }
-        type: { type: string, enum: [file, folder, link] }
-        size: { type: integer, minimum: 0, description: "Bytes; 0 for folders and links." }
+        type:
+          type: string
+          enum: [file, folder, link, other]
+          description: "`other` for a FIFO, a socket or a device, which cannot be read or downloaded (ADR-0129)."
+        size: { type: integer, minimum: 0, description: "Bytes; 0 for folders, links and others." }
         modified: { $ref: "#/components/schemas/Timestamp" }
 
     WorkspaceFolder:
