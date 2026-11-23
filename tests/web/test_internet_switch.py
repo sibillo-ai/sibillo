@@ -112,3 +112,27 @@ def test_a_user_denied_internet_access_has_no_switch(
     _send(page, "hello")
     expect(page.get_by_role("main")).to_contain_text("Echo: hello", timeout=30_000)
     expect(_switch(page)).to_have_count(0)
+
+
+@pytest.mark.parametrize("answer", ["Allow in this chat", "Allow for this turn"])
+@pytest.mark.spec("UX-042", "AGT-034")
+def test_the_switch_turns_on_as_soon_as_the_request_is_allowed(
+    page: Page, member: Account, default_model: HarnessModel, answer: str
+) -> None:
+    sign_in(page, member)
+    mark = uuid4().hex[:8]
+    wait = json.dumps({"command": "sleep 5", "description": "Wait a little"})
+    _send(page, f"chain:web_search {json.dumps({'query': f'slow {mark}'})} >>> run_command {wait}")
+    approval = page.get_by_role("region", name="Approval needed")
+    expect(approval).to_be_visible(timeout=30_000)
+    switch = _switch(page)
+    expect(switch).not_to_be_checked()
+    approval.get_by_role("button", name=answer).click()
+    # On at once, while the turn still goes on.
+    expect(switch).to_be_checked(timeout=2_000)
+    expect(page.get_by_role("button", name="Stop")).to_be_visible()
+    _answered(page, f"slow {mark}")
+    if answer == "Allow in this chat":
+        expect(switch).to_be_checked()
+    else:
+        expect(switch).not_to_be_checked(timeout=10_000)
