@@ -31,6 +31,7 @@ from sibillo_server import (
     web,
     workspace,
 )
+from sibillo_server.body_limits import BodyLimits
 from sibillo_server.config import ApiConfiguration
 from sibillo_server.database import create_engine
 from sibillo_server.durable import create_client
@@ -90,4 +91,6 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
         # After the API's routes, so that the app never hides an operation (ADR-0067).
         app.include_router(web.router(configuration.web_root))
     install_error_handlers(app)
+    # Outermost, so that a body over its limit is refused before any route or session check (API-009, ADR-0119).
+    app.add_middleware(BodyLimits, prefix=API_PREFIX)
     return app
