@@ -154,6 +154,10 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **A link the assistant wrote.** Injected content can make an answer link
+  to an address that carries private data in its path or query. Clients
+  show the link's host before it is clicked, but not the rest of the
+  address, and following a link never asks (UX-002, ADR-0126).
 - **An OAuth mix-up through Sibillo's client documents.** A malicious
   remote MCP server of the household can name its own client document of
   Sibillo at an honest authorization server that reads them and does not

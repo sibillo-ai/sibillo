@@ -24,7 +24,9 @@ installable on the home screen of Android and iOS devices as a web app.
 
 Clients MUST render Markdown in messages, including tables, code blocks with
 syntax highlighting and a copy action, and mathematical notation. Rendering
-MUST NOT execute scripts or load remote resources contained in messages.
+MUST NOT execute scripts or load remote resources contained in messages. A
+link to another site whose text is not its address MUST show the host it
+goes to (ADR-0126).
 
 ## UX-003: Simple by default, detailed on request
 
