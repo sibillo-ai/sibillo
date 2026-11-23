@@ -116,7 +116,9 @@ def test_an_attempt_over_the_limit_is_refused_without_checking_its_password(
     database: Database, server: Server, account: Account
 ) -> None:
     # A password whose check takes about a second, so that skipping it shows in the time of the answer.
-    with database.superuser() as conn:
+    with database.superuser() as conn, conn.transaction():
+        # As the user, who alone changes their password.
+        conn.execute("SELECT set_config('app.user_id', %s, true)", (str(account.id),))
         conn.execute(
             "UPDATE users SET password_hash = %s WHERE id = %s",
             (PasswordHasher(time_cost=100).hash(account.password), account.id),
