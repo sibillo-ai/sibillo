@@ -112,6 +112,15 @@ class CheckWorkflowsTest(unittest.TestCase):
         self.assertProblem(GOOD.replace("      - name: Install\n", step + "      - name: Install\n"), "interpolated")
 
     @mark.spec("REPO-007")
+    def test_commit_hashes_of_a_pull_request_may_be_inputs(self) -> None:
+        step = (
+            f"      - uses: actions/checkout@{SHA} # v7\n"
+            "        with:\n"
+            "          ref: ${{ github.event.pull_request.base.sha }}\n"
+        )
+        self.assertEqual(self.problems(GOOD.replace("      - name: Install\n", step + "      - name: Install\n")), [])
+
+    @mark.spec("REPO-007")
     def test_write_all_is_refused_anywhere(self) -> None:
         release = GOOD.replace("  pull_request:\n", "").replace(
             "permissions:\n  contents: read\n", "permissions: write-all\n"
