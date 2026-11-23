@@ -1,6 +1,8 @@
 // The interface in every language: which language it shows, its direction, its plural forms, English for what a
 // translation lacks, and notifications in the interface language (I18N-002, I18N-004, I18N-005, I18N-006, ADR-0135).
 import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -9,8 +11,9 @@ import { notificationText } from "../../../src/web/src/notifications";
 
 type Tree = { [key: string]: string | Tree | Tree[] };
 
-const LOCALES = new URL("../../../src/web/src/locales/", import.meta.url);
-const read = <T>(name: string): T => JSON.parse(readFileSync(new URL(name, LOCALES), "utf8")) as T;
+// Paths, not URLs: in the jsdom environment `URL` is jsdom's, which Node's file functions refuse.
+const LOCALES = join(dirname(fileURLToPath(import.meta.url)), "../../../src/web/src/locales");
+const read = <T>(name: string): T => JSON.parse(readFileSync(join(LOCALES, name), "utf8")) as T;
 const { languages, reviewed } = read<{ languages: string[]; reviewed: string[] }>("languages.json");
 const PLURAL = /^(.+)_(zero|one|two|few|many|other)$/;
 
