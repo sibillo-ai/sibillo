@@ -679,9 +679,11 @@ components:
       properties:
         kind: { type: string, const: exit }
         workspace_bytes:
-          type: integer
+          type: [integer, "null"]
           minimum: 0
-          description: The workspace's size after the command (SBX-019).
+          description: |
+            The workspace's size after the command (SBX-019); `null` when it
+            could not be measured within the driver's bounds (ADR-0129).
         workspace_quota_bytes:
           type: integer
           minimum: 1
