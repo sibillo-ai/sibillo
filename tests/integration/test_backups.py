@@ -21,7 +21,6 @@ import httpx
 import pytest
 
 from sibillo_server.backup import (
-    APPLICATION_VERSION,
     BackupError,
     active_conversations,
     check_plain_archive,
@@ -33,6 +32,7 @@ from sibillo_server.backup import (
     staging_parent,
 )
 from sibillo_server.database import create_engine
+from sibillo_server.durable import APPLICATION_VERSION
 from tests.support.accounts import Account, create_account, create_tenant, login
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
