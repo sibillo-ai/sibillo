@@ -61,8 +61,10 @@ ADR-0113).
 
 A sandbox MUST NOT be able to open connections to: `0.0.0.0/8`, `10.0.0.0/8`,
 `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`,
-`192.168.0.0/16`, `224.0.0.0/4`, `240.0.0.0/4`, `::1/128`, `fc00::/7`, `fe80::/10`, `ff00::/8`,
-or any address of the host. These restrictions MUST be enforced outside the
+`192.168.0.0/16`, `224.0.0.0/4`, `240.0.0.0/4`, `168.63.129.16/32`,
+`192.0.0.0/24`, `192.0.2.0/24`, `198.18.0.0/15`, `198.51.100.0/24`,
+`203.0.113.0/24`, `::1/128`, `fc00::/7`, `fe80::/10`, `ff00::/8`,
+or any address of the host (ADR-0129). These restrictions MUST be enforced outside the
 sandbox's kernel, so that they hold even for code with full control of the
 sandbox's network configuration. Security tests MUST verify this from inside a
 running sandbox, and from a test container with network administration
@@ -75,7 +77,8 @@ privileges attached like a sandbox.
 - **Phase:** 0
 - **Verification:** security
 
-A sandbox MUST NOT be able to reach any other sandbox over the network.
+A sandbox MUST NOT be able to reach any other sandbox over the network, nor
+write raw packets on its link (ADR-0113, ADR-0129).
 
 ## SBX-007: Isolated name resolution
 
@@ -136,7 +139,9 @@ made (ADR-0078).
 
 Each sandbox MUST be limited in CPU, memory, number of processes and
 execution time, with limits configurable by the instance admin. Process limits
-MUST count the processes running inside the sandbox.
+MUST count the processes running inside the sandbox. The sandboxes and file
+containers that run at once MUST have a ceiling, and the driver MUST bound
+in size and time what its own commands in a sandbox return (ADR-0129).
 
 ## SBX-012: No privileged sandboxes
 
@@ -263,7 +268,10 @@ The sandbox driver MUST be able to stream a conversation's workspace as a tar
 archive, and to replace the workspace of a stopped sandbox with one, for
 backups (ADR-0077). The import MUST NOT run anything from the archive, and
 MUST refuse entries that would be written outside the workspace, such as
-absolute paths, `..` segments, links and device files.
+absolute paths, `..` segments, paths through a link and device files; a link
+itself MAY point anywhere, and the archive MUST be checked before the
+workspace changes. Export and import MUST NOT start the conversation's
+sandbox (ADR-0129).
 
 ## SBX-021: Tools in the sandbox
 
