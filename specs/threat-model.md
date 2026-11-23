@@ -179,9 +179,10 @@ Prompts are never relied upon as a security boundary.
   opaque origin and no network access, but it can still navigate its own
   frame to another address, carrying data it holds, and it relies on the
   browser's sandbox and policy enforcement rather than on a separate domain
-  (ADR-0086). What a page holds is what the assistant wrote into it; the
-  lethal trifecta mitigation bounds what injected content can make it write
-  (AGT-004).
+  (ADR-0086). Browsers that ignore `webrtc 'block'`, Firefox and Safari
+  today, let it open a peer connection too. What a page holds is what the
+  assistant wrote into it, and a run with untrusted content can choose it:
+  writing a file never asks (ADR-0090, ADR-0125).
 - **What a task with open web grants holds.** Injected content in a page
   that such a task reads can send out what its run holds: the task's
   instructions, the user's instructions and what it found on the web. The

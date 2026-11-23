@@ -42,10 +42,11 @@ display (ADR-0086).
 
 Content that can execute code when displayed MUST NOT run with the client's
 origin. A web page MUST run in a sandboxed frame, in a document with an
-opaque origin, without network access; an SVG image MUST be displayed as an
-image, which runs no scripts. Their code MUST NOT be able to read device
-session credentials, call the public API as the user, or read other files
-(ADR-0086).
+opaque origin, without network access, forms, WebRTC or DNS prefetching,
+and only in a frame, never as a document of its own; an SVG image MUST be
+displayed as an image, which runs no scripts. Their code MUST NOT be able to
+read device session credentials, call the public API as the user, or read
+other files (ADR-0086, ADR-0125).
 
 Rationale: an artifact may contain untrusted content (AGT-003); rendering it
 must not hand that content the user's session (threat T-22).

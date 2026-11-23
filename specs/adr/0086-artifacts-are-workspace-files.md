@@ -46,7 +46,8 @@ storage, and is limited by its policy in what it may load.
    `blob:` resources, and no network: no fetch, no script, style, image or
    font from any address. The client shows it in a frame with the `sandbox`
    attribute set to `allow-scripts` alone. A page is therefore one
-   self-contained file.
+   self-contained file. Amended by ADR-0125: the policy also closes forms,
+   frames, WebRTC and DNS prefetching, and a page is served only to a frame.
 4. **Passive rendering for SVG and diagrams:** an image element runs no
    scripts, so SVG files and drawn Mermaid diagrams are shown as images.
    Mermaid draws in the client with its strict security level.

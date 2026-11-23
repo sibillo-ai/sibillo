@@ -1853,6 +1853,10 @@ paths:
           schema: { type: boolean, default: false }
         - name: page
           in: query
+          description: |
+            Serve an HTML file as a web page, to run in a sandboxed frame:
+            only to a request whose `Sec-Fetch-Dest` is `iframe`, others are
+            refused with `file.not_previewable` (ART-003, ADR-0125).
           schema: { type: boolean, default: false }
       responses:
         "200":
