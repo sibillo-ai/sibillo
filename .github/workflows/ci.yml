@@ -96,6 +96,7 @@ jobs:
               --ignore=tests/integration/test_conversation_tools.py --ignore=tests/integration/test_change_stream.py
               --ignore=tests/integration/test_workspaces.py --ignore=tests/integration/test_workspace_disks.py
               --ignore=tests/integration/test_backups.py --ignore=tests/integration/test_operator_commands.py
+              --ignore=tests/integration/test_delegations.py
             # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
             # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
             # Raised from 360 with the sandbox engine (ADR-0114), whose start adds 20 to 30 seconds to
@@ -117,11 +118,13 @@ jobs:
               tests/integration/test_rewinding.py tests/integration/test_models_api.py
               tests/integration/test_remote_provider.py tests/integration/test_ollama.py
             budget: 240
-          # Titles, compaction, costs, forks, folders and search (ADR-0073).
+          # Titles, compaction, costs, forks, folders and search (ADR-0073), and delegated runs
+          # (AGT-035 to AGT-038, ADR-0136), about 60 seconds, out of the core part, near its budget.
           - part: library
             paths: >-
               tests/integration/test_titles_and_compaction.py tests/integration/test_usage.py
               tests/integration/test_forks.py tests/integration/test_conversation_list.py
+              tests/integration/test_delegations.py
             budget: 240
           # Files in a conversation (ADR-0079): every file operation starts a container.
           - part: files
