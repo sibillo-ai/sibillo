@@ -198,6 +198,8 @@ WORKSPACE_ENTRY = re.compile(
     r"^workspaces/" + "/".join([r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"] * 3) + r"\.tar$"
 )
 STAGING_PREFIXES = (".backup-", ".restore-")
+# An archive being written into the backup folder: encrypted, and named so only once whole.
+PARTIAL_PREFIX = ".partial-"
 
 
 def staging_parent() -> Path:
@@ -212,6 +214,8 @@ def remove_leftovers(folder: Path) -> None:
     for path in folder.iterdir():
         if path.is_dir() and path.name.startswith(STAGING_PREFIXES):
             shutil.rmtree(path, ignore_errors=True)
+        elif path.is_file() and path.name.startswith(PARTIAL_PREFIX):
+            path.unlink(missing_ok=True)
 
 
 def manifest_mac(document: bytes, backup_key: str) -> str:
@@ -367,12 +371,17 @@ async def make_backup(configuration: BackupConfiguration) -> Path:
 
         await asyncio.to_thread(pack)
         name = f"{ARCHIVE_PREFIX}{created.strftime('%Y%m%dT%H%M%SZ')}{ARCHIVE_SUFFIX}"
-        encrypted = staging / name
+        # Encrypted straight into the backup folder, under a name of its own until it is whole: a rename within
+        # the folder, which the staging folder, on another file system, could not give (ADR-0130).
+        encrypted = folder / f"{PARTIAL_PREFIX}{name}"
         encrypt = ["age", "--encrypt", "--recipient", target, "--output", str(encrypted), str(plain)]
-        await asyncio.to_thread(_tool, encrypt)
-        encrypted.chmod(0o600)
-        final = folder / name
-        encrypted.replace(final)
+        try:
+            await asyncio.to_thread(_tool, encrypt)
+            encrypted.chmod(0o600)
+            final = folder / name
+            encrypted.replace(final)
+        finally:
+            encrypted.unlink(missing_ok=True)
         return final
     finally:
         await engine.dispose()
