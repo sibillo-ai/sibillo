@@ -20,6 +20,11 @@ info:
     - A session of a user whose password is an initial password is refused
       every operation with `403` and `auth.password_change_required`, except
       `getMe`, `changeMyPassword` and `logout` (AUTH-012, ADR-0105).
+    - A request body larger than 1 MiB is refused with `413` and
+      `request.too_large` before the operation runs, unless the operation
+      states a larger limit: transcriptions 26 MiB, creating a skill 21 MiB,
+      writing a skill's file 7 MiB, and writing or uploading a workspace file
+      the instance's upload limit (API-009, ADR-0119).
     - Runs stream AG-UI 1.0 events over Server-Sent Events (ADR-0032). Each
       SSE message has `id` = sequence number (from 1 within a run), `event` =
       the AG-UI event type and `data` = the JSON-encoded AG-UI event.

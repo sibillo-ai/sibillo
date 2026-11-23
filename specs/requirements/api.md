@@ -105,3 +105,20 @@ what changes for its user: a conversation created, a run started or
 finished, and a task fired, each with its identifiers and nothing of its
 content. A change MUST reach the streams of its user within a second of its
 transaction, and MUST NOT reach any other user's (ADR-0108).
+
+## API-009: Bounded request bodies
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** security
+
+The API MUST refuse a request body larger than 1 MiB with `413` and
+`request.too_large`, before it reads more of it than that, and before any
+authentication, unless the operation states a larger limit for the files it
+takes: a recording to transcribe, a skill's archive or one of its files, and
+a file uploaded to a workspace, whose limit is the instance's upload limit.
+A body without a declared length MUST be counted as it arrives (ADR-0119).
+
+Rationale: threats T-14 and T-15; a body is read before the session that
+sends it is checked.
