@@ -349,6 +349,7 @@
     "newApiKey": "New API key",
     "newApiKeyOptional": "New API key (optional)",
     "keepKeyHint": "Leave it empty to keep the current key.",
+    "newAddressKeyHint": "A new address needs the key again, or remove it: the current key is sent only to the address it was given for.",
     "removeKey": "Remove the API key",
     "contextWindow": "Context window",
     "contextWindowHint": "The most tokens a model of this server reads at once. On Ollama, it is set by OLLAMA_CONTEXT_LENGTH.",

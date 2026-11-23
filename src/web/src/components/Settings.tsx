@@ -486,6 +486,10 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
   const kind = editing?.kind ?? chosenKind;
   const [result, setResult] = useState<ConnectionTest | null>(null);
   const [busy, setBusy] = useState<"test" | "save" | null>(null);
+  // A stored key goes only to the address it was given for: a new address asks for it again (UX-025, ADR-0117).
+  const [moved, setMoved] = useState(false);
+  const [removingKey, setRemovingKey] = useState(false);
+  const keyAgain = Boolean(editing?.has_api_key) && moved && !removingKey;
 
   /** OpenRouter needs only its key; its name is OpenRouter, numbered when the household has one already. */
   function request(form: HTMLFormElement) {
@@ -639,7 +643,16 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
           <>
             <FormField label={t("connection.name")}>{(ties) => <TextInput {...ties} name="name" required maxLength={100} defaultValue={editing?.name} />}</FormField>
             <FormField label={t("connection.address")} hint={t("connection.addressHint")}>
-              {(ties) => <TextInput {...ties} name="base_url" type="url" required defaultValue={editing?.base_url} />}
+              {(ties) => (
+                <TextInput
+                  {...ties}
+                  name="base_url"
+                  type="url"
+                  required
+                  defaultValue={editing?.base_url}
+                  onChange={(event) => setMoved(editing !== undefined && event.currentTarget.value.trim().replace(/\/+$/, "") !== editing.base_url)}
+                />
+              )}
             </FormField>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-2 text-small font-semibold">{t("connection.where")}</legend>
@@ -660,12 +673,12 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
                 {(ties) => <TextArea {...ties} name="image_models" rows={2} defaultValue={editing?.image_models.join("\n") ?? ""} />}
               </FormField>
             )}
-            <FormField label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
-              {(ties) => <TextInput {...ties} name="api_key" type="password" autoComplete="off" />}
+            <FormField label={editing ? t("connection.newApiKeyOptional") : t("connection.apiKeyOptional")} hint={keyAgain ? t("connection.newAddressKeyHint") : editing?.has_api_key ? t("connection.keepKeyHint") : undefined}>
+              {(ties) => <TextInput {...ties} name="api_key" type="password" autoComplete="off" required={keyAgain} />}
             </FormField>
             {editing?.has_api_key && (
               <label className="flex items-center gap-2 text-body">
-                <Checkbox name="remove_key" />
+                <Checkbox name="remove_key" onChange={(event) => setRemovingKey(event.currentTarget.checked)} />
                 {t("connection.removeKey")}
               </label>
             )}

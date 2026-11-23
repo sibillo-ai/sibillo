@@ -688,7 +688,14 @@ async def update_connection(
         raise errors.invalid("/context_window", "listed_by_openrouter")
     if row.kind == "openrouter" and "image_models" in present:
         raise errors.invalid("/image_models", "listed_by_openrouter")
+    if "base_url" in present and str(body.base_url).rstrip("/") == target.base_url:
+        # The same address is no change: the key stays where it was given (ADR-0117).
+        present = present - {"base_url"}
     if "base_url" in present:
+        # A stored key goes only to the address it was given for: a new address needs a new key, or none
+        # (MOD-008, ADR-0117).
+        if target.api_key is not None and "api_key" not in present:
+            raise errors.invalid("/api_key", "required_with_new_address")
         # A new address is private only when the instance admin sets it (MOD-009).
         target = Target(target.kind, str(body.base_url).rstrip("/"), target.api_key, identity.instance_admin)
     if "api_key" in present:
