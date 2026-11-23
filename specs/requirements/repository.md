@@ -20,7 +20,13 @@ A milestone pull request, from a `milestone/` branch, has no type of its
 own: each of its commits MUST have a type given by the start of its subject
 (`spec:`, `test:`, `impl:`, `docs:`), and CI MUST reject a commit without a
 type, of type `rules:`, or changing files outside the paths allowed for its
-type. `rules/` pull requests MUST target `master` (ADR-0060).
+type. `rules/` pull requests MUST target `master` (ADR-0060). A merge commit
+of a milestone MUST change nothing but what merging its parents gives,
+conflicting paths aside, none of which may be a rules file; a commit without
+parents MUST be rejected, and so MUST a milestone that changes a rules file.
+The `dependabot/` type MUST apply only to pull requests that GitHub says
+Dependabot opened. CI MUST run these checks with the tools of the base
+branch, not those of the pull request (ADR-0121).
 
 ## REPO-002: DCO sign-off
 
@@ -30,8 +36,9 @@ type. `rules/` pull requests MUST target `master` (ADR-0060).
 - **Verification:** unit
 
 Every non-merge commit in a pull request MUST contain a `Signed-off-by`
-trailer whose email matches the commit author's email. Automated dependency
-update bots are exempt.
+trailer whose email matches the commit author's email. Only commits authored
+as `dependabot[bot]`, in pull requests that GitHub says Dependabot opened,
+are exempt (ADR-0121).
 
 ## REPO-003: Spec format and cross-references
 
@@ -57,7 +64,8 @@ status is `draft` or `deprecated`, and when an `implemented` requirement with
 priority MUST and an automated verification kind has no test referencing it.
 CI MUST report, without failing, the `accepted` requirements of that kind that
 have no test yet, so that tests can be written incrementally before a
-requirement is marked `implemented`.
+requirement is marked `implemented`. A test that is always skipped MUST NOT
+count as referencing a requirement (ADR-0121).
 
 ## REPO-005: Maintainer review of rules and specs
 
@@ -68,7 +76,10 @@ requirement is marked `implemented`.
 
 Changes to specifications, project rules, CI configuration and governance
 files MUST require approval by a maintainer, enforced through code owners
-and branch protection on `master`.
+and branch protection on `master`. A merge into `master` MUST require the
+checks Spec lint, Tooling tests, Traceability, Python checks and Pull
+request policy to pass, and the repository MUST keep the ruleset of
+`master` in `.github/rulesets/master.json` (ADR-0121).
 
 ## REPO-006: English artifacts
 
@@ -87,9 +98,11 @@ Every repository artifact MUST be written in English, except i18n resources
 - **Phase:** 0
 - **Verification:** unit
 
-CI workflows MUST pin third-party actions to full commit SHAs, MUST declare
-minimal permissions, and MUST NOT interpolate untrusted input (such as branch
-names) directly into scripts.
+CI workflows MUST pin third-party actions to full commit SHAs, and Docker
+actions to digests, MUST declare minimal permissions, never `write-all`, and
+MUST NOT interpolate untrusted input (such as branch names) into scripts or
+the inputs of actions. They MUST NOT run on `pull_request_target`,
+`workflow_run` or `issue_comment` (ADR-0121).
 
 ## REPO-008: No secrets or write access for untrusted pull requests
 
@@ -111,8 +124,9 @@ secrets MUST be triggered explicitly by a maintainer.
 
 CI MUST run, on every pull request and on `master`, the formatter check, the
 linter, the type checker in strict mode and the test suite of the Python
-workspace, and MUST fail on any finding. Dependencies MUST be installed from
-the committed lock file only.
+workspace, the project's tools and their tests included, and MUST fail on
+any finding. Dependencies MUST be installed from the committed lock file
+only (ADR-0121).
 
 ## REPO-010: Framework upgrades reviewed against release notes
 
@@ -137,3 +151,21 @@ CI MUST fail when a single test takes longer than the per-test limit, or when
 a CI test job's test session takes longer than that job's budget. The limit
 and the budgets MUST be written in the CI configuration, and only `rules/`
 pull requests MAY raise them (ADR-0059).
+
+## REPO-012: Images and tools pinned by digest
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 2
+- **Verification:** unit
+
+Every base image of the Dockerfiles of `deploy/images/`, other than a stage
+of the same file or a build context, and every image that
+`deploy/compose.yaml` pulls, MUST be named with its digest, and the web
+app's package manager with its hash; CI MUST fail otherwise. Dependabot
+MUST watch the actions, the Python and web dependencies and the Docker
+images (ADR-0121).
+
+Rationale: threats T-16 and T-17; a tag can point to other contents
+tomorrow.
+

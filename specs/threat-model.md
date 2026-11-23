@@ -93,8 +93,8 @@ beyond keeping them configurable and updatable.
 | T-13 | A user cannot see or remove what the assistant retained about them | — | MEM-001, MEM-002, MEM-003, MEM-004 |
 | T-14 | Unauthenticated access or account takeover through the exposed endpoint | X4 | AUTH-001, AUTH-002, AUTH-004, AUTH-005, AUTH-006, AUTH-007, AUTH-010, OPS-003 |
 | T-15 | Resource exhaustion: a sandbox or a user consumes all CPU, memory, disk or model budget | X2, X3 | SBX-011, SBX-016, MOD-004 |
-| T-16 | Malicious pull request or compromised CI action injects code or steals secrets | X5 | REPO-001, REPO-005, REPO-007, REPO-008 |
-| T-17 | Tampered release images | X5 | OPS-007 |
+| T-16 | Malicious pull request or compromised CI action injects code or steals secrets | X5 | REPO-001, REPO-002, REPO-005, REPO-007, REPO-008, REPO-012 |
+| T-17 | Tampered release images | X5 | REPO-012; OPS-007, still a draft: there is no release workflow yet, and images are built from source |
 | T-18 | The host egress rules disappear (firewall reload, reboot, manual change) while sandboxes run, leaving them unfiltered | — | SBX-015, OPS-002 |
 | T-19 | Run data stored by the durable execution engine, outside row-level security, is read across users or tenants, or survives deletion | X2 | TEN-009 |
 | T-20 | A client forges or replays approval decisions to run tools the user did not approve | X2, X4 | AGT-012, AUTH-004 |
