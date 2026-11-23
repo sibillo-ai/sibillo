@@ -356,19 +356,35 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
+      # The pull request's commits, in a folder of their own.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          path: head
+          persist-credentials: false
+      # The tools that judge them come from the base branch, never from the
+      # pull request, which could change them (REPO-001, ADR-0121).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: policy
           persist-credentials: false
       # Branch names are attacker-controlled: pass them through the
-      # environment, never interpolate them into the script.
+      # environment, never interpolate them into the script. The author's
+      # login is GitHub's, and names Dependabot (ADR-0121).
       - name: Check allowed paths (REPO-001)
+        working-directory: head
         env:
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
-        run: python3 tools/check_pr_paths.py --branch "$HEAD_REF" --base "origin/$BASE_REF" --head HEAD
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: >-
+          python3 ../policy/tools/check_pr_paths.py
+          --branch "$HEAD_REF" --base "origin/$BASE_REF" --head HEAD --author "$AUTHOR"
       - name: Check DCO sign-off (REPO-002)
+        working-directory: head
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: python3 tools/check_dco.py --base "origin/$BASE_REF" --head HEAD
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: python3 ../policy/tools/check_dco.py --base "origin/$BASE_REF" --head HEAD --author "$AUTHOR"
