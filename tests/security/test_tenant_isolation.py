@@ -130,6 +130,12 @@ def _new_row(table: str, owner: User) -> tuple[LiteralString, tuple[Any, ...]]:
                 " created_at) VALUES (%s, %s, %s, %s, '[]', now())",
                 (owner.run_id, tenant, user, owner.conversation_id),
             )
+        case "delegations":
+            return (
+                "INSERT INTO delegations (id, tenant_id, owner_id, conversation_id, run_id, tool_call_id, brief,"
+                " status, created_at) VALUES (%s, %s, %s, %s, %s, 'intruder', 'intruder', 'queued', now())",
+                (uuid7(), tenant, user, owner.conversation_id, owner.run_id),
+            )
         case "runs":
             return (
                 "INSERT INTO runs (id, tenant_id, owner_id, conversation_id, parent_run_id, kind, status, created_at)"

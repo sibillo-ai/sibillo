@@ -31,6 +31,7 @@ KEY_COLUMNS: dict[str, tuple[str, ...]] = {
     "conversations": ("id",),
     "conversation_plans": ("conversation_id",),
     "compaction_checkpoints": ("run_id",),
+    "delegations": ("id",),
     "runs": ("id",),
     "conversation_messages": ("run_id", "seq"),
     "usage_ledger": ("id",),
@@ -104,7 +105,8 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         grant_id,
         trigger_id,
         firing_id,
-    ) = (uuid7() for _ in range(19))
+        delegation_id,
+    ) = (uuid7() for _ in range(20))
     username, token_hash = f"user-{user_id}", user_id.bytes * 2
     conn.execute(
         "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin, created_at)"
@@ -169,6 +171,11 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "INSERT INTO conversation_messages (run_id, seq, tenant_id, owner_id, conversation_id, message, created_at)"
         " VALUES (%s, 1, %s, %s, %s, %s, now())",
         (run_id, tenant_id, user_id, conversation_id, Jsonb(MESSAGE)),
+    )
+    conn.execute(
+        "INSERT INTO delegations (id, tenant_id, owner_id, conversation_id, run_id, tool_call_id, brief, status,"
+        " created_at) VALUES (%s, %s, %s, %s, %s, 'call-1', 'A brief', 'completed', now())",
+        (delegation_id, tenant_id, user_id, conversation_id, run_id),
     )
     conn.execute(
         "INSERT INTO compaction_checkpoints (run_id, tenant_id, owner_id, conversation_id, messages, created_at)"
@@ -272,6 +279,7 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         "conversations": (conversation_id,),
         "conversation_plans": (conversation_id,),
         "compaction_checkpoints": (run_id,),
+        "delegations": (delegation_id,),
         "runs": (run_id,),
         "conversation_messages": (run_id, 1),
         "usage_ledger": (ledger_id,),
