@@ -125,7 +125,9 @@ The connection is tested step by step before it is saved; if it fails, the
 test says which step failed and why. Then choose the **Default model** that
 new conversations start with. Anyone in the household can switch models in a
 conversation, from the message box. API keys are stored encrypted and never
-shown again.
+shown again, and a key is sent only to the address it was given for: moving
+a server that has a key to a new address asks for the key again, or for its
+removal (ADR-0117).
 
 The same can be done through the API. With Ollama on your network:
 
