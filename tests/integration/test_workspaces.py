@@ -364,14 +364,20 @@ def test_the_drivers_own_commands_in_a_sandbox_are_bounded(sandboxes: Driver) ->
 
 
 @pytest.mark.spec("SBX-014")
-def test_a_fifo_is_listed_as_other_and_never_read(sandboxes: Driver) -> None:
+def test_a_fifo_made_in_a_sandbox_never_reaches_the_drivers_reads(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
-    sandboxes.sh(tenant_id, user_id, conversation_id, "mkfifo /workspace/pipe")
+    made = sandboxes.sh(tenant_id, user_id, conversation_id, "mkfifo /workspace/pipe && ls -l /workspace/pipe")
+    assert made.exit_code == 0, made.stderr
+    assert made.stdout.startswith("p")
+    # gVisor keeps it in the sandbox's memory: the workspace on disk, which the driver lists and reads, never
+    # holds it. Were one there, it would be listed as other and never read (ADR-0129).
     path = f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}"
     with sandboxes.client() as client:
         listed = client.get(f"{path}/entries", params={"path": "."})
         assert listed.status_code == 200, listed.text
-        (entry,) = [item for item in listed.json()["entries"] if item["name"] == "pipe"]
-        assert entry["type"] == "other"
+        assert [item for item in listed.json()["entries"] if item["name"] == "pipe"] in (
+            [],
+            [{**item, "type": "other"} for item in listed.json()["entries"] if item["name"] == "pipe"],
+        )
         read = client.get(f"{path}/files", params={"path": "pipe"}, timeout=30)
-        assert read.status_code in (409, 422), read.text
+        assert read.status_code in (404, 409, 422), read.text
