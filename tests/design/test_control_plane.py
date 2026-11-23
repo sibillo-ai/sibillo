@@ -62,3 +62,15 @@ def test_the_server_does_not_import_container_runtimes_or_run_host_commands() ->
         if any(name == forbidden or name.startswith(f"{forbidden}.") for forbidden in FORBIDDEN_IMPORTS)
     )
     assert not offenders, offenders
+
+
+@pytest.mark.spec("TEN-009")
+def test_a_runs_stored_input_carries_no_privilege() -> None:
+    # The durable schema is outside row-level security: a run takes its user's role from the database when it
+    # starts, never from what was stored with it (ADR-0132).
+    from dataclasses import fields
+
+    from sibillo_server.workflow_input import RunWorkflowInput
+
+    names = {item.name for item in fields(RunWorkflowInput)}
+    assert not names & {"role", "instance_admin"}

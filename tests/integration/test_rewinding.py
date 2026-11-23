@@ -8,6 +8,7 @@ the turn before it, then sending the edited text.
 from __future__ import annotations
 
 import secrets
+import time
 from typing import Any
 
 import httpx
@@ -247,3 +248,19 @@ def test_a_fork_of_a_conversation_with_untrusted_content_is_untrusted_even_befor
         forked = client.post(f"/conversations/{conversation_id}/fork", json={"run_id": first})
     assert forked.status_code == 201, forked.text
     assert holds_untrusted_content(server, token, body(forked)["id"]) is True
+
+
+@pytest.mark.spec("CNV-004", "CNV-003")
+def test_a_rewind_waits_for_a_cancelled_run_to_stop(server: Server, token: str) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    first, _ = start_run(server, token, conversation_id, "kept")
+    assert wait_for_run(server, token, first)["status"] == "completed"
+    slow, _ = start_run(server, token, conversation_id, "slow:6", stop_after=1)
+    with server.client(token) as client:
+        assert client.post(f"/runs/{slow}/cancel").status_code == 200
+    # Cancelled, but its workflow is still ending: what it does now must not outlive the rewind (ADR-0132).
+    assert_problem(_rewind(server, token, conversation_id, first), 409, "run.in_progress")
+    deadline = time.monotonic() + 30
+    while _rewind(server, token, conversation_id, first).status_code == 409:
+        assert time.monotonic() < deadline, "the cancelled run never stopped"
+        time.sleep(0.5)

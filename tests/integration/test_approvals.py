@@ -29,7 +29,7 @@ from tests.support.approvals import (
 )
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
-from tests.support.runs import create_conversation, get_run
+from tests.support.runs import create_conversation, get_run, start_run, wait_for_run
 from tests.support.search import SearchServer
 from tests.support.server import Server
 
@@ -191,3 +191,22 @@ def test_expired_requests_are_denied_even_when_no_run_can_be_made(
     with server.client(token) as client:
         events = body(client.get("/me/activity", params={"conversation_id": conversation_id}))["items"]
     assert [(event["tool"], event["outcome"]) for event in events] == [("web_search", "expired")]
+
+
+@pytest.mark.spec("AGT-008")
+def test_calls_to_tools_that_are_off_or_unknown_are_audited(
+    server: Server, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    with server.client(token) as client:
+        response = client.patch(f"/conversations/{conversation_id}", json={"disabled_tools": ["run_command"]})
+    assert response.status_code == 200, response.text
+    for text in ("run:echo off", 'tool:no_such_tool {"x": 1}'):
+        run_id, _ = start_run(server, token, conversation_id, text)
+        wait_for_run(server, token, run_id)
+    # Refusals leave an event too (ADR-0132).
+    events = activity(server, token, conversation_id=conversation_id)
+    assert {(event["tool"], event["outcome"]) for event in events} >= {
+        ("run_command", "refused"),
+        ("no_such_tool", "refused"),
+    }

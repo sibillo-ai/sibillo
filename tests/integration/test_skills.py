@@ -15,6 +15,7 @@ import re
 import secrets
 import shlex
 import stat
+import time
 import zipfile
 from typing import Any
 
@@ -867,3 +868,19 @@ def test_skills_of_others_cannot_be_read_changed_or_deleted(
             # Another user may use the same name.
             _create(server, other_token, _skill_md(mine["name"]))
     assert [skill["id"] for skill in _own(server, token)] == [mine["id"]]
+
+
+@pytest.mark.spec("AGT-017")
+def test_a_skills_front_matter_is_bounded_before_it_is_read(server: Server, token: str) -> None:
+    # Aliases that nest to billions of items, which a parser would build in full (ADR-0132).
+    layers = ['a0: &a0 ["x","x","x","x","x","x","x","x","x"]']
+    layers += [f"a{n}: &a{n} [" + ",".join([f"*a{n - 1}"] * 9) + "]" for n in range(1, 9)]
+    bomb = "---\nname: bomb\n" + "\n".join(layers) + "\ndescription: *a8\n---\n\nBody.\n"
+    started = time.monotonic()
+    with server.client(token) as client:
+        refused = client.post("/me/skills", json={"skill_md": bomb})
+        assert_problem(refused, 422, "skill.invalid")
+        # Front matter longer than 16 KiB is refused unread.
+        long = "---\nname: long\ndescription: " + "y" * 17_000 + "\n---\n\nBody.\n"
+        assert_problem(client.post("/me/skills", json={"skill_md": long}), 422, "skill.invalid")
+    assert time.monotonic() - started < 10
