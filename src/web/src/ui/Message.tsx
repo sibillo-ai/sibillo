@@ -24,9 +24,12 @@ export function UserMessage({ children, actions }: { children: ReactNode; action
 /** What the user said: a bubble at the end of the column, four fifths of it at most. */
 export function Bubble({ speaker, children }: { speaker: string; children: ReactNode }) {
   return (
-    <div className="max-w-4/5 self-end rounded-lg rounded-br-sm border border-line bg-sunken px-4 py-3 text-reading break-words whitespace-pre-wrap">
+    <div className="max-w-4/5 self-end rounded-lg rounded-ee-sm border border-line bg-sunken px-4 py-3 text-reading break-words whitespace-pre-wrap">
       <span className="sr-only">{speaker}: </span>
-      {children}
+      {/* What the user writes takes its own direction, whatever the interface's (I18N-005). */}
+      <span dir="auto" className="block">
+        {children}
+      </span>
     </div>
   );
 }
@@ -46,7 +49,7 @@ export function AttachmentChip({ icon, name, detail, onShow }: { icon: ReactNode
     <button
       type="button"
       onClick={onShow}
-      className="flex max-w-64 cursor-pointer items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-left text-small transition-colors duration-120 hover:bg-hover pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none [&_svg]:text-ink-2"
+      className="flex max-w-64 cursor-pointer items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-start text-small transition-colors duration-120 hover:bg-hover pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none [&_svg]:text-ink-2"
     >
       {icon}
       <span className="flex min-w-0 flex-col">
@@ -68,7 +71,12 @@ export function AttachmentImage({ src, alt, onShow }: { src: string; alt: string
 
 /** The answer: plain text in the reading role, with what the run did where it happened. */
 export function AnswerBody({ children }: { children: ReactNode }) {
-  return <div className="flex min-w-0 flex-col gap-3 text-reading">{children}</div>;
+  // What the assistant writes takes its own direction, whatever the interface's (I18N-005).
+  return (
+    <div dir="auto" className="flex min-w-0 flex-col gap-3 text-reading">
+      {children}
+    </div>
+  );
 }
 
 const REVEAL = {
@@ -93,11 +101,11 @@ export function MessageActions({
   children: ReactNode;
 }) {
   return (
-    <div className={cx("flex items-center", reveal === "message" ? "-mr-2" : "-ml-2")}>
+    <div className={cx("flex items-center", reveal === "message" ? "-me-2" : "-ms-2")}>
       <div className={cx("flex items-center gap-px transition-opacity duration-120 [@media(hover:none)]:opacity-100", shown ? "opacity-100" : "opacity-0", REVEAL[reveal])}>
         {children}
       </div>
-      {caption && <span className="ml-2 text-caption text-ink-3 tabular-nums">{caption}</span>}
+      {caption && <span className="ms-2 text-caption text-ink-3 tabular-nums">{caption}</span>}
     </div>
   );
 }
@@ -147,7 +155,7 @@ export function Step({
           {caption && <span className="min-w-0 truncate font-mono text-caption">{caption}</span>}
         </span>
         {end}
-        <ChevronRight className="text-ink-3 transition-transform duration-120 group-open/step:rotate-90" aria-hidden="true" />
+        <ChevronRight className="text-ink-3 transition-transform duration-120 rtl:-scale-x-100 group-open/step:rotate-90 rtl:group-open/step:-rotate-90" aria-hidden="true" />
       </summary>
       <div className="flex min-w-0 flex-col gap-2 border-t border-line p-3 text-small text-ink-2">{children}</div>
     </details>
@@ -216,7 +224,7 @@ export function FileCard({
   return (
     <div role="group" aria-label={name} className="flex w-full max-w-96 items-center gap-3 rounded-md border border-line bg-surface p-3">
       <Tile>{icon}</Tile>
-      <button type="button" onClick={onShow} title={hint} className="flex min-w-0 flex-1 cursor-pointer flex-col rounded-sm text-left">
+      <button type="button" onClick={onShow} title={hint} className="flex min-w-0 flex-1 cursor-pointer flex-col rounded-sm text-start">
         <span className="truncate text-body font-semibold">{name}</span>
         <span className={cx("text-caption", gone ? "text-danger" : "text-ink-3")}>{detail}</span>
       </button>
@@ -233,7 +241,7 @@ export function ErrorCard({ sprite, title, reason, children }: { sprite: ReactNo
       <div className="min-w-0 flex-1 text-body">
         <strong className="block font-semibold">{title}</strong>
         <p className="mt-px text-ink-2">{children}</p>
-        {reason && <blockquote className="mt-2 border-l-2 border-line-strong pl-3 break-words whitespace-pre-wrap">{reason}</blockquote>}
+        {reason && <blockquote className="mt-2 border-s-2 border-line-strong ps-3 break-words whitespace-pre-wrap">{reason}</blockquote>}
       </div>
     </div>
   );

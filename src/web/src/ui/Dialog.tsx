@@ -48,7 +48,7 @@ export function Dialog({
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">{children}</div>
       {footer && (
         <footer className="flex flex-none flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4 max-sm:flex-col-reverse max-sm:items-stretch">
-          {footerStart && <div className="flex sm:mr-auto max-sm:flex-col">{footerStart}</div>}
+          {footerStart && <div className="flex sm:me-auto max-sm:flex-col">{footerStart}</div>}
           {footer}
         </footer>
       )}
@@ -64,7 +64,7 @@ export function Dialog({
           className={cx(
             "slide fixed z-50 flex flex-col bg-raised text-ink shadow-above outline-none",
             "max-sm:inset-x-0 max-sm:bottom-0 max-sm:max-h-[92dvh] max-sm:rounded-t-lg",
-            "sm:top-1/2 sm:left-1/2 sm:max-h-[min(92dvh,48rem)] sm:w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg",
+            "sm:inset-x-0 sm:top-1/2 sm:mx-auto sm:max-h-[min(92dvh,48rem)] sm:w-[calc(100vw-2rem)] sm:-translate-y-1/2 sm:rounded-lg",
             WIDTHS[size],
           )}
         >

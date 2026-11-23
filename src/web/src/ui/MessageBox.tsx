@@ -58,6 +58,7 @@ export function MessageInput({ label, id, ...rest }: Omit<ComponentProps<"textar
       <textarea
         id={id ?? own}
         rows={1}
+        dir="auto"
         className="max-h-56 resize-none bg-transparent px-2 py-1 text-reading text-ink outline-none placeholder:text-ink-3 md:min-h-13"
         {...rest}
       />
@@ -124,7 +125,7 @@ export function Attachment({
   onRemove: () => void;
 }) {
   return (
-    <li className="flex max-w-full items-center gap-2 rounded-md border border-line bg-hover py-1 pr-1 pl-2 text-small">
+    <li className="flex max-w-full items-center gap-2 rounded-md border border-line bg-hover py-1 pe-1 ps-2 text-small">
       {preview ? <img src={preview} alt={name} className="size-8 flex-none rounded-sm object-cover" /> : <FileText className="size-4 flex-none text-ink-2" aria-hidden="true" />}
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-semibold">{name}</span>

@@ -39,7 +39,7 @@ const COMPONENTS: Components = {
           {children}
         </a>
         {host && (
-          <span data-link-host className="ml-1 text-caption text-ink-3">
+          <span data-link-host className="ms-1 text-caption text-ink-3">
             ({host})
           </span>
         )}
@@ -50,14 +50,14 @@ const COMPONENTS: Components = {
   img: ({ alt }) => <ImageText alt={alt} />,
   table: ({ children }) => (
     <div className="overflow-x-auto rounded-md border border-line">
-      <table className="w-full border-collapse text-body [&_td]:border-b [&_td]:border-line [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:bg-sunken [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_tr:last-child_td]:border-b-0">
+      <table className="w-full border-collapse text-body [&_td]:border-b [&_td]:border-line [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:bg-sunken [&_th]:px-3 [&_th]:py-2 [&_th]:text-start [&_th]:font-semibold [&_tr:last-child_td]:border-b-0">
         {children}
       </table>
     </div>
   ),
-  blockquote: ({ children }) => <blockquote className="space-y-3 border-l-2 border-line-strong pl-4 font-serif text-ink-2 italic">{children}</blockquote>,
-  ul: ({ children }) => <ul className="list-disc space-y-1 pl-6 marker:text-ink-3">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-6 marker:text-ink-3">{children}</ol>,
+  blockquote: ({ children }) => <blockquote className="space-y-3 border-s-2 border-line-strong ps-4 font-serif text-ink-2 italic">{children}</blockquote>,
+  ul: ({ children }) => <ul className="list-disc space-y-1 ps-6 marker:text-ink-3">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-1 ps-6 marker:text-ink-3">{children}</ol>,
   h1: ({ children }) => <h3 className={HEADING}>{children}</h3>,
   h2: ({ children }) => <h3 className={HEADING}>{children}</h3>,
   h3: ({ children }) => <h4 className={SUBHEADING}>{children}</h4>,
@@ -128,7 +128,7 @@ function ImageText({ alt }: { alt: string | undefined }) {
 function TaskBox({ done }: { done: boolean }) {
   const { t } = useTranslation();
   return (
-    <span className="mr-2 inline-flex align-middle">
+    <span className="me-2 inline-flex align-middle">
       <Checkbox checked={done} disabled readOnly aria-label={t(done ? "tasks.status.completed" : "tasks.status.pending")} />
     </span>
   );

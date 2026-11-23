@@ -60,7 +60,7 @@ function LanguageField({ value, onChange }: { value: string | null; onChange: (l
     <Row title={t("assistant.language")} description={<span id={hint}>{t("assistant.languageHint")}</span>} htmlFor={id} wide>
       <Select id={id} aria-describedby={hint} value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}>
         <option value="">{t("assistant.languageOfMessages")}</option>
-        {languageOptions(i18n.language, value).map((option) => (
+        {languageOptions(i18n.language, value, t("assistant.translatedAutomatically")).map((option) => (
           <option key={option.tag} value={option.tag} lang={option.tag}>
             {option.label}
           </option>

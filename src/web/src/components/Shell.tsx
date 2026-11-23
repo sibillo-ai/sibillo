@@ -74,11 +74,11 @@ export function Shell({ me }: { me: User }) {
             style={{ "--list-width": `${list.width}px` } as CSSProperties}
             className={cx(
               open ? "flex" : "hidden",
-              "fixed inset-0 z-40 w-full flex-none flex-col gap-3 bg-sunken px-3 pt-safe pb-safe md:relative md:inset-auto md:flex md:w-(--list-width) md:border-r md:border-line",
+              "fixed inset-0 z-40 w-full flex-none flex-col gap-3 bg-sunken px-3 pt-safe pb-safe md:relative md:inset-auto md:flex md:w-(--list-width) md:border-e md:border-line",
             )}
           >
-            <ResizeHandle label={t("shell.resizeList")} side="right" panel={list} className="hidden md:block" />
-            <div className="flex h-10 flex-none items-center gap-2 pl-1">
+            <ResizeHandle label={t("shell.resizeList")} side="end" panel={list} className="hidden md:block" />
+            <div className="flex h-10 flex-none items-center gap-2 ps-1">
               <Link to="/" className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-reading font-semibold">
                 <Sprite pose="waiting" head className="size-7 flex-none" />
                 <span className="truncate">{t("app.name")}</span>
@@ -98,7 +98,7 @@ export function Shell({ me }: { me: User }) {
                 <SlidersHorizontal aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{t("shell.settings")}</span>
               </NavLink>
-              <div className="flex items-center gap-2 pt-2 pl-2">
+              <div className="flex items-center gap-2 pt-2 ps-2">
                 <Avatar name={me.display_name} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-body font-semibold">{me.display_name}</div>

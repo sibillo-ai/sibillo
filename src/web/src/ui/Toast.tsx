@@ -30,7 +30,7 @@ export function Toast({
   children?: ReactNode;
 }) {
   return (
-    <div role={role} className="slide pointer-events-auto flex items-center gap-3 rounded-lg border border-line bg-raised py-3 pr-3 pl-4 text-small text-ink shadow-float">
+    <div role={role} className="slide pointer-events-auto flex items-center gap-3 rounded-lg border border-line bg-raised py-3 pe-3 ps-4 text-small text-ink shadow-float">
       {leading}
       <div className="min-w-0 flex-1">
         <strong className="block font-semibold">{title}</strong>

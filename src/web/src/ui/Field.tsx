@@ -62,12 +62,12 @@ export function TextArea({ mono = false, tall = false, ...rest }: Omit<Component
 export function SearchInput({ label, ...rest }: Omit<ComponentProps<"input">, "className" | "type" | "aria-label"> & { label: string }) {
   return (
     <div className="relative w-full">
-      <Search className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+      <Search className="pointer-events-none absolute top-1/2 start-2 size-4 -translate-y-1/2 text-ink-3" aria-hidden="true" />
       <input
         type="search"
         aria-label={label}
         placeholder={label}
-        className="h-8 w-full rounded-md border border-transparent bg-hover pr-2 pl-8 text-small text-ink outline-none transition-colors duration-120 placeholder:text-ink-3 focus:border-accent focus:bg-surface focus:ring-3 focus:ring-accent-soft pointer-coarse:min-h-11 pointer-coarse:text-reading [&::-webkit-search-cancel-button]:appearance-none"
+        className="h-8 w-full rounded-md border border-transparent bg-hover pe-2 ps-8 text-small text-ink outline-none transition-colors duration-120 placeholder:text-ink-3 focus:border-accent focus:bg-surface focus:ring-3 focus:ring-accent-soft pointer-coarse:min-h-11 pointer-coarse:text-reading [&::-webkit-search-cancel-button]:appearance-none"
         {...rest}
       />
     </div>
@@ -78,10 +78,10 @@ export function SearchInput({ label, ...rest }: Omit<ComponentProps<"input">, "c
 export function Select({ children, ...rest }: Omit<ComponentProps<"select">, "className">) {
   return (
     <div className="relative w-full">
-      <select className={cx(BOX, "h-10 cursor-pointer appearance-none truncate pr-9")} {...rest}>
+      <select className={cx(BOX, "h-10 cursor-pointer appearance-none truncate pe-9")} {...rest}>
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-ink-2" aria-hidden="true" />
+      <ChevronDown className="pointer-events-none absolute top-1/2 end-3 size-4 -translate-y-1/2 text-ink-2" aria-hidden="true" />
     </div>
   );
 }
@@ -89,7 +89,7 @@ export function Select({ children, ...rest }: Omit<ComponentProps<"select">, "cl
 /** A button that opens a picker of its own and looks like a select, as the model picker's does (UX-015). */
 export function SelectButton({ leading, children, ...rest }: Omit<ComponentProps<"button">, "className" | "type"> & { leading?: ReactNode }) {
   return (
-    <button type="button" className={cx(BOX, "flex h-10 cursor-pointer items-center gap-2 text-left aria-expanded:border-accent [&_svg]:size-4 [&_svg]:flex-none")} {...rest}>
+    <button type="button" className={cx(BOX, "flex h-10 cursor-pointer items-center gap-2 text-start aria-expanded:border-accent [&_svg]:size-4 [&_svg]:flex-none")} {...rest}>
       {leading}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       <ChevronDown className="text-ink-2" aria-hidden="true" />

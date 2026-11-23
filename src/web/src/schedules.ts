@@ -53,11 +53,11 @@ export function describeSchedule(t: TFunction, language: string, start: string, 
       timed = false;
       break;
     case "HOURLY":
-      pattern = interval === 1 ? t("taskSettings.everyHour") : t("taskSettings.everyHours", { count: interval });
+      pattern = t("taskSettings.everyHours", { count: interval });
       timed = false;
       break;
     case "DAILY":
-      pattern = interval === 1 ? t("taskSettings.everyDay") : t("taskSettings.everyDays", { count: interval });
+      pattern = t("taskSettings.everyDays", { count: interval });
       break;
     case "WEEKLY": {
       if (interval === 1 && byDay.length === 5 && WEEKDAYS.every((day) => byDay.includes(day))) {
@@ -66,12 +66,12 @@ export function describeSchedule(t: TFunction, language: string, start: string, 
       }
       const days = byDay.length ? dayNames(t, byDay) : null;
       if (byDay.length && days === null) return null;
-      const every = interval === 1 ? t("taskSettings.everyWeek") : t("taskSettings.everyWeeks", { count: interval });
+      const every = t("taskSettings.everyWeeks", { count: interval });
       pattern = days ? t("taskSettings.onDays", { every, days }) : every;
       break;
     }
     case "MONTHLY": {
-      const every = interval === 1 ? t("taskSettings.everyMonth") : t("taskSettings.everyMonths", { count: interval });
+      const every = t("taskSettings.everyMonths", { count: interval });
       const nth = byDay.length === 1 ? /^(-?\d)([A-Z]{2})$/.exec(byDay[0]!) : null;
       const monthDay = rule.get("BYMONTHDAY");
       if (nth && ORDINALS[nth[1]!] && DAYS[nth[2]!]) {
@@ -84,14 +84,14 @@ export function describeSchedule(t: TFunction, language: string, start: string, 
       break;
     }
     case "YEARLY":
-      pattern = interval === 1 ? t("taskSettings.everyYear") : t("taskSettings.everyYears", { count: interval });
+      pattern = t("taskSettings.everyYears", { count: interval });
       break;
     default:
       return null;
   }
   let words = timed ? t("taskSettings.atTime", { time, pattern }) : pattern;
   const count = rule.get("COUNT");
-  if (count !== undefined) words += count === "1" ? t("taskSettings.timesOnce") : t("taskSettings.times", { count: Number(count) });
+  if (count !== undefined) words += t("taskSettings.times", { count: Number(count) });
   const until = rule.get("UNTIL");
   if (until !== undefined) {
     const end = untilDate(until);

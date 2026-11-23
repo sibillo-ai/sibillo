@@ -29,6 +29,7 @@ import {
 import { errorKey } from "./Composer";
 import { CodeBlock, Markdown } from "./Markdown";
 import { ResizeHandle, usePanelWidth } from "./ResizeHandle";
+import i18n from "../i18n";
 
 const WIDE = "(min-width: 768px)";
 // The API shows at most this much of a text (UX-020).
@@ -89,8 +90,8 @@ export function WorkspacePanel(props: { conversationId: string; open: boolean; o
   if (wide) {
     if (!props.open) return null;
     return (
-      <section aria-labelledby={title} style={{ width: panel.width, ...PANEL_LIMIT }} className="relative flex max-w-(--panel-limit) flex-none flex-col border-l border-line bg-canvas">
-        <ResizeHandle label={t("files.resize")} side="left" panel={panel} />
+      <section aria-labelledby={title} style={{ width: panel.width, ...PANEL_LIMIT }} className="relative flex max-w-(--panel-limit) flex-none flex-col border-s border-line bg-canvas">
+        <ResizeHandle label={t("files.resize")} side="start" panel={panel} />
         <PanelBody conversationId={props.conversationId} reveal={props.reveal} titleId={title} onClose={close} />
       </section>
     );
@@ -242,7 +243,7 @@ function PanelBody({ conversationId, reveal, titleId, onClose }: { conversationI
                     <p className="truncate text-small font-semibold text-ink">{entry.name}</p>
                     <p className="truncate font-normal tabular-nums">
                       {entry.type === "file" ? `${formatSize(entry.size)} · ` : ""}
-                      {new Date(entry.modified).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                      {new Date(entry.modified).toLocaleString(i18n.language, { dateStyle: "medium", timeStyle: "short" })}
                     </p>
                   </div>
                 }
@@ -468,7 +469,7 @@ function TreeItem(props: TreeProps & { entry: WorkspaceEntry; level: number; foc
         end={
           <>
             {entry.type === "file" && <span>{formatSize(entry.size)}</span>}
-            <span>{new Date(entry.modified).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+            <span>{new Date(entry.modified).toLocaleDateString(i18n.language, { month: "short", day: "numeric" })}</span>
           </>
         }
         onClick={() => {
@@ -576,7 +577,7 @@ function FilePreview({ conversationId, entry, large = false }: { conversationId:
             <thead>
               <tr>
                 {head.map((cell, index) => (
-                  <th key={index} className="border border-line bg-hover px-2 py-1 text-left font-semibold whitespace-nowrap">
+                  <th key={index} className="border border-line bg-hover px-2 py-1 text-start font-semibold whitespace-nowrap">
                     {cell}
                   </th>
                 ))}

@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api, unwrap, type EgressPolicy, type ModelChoice, type ModelOption } from "./api/client";
+import i18n from "./i18n";
 
 export const MODELS = ["models"] as const;
 
@@ -25,8 +26,9 @@ export function refusedBy(policy: EgressPolicy | undefined, option: Pick<ModelOp
   return policy === "local_only" && option?.location === "remote";
 }
 
-/** A price per million tokens, as short as it can be: `0.27`, `2.5`, `15`. */
+/** A price per million tokens, as short as it can be, in the interface language: `0.27`, `2.5`, `15` (I18N-006). */
 export function shortPrice(value: string): string {
   const number = Number(value);
-  return number >= 1 ? String(Number(number.toFixed(2))) : String(Number(number.toPrecision(2)));
+  const options: Intl.NumberFormatOptions = number >= 1 ? { maximumFractionDigits: 2 } : { maximumSignificantDigits: 2 };
+  return new Intl.NumberFormat(i18n.language, options).format(number);
 }

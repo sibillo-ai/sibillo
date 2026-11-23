@@ -21,7 +21,7 @@ export function Switch({
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none h-5 w-9 rounded-full bg-line-strong transition-colors duration-200 ease-soft peer-checked:bg-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:opacity-45 after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-surface after:shadow-line after:transition-transform after:duration-200 after:ease-soft peer-checked:after:translate-x-4 peer-checked:after:bg-canvas"
+        className="pointer-events-none h-5 w-9 rounded-full bg-line-strong transition-colors duration-200 ease-soft peer-checked:bg-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:opacity-45 after:absolute after:top-0.5 after:start-0.5 after:size-4 after:rounded-full after:bg-surface after:shadow-line after:transition-transform after:duration-200 after:ease-soft peer-checked:after:translate-x-4 rtl:peer-checked:after:-translate-x-4 peer-checked:after:bg-canvas"
       />
     </span>
   );

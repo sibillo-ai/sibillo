@@ -8,7 +8,8 @@
     "generate": "openapi-typescript ../../specs/contracts/openapi.yaml -o src/api/schema.d.ts",
     "build": "openapi-typescript ../../specs/contracts/openapi.yaml -o src/api/schema.d.ts && tsc --noEmit && tsc --noEmit -p src/sw && vite build",
     "typecheck": "openapi-typescript ../../specs/contracts/openapi.yaml -o src/api/schema.d.ts && tsc --noEmit && tsc --noEmit -p src/sw",
-    "test": "vitest run"
+    "test": "vitest run",
+    "translate": "node scripts/translate.mjs"
   },
   "dependencies": {
     "@ag-ui/core": "1.0.3",

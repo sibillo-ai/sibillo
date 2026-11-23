@@ -257,7 +257,7 @@ function Member({ user }: { user: User }) {
           <>
             {user.username}
             {passkeys !== undefined && " · "}
-            {passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : passkeys === 1 ? t("members.onePasskey") : t("members.passkeys", { count: passkeys })}
+            {passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : t("members.passkeys", { count: passkeys })}
           </>
         }
       >

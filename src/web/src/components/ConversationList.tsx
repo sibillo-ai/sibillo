@@ -174,7 +174,7 @@ function FolderItem({ folder, conversations, folders }: { folder: Folder; conver
         aria-expanded={expanded}
         icon={
           <>
-            <ChevronRight className={cx("transition-transform duration-120", expanded && "rotate-90")} aria-hidden="true" />
+            <ChevronRight className={cx("transition-transform duration-120 rtl:-scale-x-100", expanded && "rotate-90 rtl:-rotate-90")} aria-hidden="true" />
             <FolderIcon aria-hidden="true" />
           </>
         }
@@ -183,7 +183,7 @@ function FolderItem({ folder, conversations, folders }: { folder: Folder; conver
         {folder.name}
       </NavItem>
       {expanded && (
-        <ul aria-label={folder.name} className="mt-px flex flex-col gap-px pl-6">
+        <ul aria-label={folder.name} className="mt-px flex flex-col gap-px ps-6">
           {conversations.map((conversation) => (
             <ConversationItem key={conversation.id} conversation={conversation} folders={folders} />
           ))}

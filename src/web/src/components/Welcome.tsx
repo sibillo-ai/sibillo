@@ -137,7 +137,7 @@ export function Welcome({ me }: { me: User }) {
               </figure>
             )}
             {/* The model the chat starts with is chosen with the greeting, not in the message box (UX-039). */}
-            <div className="-ml-3 mt-2 flex">
+            <div className="-ms-3 mt-2 flex">
               <ModelSelect
                 compact
                 value={model}

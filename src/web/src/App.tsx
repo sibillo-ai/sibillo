@@ -3,12 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes } from "react-router";
 
 import { ConversationView } from "./components/ConversationView";
+import { useSettings } from "./components/AssistantSettings";
 import { McpSignIn } from "./components/McpSettings";
 import { ChoosePassword } from "./components/Password";
 import { Settings } from "./components/Settings";
 import { Shell } from "./components/Shell";
 import { SignIn } from "./components/SignIn";
 import { Welcome } from "./components/Welcome";
+import { browserLanguages, interfaceLanguage, showInterfaceIn } from "./i18n";
 import { NoticeProvider, useNotify } from "./notices";
 import { watchForUpdates } from "./update";
 import { useMe } from "./session";
@@ -19,6 +21,7 @@ export function App() {
   return (
     <NoticeProvider>
       <NewVersion />
+      {me === null ? <InterfaceLanguage preferred={null} /> : <PreferredInterfaceLanguage />}
       {me === null ? (
         <SignIn />
       ) : me.password_change_required ? (
@@ -49,5 +52,26 @@ function NewVersion() {
       notify({ kind: "info", lasting: true, title: t("update.ready"), text: t("update.when"), action: { label: t("update.load"), run: () => window.location.reload() } }),
     );
   }, [notify, t]);
+  return null;
+}
+
+/** The interface in the user's preferred language, once their defaults are known (I18N-004, ADR-0135). */
+function PreferredInterfaceLanguage() {
+  const settings = useSettings();
+  if (settings.data === undefined) return null;
+  return <InterfaceLanguage preferred={settings.data.language ?? null} />;
+}
+
+/** The interface in the preferred language, else the browser's, else English, as soon as either changes. */
+function InterfaceLanguage({ preferred }: { preferred: string | null }) {
+  const language = interfaceLanguage(preferred, browserLanguages());
+  useEffect(() => {
+    void showInterfaceIn(language);
+  }, [language]);
+  useEffect(() => {
+    const changed = () => void showInterfaceIn(interfaceLanguage(preferred, browserLanguages()));
+    window.addEventListener("languagechange", changed);
+    return () => window.removeEventListener("languagechange", changed);
+  }, [preferred]);
   return null;
 }

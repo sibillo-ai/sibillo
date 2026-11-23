@@ -2,6 +2,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { API_BASE, REQUEST_HEADER, type Schemas, api, unwrap, ApiError } from "./api/client";
+import i18n from "./i18n";
 
 export type WorkspaceEntry = Schemas["WorkspaceEntry"];
 export type WorkspaceSummary = Schemas["WorkspaceSummary"];
@@ -157,17 +158,19 @@ export function upload(
   return { done, abort: () => request.abort(), sent: () => sent };
 }
 
-/** A size for people: 24 KB, 3.1 MB. */
+/** A size for people, in the interface language: 24 kB, 3.1 MB, 3,1 MB (I18N-006). */
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
+  const units = ["kilobyte", "megabyte", "gigabyte", "terabyte"];
+  const format = (value: number, unit: string, digits: number) =>
+    new Intl.NumberFormat(i18n.language, { style: "unit", unit, unitDisplay: "short", maximumFractionDigits: digits }).format(value);
+  if (bytes < 1024) return format(bytes, "byte", 0);
   let value = bytes / 1024;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit += 1;
   }
-  return `${value >= 10 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+  return format(value, units[unit]!, value >= 10 ? 0 : 1);
 }
 
 /** The kind of preview a file gets, by its extension, as the API serves it (UX-020). */

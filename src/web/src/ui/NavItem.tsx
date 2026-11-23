@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 /** The classes of an entry, for an entry that is a link. The current one is marked with `aria-current`. */
 export const NAV_ITEM =
-  "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2 text-left text-body text-ink-2 transition-colors duration-120 hover:bg-hover hover:text-ink aria-[current]:bg-pressed aria-[current]:font-semibold aria-[current]:text-ink pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none";
+  "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2 text-start text-body text-ink-2 transition-colors duration-120 hover:bg-hover hover:text-ink aria-[current]:bg-pressed aria-[current]:font-semibold aria-[current]:text-ink pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none";
 
 export function NavItem({
   current = false,

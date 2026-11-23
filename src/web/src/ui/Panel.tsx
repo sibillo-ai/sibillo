@@ -120,9 +120,9 @@ export function TreeEntry({
       tabIndex={focusable ? 0 : -1}
       onClick={onClick}
       style={{ "--depth": level - 1 } as CSSProperties}
-      className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm pr-2 pl-[calc(0.5rem+var(--depth)*1rem)] text-body text-ink-2 transition-colors duration-120 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent aria-selected:bg-pressed aria-selected:font-semibold aria-selected:text-ink pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none"
+      className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm pe-2 ps-[calc(0.5rem+var(--depth)*1rem)] text-body text-ink-2 transition-colors duration-120 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent aria-selected:bg-pressed aria-selected:font-semibold aria-selected:text-ink pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:flex-none"
     >
-      <ChevronRight className={cx("text-ink-3 transition-transform duration-120", expanded === undefined && "invisible", expanded && "rotate-90")} aria-hidden="true" />
+      <ChevronRight className={cx("text-ink-3 transition-transform duration-120 rtl:-scale-x-100", expanded === undefined && "invisible", expanded && "rotate-90 rtl:-rotate-90")} aria-hidden="true" />
       {icon}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {end && <span className="flex flex-none gap-2 text-caption font-normal text-ink-2 tabular-nums">{end}</span>}
@@ -149,7 +149,7 @@ export function CodeFrame({ title, actions, flush = false, children }: { title: 
   return (
     <div className={cx("min-w-0", !flush && "overflow-hidden rounded-md border border-line bg-surface")}>
       {/* Not a `header`: outside the page's main content that would be a second banner. */}
-      <div className={cx("flex min-h-8 items-center gap-1 pr-1 text-caption font-medium text-ink-3", flush ? "pl-0" : "pl-3", children !== undefined && "border-b border-line")}>
+      <div className={cx("flex min-h-8 items-center gap-1 pe-1 text-caption font-medium text-ink-3", flush ? "ps-0" : "ps-3", children !== undefined && "border-b border-line")}>
         <div className="min-w-0 flex-1">{title}</div>
         {actions}
       </div>

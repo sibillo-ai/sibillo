@@ -20,7 +20,7 @@ export default defineConfig({
       manifest: {
         name: "Sibillo",
         short_name: "Sibillo",
-        description: "A private assistant for the household",
+        // Only the product's name, the same in every language (ADR-0135).
         start_url: "/",
         scope: "/",
         display: "standalone",

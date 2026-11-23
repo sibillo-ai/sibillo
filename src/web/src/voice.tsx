@@ -503,7 +503,7 @@ function HandsFree(props: {
         </VoiceButton>
         {/* That the microphone hears, as when dictating; beside the button, so that it has a name of its own. */}
         {state === "listening" && props.stream && (
-          <VoiceLevel stream={props.stream} label={t("voice.capturing")} className="pointer-events-none absolute top-1/2 left-1/2 mt-2 h-16 w-3/5 -translate-x-1/2 -translate-y-full text-on-accent" />
+          <VoiceLevel stream={props.stream} label={t("voice.capturing")} className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto mt-2 h-16 w-3/5 -translate-y-full text-on-accent" />
         )}
       </div>
       )}

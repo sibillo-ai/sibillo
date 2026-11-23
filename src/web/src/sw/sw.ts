@@ -4,8 +4,8 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 
-import { notifications as strings } from "../locales/en.json";
-import { notificationOf } from "../notifications";
+import { notificationLanguage } from "../notificationLanguage";
+import { notificationOf, notificationText } from "../notifications";
 import { keepShare, shareOf } from "../share";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<string | { url: string; revision: string | null }> };
@@ -49,15 +49,18 @@ self.addEventListener("push", (event) => {
   }
   const notification = notificationOf(payload);
   if (notification === undefined) return;
-  const text = strings.kinds[notification.kind];
   event.waitUntil(
-    self.registration.showNotification(text.title, {
-      body: text.body,
-      tag: notification.tag,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: notification.url },
-    }),
+    (async () => {
+      // In the interface language, which the app keeps for its service worker (I18N-004, ADR-0135).
+      const text = notificationText(notification.kind, await notificationLanguage());
+      await self.registration.showNotification(text.title, {
+        body: text.body,
+        tag: notification.tag,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { url: notification.url },
+      });
+    })(),
   );
 });
 

@@ -571,7 +571,7 @@ function TaskPage({ taskId }: { taskId: string }) {
     <div className="flex min-w-0 flex-col gap-4">
       <div>
         <Link to="/settings?section=tasks" className={buttonClass({ variant: "ghost", size: "sm" })}>
-          <ChevronLeft aria-hidden="true" />
+          <ChevronLeft className="rtl:-scale-x-100" aria-hidden="true" />
           {t("taskSettings.back")}
         </Link>
       </div>

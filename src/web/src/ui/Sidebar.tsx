@@ -49,7 +49,7 @@ export function NavEntry({
         {/* Room for the menu, which lies over the end of the link. */}
         {menu !== undefined && <span aria-hidden="true" className="w-6 flex-none pointer-coarse:w-8" />}
       </NavLink>
-      {menu !== undefined && <span className="absolute inset-y-0 right-0 flex items-center">{menu}</span>}
+      {menu !== undefined && <span className="absolute inset-y-0 end-0 flex items-center">{menu}</span>}
     </li>
   );
 }

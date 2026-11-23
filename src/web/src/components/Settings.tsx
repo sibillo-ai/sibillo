@@ -105,7 +105,7 @@ export function Settings({ me }: { me: User }) {
         title={title}
         start={
           <IconButton label={entered ? t("settings.backToSettings") : t("settings.backToConversations")} onClick={back}>
-            <ChevronLeft aria-hidden="true" />
+            <ChevronLeft className="rtl:-scale-x-100" aria-hidden="true" />
           </IconButton>
         }
       />
@@ -298,7 +298,7 @@ function ModelsSection() {
             >
               <Badge tone="ok">
                 <Check aria-hidden="true" />
-                {connection.model_count === 1 ? t("settings.modelCountOne", { count: 1 }) : t("settings.modelCountMany", { count: connection.model_count })}
+                {t("settings.modelCount", { count: connection.model_count })}
               </Badge>
             </Row>
           ))}
@@ -448,9 +448,7 @@ function TestResult({ test }: { test: ConnectionTest }) {
       </div>
       <p>
         {test.passed
-          ? test.model_count === 1
-            ? t("connection.passedBodyOne", { count: 1 })
-            : t("connection.passedBodyMany", { count: test.model_count ?? 0 })
+          ? t("connection.passedBody", { count: test.model_count ?? 0 })
           : t(`connection.fixes.${reason ?? "http_error"}`)}
       </p>
       <ol className="flex flex-col gap-2">
@@ -589,7 +587,7 @@ function ConnectionDialog(props: { onClose: () => void; onSaved: () => Promise<v
       notify({
         kind: "info",
         title: t("connection.connected", { name: connection.name }),
-        text: connection.model_count === 1 ? t("connection.connectedBodyOne", { count: 1 }) : t("connection.connectedBodyMany", { count: connection.model_count }),
+        text: t("connection.connectedBody", { count: connection.model_count }),
       });
     } catch (error) {
       failed(error);

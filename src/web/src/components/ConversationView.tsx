@@ -30,6 +30,7 @@ import { Markdown } from "./Markdown";
 import { QuestionCard, TaskList } from "./Questions";
 import { Sprite } from "./Sprite";
 import { type Reveal, WorkspacePanel } from "./WorkspacePanel";
+import i18n from "../i18n";
 
 type AgUiMessage = MessagePage["items"][number] & {
   content?: unknown;
@@ -421,7 +422,7 @@ export function ConversationView() {
           children: (
             <>
               {conversation.data && (
-                <span className="-ml-1 flex min-w-0">
+                <span className="-ms-1 flex min-w-0">
                   <ModelSelect compact value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
                 </span>
               )}
@@ -566,7 +567,7 @@ export function ConversationView() {
         open={pending !== null}
         onClose={() => setPending(null)}
         title={t("rewind.title")}
-        description={pending?.deleted === 1 ? t("rewind.bodyOne", { count: 1 }) : t("rewind.bodyMany", { count: pending?.deleted ?? 0 })}
+        description={t("rewind.body", { count: pending?.deleted ?? 0 })}
         footer={
           <>
             <Button onClick={() => setPending(null)}>{t("rewind.cancel")}</Button>
@@ -644,8 +645,10 @@ function ConversationCost({ conversation, brief = false }: { conversation: { cos
   );
 }
 
+/** Tokens, shortly, in the interface language: `950`, `12.3k`, `131k` (I18N-006). */
 function compact(tokens: number): string {
-  return tokens >= 1000 ? `${Number((tokens / 1000).toFixed(tokens >= 100_000 ? 0 : 1))}k` : String(tokens);
+  const number = (value: number, digits: number) => new Intl.NumberFormat(i18n.language, { maximumFractionDigits: digits }).format(value);
+  return tokens >= 1000 ? `${number(tokens / 1000, tokens >= 100_000 ? 0 : 1)}k` : number(tokens, 0);
 }
 
 /** How much of the model's context window the conversation uses: tokens, window, share and a gauge (UX-008). */

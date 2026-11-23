@@ -56,12 +56,12 @@ export function RequestCard({
             </span>
             {step.previous && (
               <IconButton label={step.previous.label} disabled={step.previous.disabled} onClick={step.previous.onClick}>
-                <ChevronLeft aria-hidden="true" />
+                <ChevronLeft className="rtl:-scale-x-100" aria-hidden="true" />
               </IconButton>
             )}
             {step.next && (
               <IconButton label={step.next.label} disabled={step.next.disabled} onClick={step.next.onClick}>
-                <ChevronRight aria-hidden="true" />
+                <ChevronRight className="rtl:-scale-x-100" aria-hidden="true" />
               </IconButton>
             )}
           </>
@@ -70,7 +70,7 @@ export function RequestCard({
       <div className="min-h-0 overflow-y-auto px-4 py-3">{children}</div>
       <footer className="flex flex-none flex-wrap items-center justify-end gap-2 border-t border-line px-4 py-3">
         {footer}
-        {footerStart && <div className="ml-auto flex flex-wrap items-center gap-2">{footerStart}</div>}
+        {footerStart && <div className="ms-auto flex flex-wrap items-center gap-2">{footerStart}</div>}
       </footer>
     </section>
   );

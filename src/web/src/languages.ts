@@ -1,12 +1,13 @@
-// The languages a user may prefer the assistant to answer in (I18N-003, ADR-0103).
-// Kept as BCP 47 tags; their names come from the platform, so they need no translation resources (I18N-001).
+// The languages of the interface and of the assistant (I18N-002, I18N-003, ADR-0103, ADR-0135).
+// Kept as BCP 47 tags in locales/languages.json, which the tests read too; their names come from the platform, so
+// they need no translation resources (I18N-001).
+import list from "./locales/languages.json";
 
-/** Common languages, offered as the preferred language. */
-export const LANGUAGES = [
-  "ar", "bg", "bn", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fil", "fr", "ga", "gl",
-  "he", "hi", "hr", "hu", "id", "is", "it", "ja", "ko", "lt", "lv", "ms", "mt", "nb", "nl", "pl", "pt", "pt-BR", "ro",
-  "ru", "sk", "sl", "sq", "sr", "sv", "sw", "ta", "th", "tr", "uk", "ur", "vi", "zh-Hans", "zh-Hant",
-] as const;
+/** Common languages: those the interface comes in, and those offered as the preferred language. */
+export const LANGUAGES: readonly string[] = list.languages;
+
+/** The languages whose translation a person has reviewed; the others' were made by a model. */
+export const REVIEWED: readonly string[] = list.reviewed;
 
 function named(tag: string, locale: string): string {
   try {
@@ -17,15 +18,20 @@ function named(tag: string, locale: string): string {
   }
 }
 
-/** Each language, named in its own language and in the interface's, sorted by the latter; `stored` is kept even if not listed. */
-export function languageOptions(locale: string, stored?: string | null): { tag: string; label: string }[] {
+/**
+ * Each language, named in its own language and in the interface's, sorted by the latter; `stored` is kept even if
+ * not listed. A language whose translation a model made says so with `automatic` (I18N-002).
+ */
+export function languageOptions(locale: string, stored: string | null | undefined, automatic: string): { tag: string; label: string }[] {
   const tags: string[] = [...LANGUAGES];
   if (stored && !tags.includes(stored)) tags.push(stored);
   return tags
     .map((tag) => {
       const own = named(tag, tag);
       const ours = named(tag, locale);
-      return { tag, sortBy: ours, label: own === ours ? own : `${own} — ${ours}` };
+      const name = own === ours ? own : `${own} — ${ours}`;
+      const label = LANGUAGES.includes(tag) && !REVIEWED.includes(tag) ? `${name} (${automatic})` : name;
+      return { tag, sortBy: ours, label };
     })
     .sort((a, b) => a.sortBy.localeCompare(b.sortBy, locale))
     .map(({ tag, label }) => ({ tag, label }));
