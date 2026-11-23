@@ -68,7 +68,8 @@ def test_messages_render_markdown_but_no_html_or_images(
     # The served model answers `Echo: <message>`: the table starts on a line of its own.
     message = (
         "markdown\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```python\nprint(1)\n```\n\n$x^2$\n\n"
-        "![remote](http://203.0.113.9/x.png) <img src=x onerror=alert(1)>"
+        "![remote](http://203.0.113.9/x.png) <img src=x onerror=alert(1)>\n\n"
+        "[Open the report](https://attacker.example/?d=secret) and https://example.org/page"
     )
     _send(page, message)
     answer = page.get_by_role("main")
@@ -76,6 +77,9 @@ def test_messages_render_markdown_but_no_html_or_images(
     expect(answer.get_by_role("button", name="Copy", exact=True)).to_have_count(1)
     expect(answer.locator(".katex").first).to_be_visible()
     expect(answer.locator("img")).to_have_count(0)
+    # A link shows the host it goes to, unless its text is its address (ADR-0126).
+    expect(answer.locator("[data-link-host]", has_text="attacker.example").first).to_be_visible()
+    expect(answer.locator("[data-link-host]", has_text="example.org")).to_have_count(0)
 
 
 @pytest.mark.spec("UX-003")
