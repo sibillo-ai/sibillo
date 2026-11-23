@@ -1,6 +1,6 @@
 """Enforce pull request types and allowed paths (REPO-001).
 
-Usage: python3 tools/check_pr_paths.py --branch BRANCH --base REF --head REF
+Usage: python3 tools/check_pr_paths.py --branch BRANCH --base REF --head REF [--author LOGIN]
 
 The branch prefix (the text before the first '/') is the pull request type.
 Each type may change only its allowed paths. Rules files can be changed only
@@ -11,17 +11,27 @@ A milestone pull request, from a 'milestone/' branch into the default branch,
 has no type of its own: each of its commits is checked against the type that
 starts its subject, such as 'impl:', and a commit without a type, of type
 'rules:', or changing paths outside its type is rejected. Merges may only
-bring the default branch into the milestone branch (ADR-0060).
+bring the default branch into the milestone branch (ADR-0060), and may change
+nothing but what merging their parents gives, conflicting paths aside, none
+of them a rules file; a commit without parents is rejected, and so is a
+milestone that changes a rules file (ADR-0121).
+
+The 'dependabot' type holds only for pull requests that GitHub says
+Dependabot opened, whose login CI passes as --author. CI runs this tool from
+the base branch, never from the pull request (ADR-0121).
 """
 
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import re
 import subprocess
 import sys
 
 DEFAULT_BRANCH = "master"
+# The login GitHub gives Dependabot: the only author of 'dependabot/' pull requests (ADR-0121).
+DEPENDABOT = "dependabot[bot]"
 # A milestone branch has no type of its own; each of its commits has one,
 # given by the start of its subject, such as "impl:" or "test(sandbox):".
 MILESTONE = "milestone"
@@ -57,14 +67,26 @@ POLICY: dict[str, tuple[str, ...]] = {
     "impl": ("src/", "migrations/", "deploy/", "pyproject.toml", "uv.lock"),
     "docs": ("docs/", "README.md", "CHANGELOG.md"),
     "rules": RULES_PATHS,
-    # Automated dependency updates: manifests and pinned workflow actions.
-    "dependabot": (".github/workflows/", ".github/dependabot.yml", "pyproject.toml", "uv.lock", "deploy/"),
+    # Automated dependency updates: pinned workflow actions, manifests and lock files, and pinned images.
+    "dependabot": (
+        ".github/workflows/",
+        "pyproject.toml",
+        "uv.lock",
+        "src/web/package.json",
+        "src/web/package-lock.json",
+        "src/web/pnpm-lock.yaml",
+        "deploy/images/*/Dockerfile",
+        "deploy/compose.yaml",
+    ),
 }
 
 
 def matches(pattern: str, path: str) -> bool:
+    """A pattern ending with '/' matches below that directory, one with '*' a file name of one segment there."""
     if pattern.endswith("/"):
         return path.startswith(pattern)
+    if "*" in pattern:
+        return fnmatch.fnmatchcase(path, pattern) and path.count("/") == pattern.count("/")
     return path == pattern
 
 
@@ -79,12 +101,14 @@ def pr_type(branch: str) -> str | None:
     return prefix
 
 
-def violations(branch: str, paths: list[str]) -> list[str]:
+def violations(branch: str, paths: list[str], author: str | None = None) -> list[str]:
     """Return a message for every path the branch's pull request type may not change."""
     kind = pr_type(branch)
     if kind is None or kind not in POLICY:
         allowed = ", ".join(f"{name}/" for name in (*POLICY, MILESTONE))
         return [f"branch '{branch}' must be named '<type>/<description>' with type one of: {allowed}"]
+    if kind == "dependabot" and author != DEPENDABOT:
+        return [f"'dependabot/' pull requests are opened by {DEPENDABOT}, not by {author or 'an unknown author'}"]
 
     allowed_paths = POLICY[kind]
     problems: list[str] = []
@@ -117,16 +141,45 @@ def commit_type(subject: str) -> str | None:
     return None if match is None else match.group(1)
 
 
+def merge_violations(sha: str, parents: list[str]) -> list[str]:
+    """What a merge commit changes beyond merging its parents: paths, or a rules path it resolved (ADR-0121)."""
+    commit = sha[:12]
+    merged = subprocess.run(
+        ["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", *parents],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if merged.returncode not in (0, 1):
+        return [f"{commit}: its parents cannot be merged again to check it: {merged.stderr.strip()}"]
+    tree, *conflicting = [line for line in merged.stdout.splitlines() if line]
+    problems = [
+        f"{commit}: a merge resolves a conflict in {path}, a rules file" for path in conflicting
+        if matches_any(RULES_PATHS, path)
+    ]
+    changed = git("diff", "--name-only", "--no-renames", tree, sha)
+    problems += [
+        f"{commit}: a merge changes {path}, which merging its parents does not"
+        for path in changed.splitlines()
+        if path and path not in conflicting
+    ]
+    return problems
+
+
 def milestone_violations(base: str, head: str) -> list[str]:
-    """Check each commit of a milestone branch against its own type (ADR-0060)."""
+    """Check each commit of a milestone branch against its own type (ADR-0060, ADR-0121)."""
     problems: list[str] = []
     log = git("log", "--format=%H%x1f%P%x1f%s", f"{base}..{head}")
     for line in log.splitlines():
         sha, parents, subject = line.split("\x1f", 2)
         commit, parent_shas = sha[:12], parents.split()
+        if not parent_shas:
+            problems.append(f"{commit}: a commit with no parent is not allowed in a milestone")
+            continue
         if len(parent_shas) > 1:
             if not all(is_ancestor(parent, base) for parent in parent_shas[1:]):
                 problems.append(f"{commit}: a merge may only bring '{DEFAULT_BRANCH}' into a milestone branch")
+            problems += merge_violations(sha, parent_shas)
             continue
         kind = commit_type(subject)
         if kind not in COMMIT_TYPES:
@@ -136,6 +189,12 @@ def milestone_violations(base: str, head: str) -> list[str]:
         changed = git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha)
         paths = [path for path in changed.splitlines() if path]
         problems += [f"{commit} ({kind}): {problem}" for problem in violations(f"{kind}/commit", paths)]
+    # Whatever the commits say, the milestone as a whole changes no rules file.
+    problems += [
+        f"{path}: rules files can only be changed by a 'rules/' pull request"
+        for path in changed_paths(base, head)
+        if matches_any(RULES_PATHS, path)
+    ]
     return problems
 
 
@@ -154,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--branch", required=True, help="name of the pull request's head branch")
     parser.add_argument("--base", required=True, help="base ref, e.g. origin/master")
     parser.add_argument("--head", default="HEAD", help="head ref")
+    parser.add_argument("--author", default=None, help="login of the pull request's author, as GitHub gives it")
     args = parser.parse_args(argv)
 
     base_branch = args.base.removeprefix("origin/")
@@ -161,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     if pr_type(args.branch) == MILESTONE:
         problems = target_violations(args.branch, base_branch) + milestone_violations(args.base, args.head)
     else:
-        problems = violations(args.branch, paths) + target_violations(args.branch, base_branch)
+        problems = violations(args.branch, paths, args.author) + target_violations(args.branch, base_branch)
     if problems:
         for problem in problems:
             print(f"error: {problem}", file=sys.stderr)
