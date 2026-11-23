@@ -55,6 +55,28 @@ def _is_spec_marker(node: ast.expr) -> bool:
     )
 
 
+def _is_skip(node: ast.expr) -> bool:
+    """`pytest.mark.skip`, `mark.skip` or `unittest.skip`, called or not: a skip whatever the condition."""
+    target = node.func if isinstance(node, ast.Call) else node
+    if not (isinstance(target, ast.Attribute) and target.attr == "skip"):
+        return False
+    owner = target.value
+    return (isinstance(owner, ast.Attribute) and owner.attr == "mark") or (
+        isinstance(owner, ast.Name) and owner.id in ("mark", "unittest")
+    )
+
+
+def _skipped_markers(tree: ast.AST) -> set[int]:
+    """The `spec` markers on tests that are always skipped: they verify nothing (ADR-0121)."""
+    skipped: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and any(
+            _is_skip(decorator) for decorator in node.decorator_list
+        ):
+            skipped.update(id(inner) for decorator in node.decorator_list for inner in ast.walk(decorator))
+    return skipped
+
+
 def find_references(root: Path) -> tuple[list[Reference], list[str]]:
     """Return every requirement referenced by a `spec` marker, and parse errors."""
     references: list[Reference] = []
@@ -67,6 +89,7 @@ def find_references(root: Path) -> tuple[list[Reference], list[str]]:
         except SyntaxError as exc:
             errors.append(f"{rel}:{exc.lineno}: cannot parse: {exc.msg}")
             continue
+        skipped = _skipped_markers(tree)
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and _is_spec_marker(node.func)):
                 continue
@@ -75,7 +98,8 @@ def find_references(root: Path) -> tuple[list[Reference], list[str]]:
                 errors.append(f"{where}: spec marker without requirement IDs")
             for arg in node.args:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    references.append(Reference(arg.value, where))
+                    if id(node) not in skipped:
+                        references.append(Reference(arg.value, where))
                 else:
                     errors.append(f"{where}: spec marker arguments must be string literals")
     return references, errors
