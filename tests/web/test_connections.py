@@ -103,6 +103,50 @@ def test_changing_a_server_keeps_what_is_not_changed(
     assert _connections(server, admin)[renamed]["has_api_key"] is False
 
 
+@pytest.mark.spec("UX-025", "MOD-008")
+def test_a_new_address_asks_for_the_key_again(
+    page: Page, server: Server, admin: Account, default_model: HarnessModel
+) -> None:
+    name = f"Media server {uuid4().hex[:6]}"
+    _add(
+        server,
+        admin,
+        {
+            "name": name,
+            "kind": "openai",
+            "base_url": default_model.endpoint.url,
+            "location": "local",
+            "api_key": f"key-{uuid4().hex}",
+        },
+    )
+    elsewhere = default_model.endpoint.ollama_url
+    _settings(page, admin)
+    dialog = _edit(page, name)
+    key = dialog.get_by_label(re.compile("^New API key"))
+    # The same address keeps the key; a new one asks for it again, and says why.
+    expect(dialog).not_to_contain_text("A new address needs the key again")
+    dialog.get_by_label("Address").fill(elsewhere)
+    expect(dialog).to_contain_text("A new address needs the key again")
+    assert accessibility_violations(page) == []
+    dialog.get_by_role("button", name="Save").click()
+    assert key.evaluate("input => input.validity.valueMissing") is True
+    expect(dialog).to_be_visible()
+    assert _connections(server, admin)[name]["base_url"] == default_model.endpoint.url
+    # Given again, it is saved with the new address.
+    key.fill(f"key-{uuid4().hex}")
+    dialog.get_by_role("button", name="Save").click()
+    expect(dialog).to_be_hidden(timeout=30_000)
+    assert _connections(server, admin)[name]["base_url"] == elsewhere
+    # Or the key is removed with the move.
+    dialog = _edit(page, name)
+    dialog.get_by_label("Address").fill(default_model.endpoint.url)
+    dialog.get_by_label("Remove the API key").check()
+    dialog.get_by_role("button", name="Save").click()
+    expect(dialog).to_be_hidden(timeout=30_000)
+    moved = _connections(server, admin)[name]
+    assert (moved["base_url"], moved["has_api_key"]) == (default_model.endpoint.url, False)
+
+
 @pytest.mark.spec("UX-025")
 def test_a_change_that_fails_its_test_is_not_saved(
     page: Page, server: Server, admin: Account, default_model: HarnessModel
