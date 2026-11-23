@@ -563,27 +563,37 @@ def test_no_sandbox_runs_after_the_engine_restarts_until_the_table_is_verified(s
     assert sandboxes.sh(tenant_id, user_id, conversation_id, "cat /workspace/a.txt").stdout == "kept\n"
 
 
-def _resolves(driver: Driver, tenant_id: str, user_id: str, conversation_id: str) -> bool:
-    result = driver.sh(tenant_id, user_id, conversation_id, "getent hosts example.com", timeout_seconds=8)
-    return result.exit_code == 0 and bool(result.stdout.strip())
-
-
 def _has_network(driver: Driver, tenant_id: str, user_id: str, conversation_id: str) -> bool:
-    """Whether a sandbox reaches a public address, the resolver on its DNS port, or a name."""
+    """Whether a sandbox reaches a public address, the resolver on its DNS port, or a name.
+
+    Every attempt runs at once, each with its own timeout, so that a sandbox without network costs the longest
+    of them rather than their sum (REPO-011, ADR-0059).
+    """
     targets = [f"{PUBLIC_HTTP}:443", f"{RESOLVER}:53", f"{RESOLVER}:443"]
     probe = (
-        'python3 -c "import socket,sys\n'
-        "for target in sys.argv[1:]:\n"
+        'python3 -c "import socket,subprocess,sys,threading\n'
+        "def connect(target):\n"
         "    host, port = target.rsplit(':', 1)\n"
         "    s=socket.socket(); s.settimeout(3)\n"
         "    try:\n"
         "        s.connect((host, int(port))); print('connected', target, flush=True)\n"
         "    except OSError:\n"
-        '        pass"'
+        "        pass\n"
+        "def resolve():\n"
+        "    try:\n"
+        "        found=subprocess.run(['getent','hosts','example.com'],capture_output=True,text=True,timeout=8)\n"
+        "    except subprocess.TimeoutExpired:\n"
+        "        return\n"
+        "    if found.returncode == 0 and found.stdout.strip(): print('resolved', flush=True)\n"
+        "threads=[threading.Thread(target=connect,args=(t,)) for t in sys.argv[1:]]\n"
+        "threads.append(threading.Thread(target=resolve))\n"
+        "[t.start() for t in threads]; [t.join() for t in threads]\n"
+        '"'
     )
     result = driver.sh(tenant_id, user_id, conversation_id, f"{probe} {' '.join(targets)}", timeout_seconds=15)
-    connected = {line.split()[1] for line in result.stdout.splitlines() if line.startswith("connected ")}
-    resolves = _resolves(driver, tenant_id, user_id, conversation_id)
+    lines = result.stdout.splitlines()
+    connected = {line.split()[1] for line in lines if line.startswith("connected ")}
+    resolves = "resolved" in lines
     assert (connected == set(targets) and resolves) or (not connected and not resolves), (connected, resolves)
     return resolves
 
