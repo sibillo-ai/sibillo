@@ -96,6 +96,7 @@ EXECUTABLE_FUNCTIONS = {
     # Read-only, before a password is checked (ADR-0118).
     "auth_check_login_attempt(text, inet)",
     "auth_take_sign_in(bytea)",
+    "abandoned_runs(integer)",
     "retention_expired_runs(integer)",
     "expired_temporary_conversations(integer)",
     "expired_approvals()",
