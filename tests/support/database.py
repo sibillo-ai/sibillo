@@ -40,6 +40,7 @@ PRIVATE_TABLES = (
     "conversation_plans",
     "conversation_messages",
     "compaction_checkpoints",
+    "delegations",
     "runs",
     "usage_ledger",
     "audit_events",

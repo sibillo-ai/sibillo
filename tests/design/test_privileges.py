@@ -57,6 +57,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "conversations": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "compaction_checkpoints": {"SELECT": EVERY, "INSERT": EVERY},
     "conversation_messages": {"SELECT": EVERY, "INSERT": EVERY},
+    # Each delegation of a run, its status and report written as its delegated run ends (ADR-0136).
+    "delegations": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY},
     "runs": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     # The open event streams of runs (UX-004, ADR-0101).
     "run_followers": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
