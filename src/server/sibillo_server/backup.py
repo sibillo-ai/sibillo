@@ -12,9 +12,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import hmac
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -23,6 +25,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -173,10 +176,91 @@ def _tool(argv: Sequence[str], *, environment: dict[str, str] | None = None) -> 
         raise BackupError(f"{argv[0]} failed: {result.stderr.strip()[-500:]}")
 
 
-def _libpq(url: str) -> str:
-    """The database URL as libpq reads it."""
+def _libpq(url: str) -> tuple[str, dict[str, str]]:
+    """The database URL as libpq reads it, without its password, and the environment that gives the password:
+    never on a command line, which other processes read (ADR-0130)."""
     scheme, separator, rest = url.partition("://")
-    return f"postgresql://{rest}" if separator and scheme.startswith("postgres") else url
+    if not separator or not scheme.startswith("postgres"):
+        return url, {}
+    parts = urlsplit(f"postgresql://{rest}")
+    environment = {} if parts.password is None else {"PGPASSWORD": unquote(parts.password)}
+    host = parts.hostname or ""
+    netloc = f"{quote(unquote(parts.username or ''), safe='')}@{host}" if parts.username else host
+    if parts.port is not None:
+        netloc += f":{parts.port}"
+    return urlunsplit(("postgresql", netloc, parts.path, parts.query, "")), environment
+
+
+# --- What a backup keeps, and what a restore trusts (ADR-0130) ---
+
+MAC = "manifest.mac"
+WORKSPACE_ENTRY = re.compile(
+    r"^workspaces/" + "/".join([r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"] * 3) + r"\.tar$"
+)
+STAGING_PREFIXES = (".backup-", ".restore-")
+
+
+def staging_parent() -> Path:
+    """Where contents are staged: the container's own temporary folder, never the backup folder (ADR-0130)."""
+    return Path(tempfile.gettempdir())
+
+
+def remove_leftovers(folder: Path) -> None:
+    """Remove the staging folders an interrupted backup or restore left in `folder`."""
+    if not folder.is_dir():
+        return
+    for path in folder.iterdir():
+        if path.is_dir() and path.name.startswith(STAGING_PREFIXES):
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def manifest_mac(document: bytes, backup_key: str) -> str:
+    """The HMAC-SHA-256 of a manifest, under a key only the holder of the backup key derives (ADR-0130)."""
+    key = hashlib.sha256(b"sibillo-backup-manifest\0" + backup_key.strip().upper().encode()).digest()
+    return hmac.new(key, document, hashlib.sha256).hexdigest()
+
+
+def check_plain_archive(plain: Path, backup_key: str, destination: Path) -> Path:
+    """Unpack a decrypted archive into `destination` once its manifest is authenticated, and only what the
+    manifest lists, checked against its checksums; the contents (ADR-0077, ADR-0130)."""
+    with tarfile.open(plain, "r") as tar:
+        members = {member.name: member for member in tar.getmembers()}
+        document_member, mac_member = members.get(MANIFEST), members.get(MAC)
+        document = tar.extractfile(document_member) if document_member is not None else None
+        mac = tar.extractfile(mac_member) if mac_member is not None else None
+        if document is None or mac is None:
+            raise BackupError("the archive has no manifest, or no MAC of it: it cannot be authenticated")
+        manifest_bytes = document.read()
+        if not hmac.compare_digest(
+            mac.read().decode(errors="replace").strip(), manifest_mac(manifest_bytes, backup_key)
+        ):
+            raise BackupError("the archive's manifest cannot be authenticated with this backup key")
+        try:
+            manifest = json.loads(manifest_bytes)
+        except ValueError as error:
+            raise BackupError("the archive's manifest is not JSON") from error
+        if manifest.get("version") != APPLICATION_VERSION:
+            raise BackupError(
+                f"the archive was made by Sibillo {manifest.get('version')}, and this is {APPLICATION_VERSION}"
+            )
+        listed: dict[str, Any] = manifest.get("entries", {})
+        for name, member in members.items():
+            if name in (MANIFEST, MAC):
+                continue
+            if name not in listed or not member.isfile():
+                raise BackupError(f"the archive holds {name}, which its manifest does not list")
+            if name.startswith("workspaces/") and not WORKSPACE_ENTRY.match(name):
+                raise BackupError(f"the archive holds {name}, which is not a conversation's workspace")
+            if not name.startswith("workspaces/") and name not in (DATABASE, SECRET_KEY):
+                raise BackupError(f"the archive holds {name}, which a backup does not make")
+        destination.mkdir(parents=True, exist_ok=True)
+        for member in members.values():
+            tar.extract(member, destination, filter="data")
+    for name, entry in listed.items():
+        path = destination / name
+        if not path.is_file() or path.stat().st_size != entry["size"] or _sha256(path) != entry["sha256"]:
+            raise BackupError(f"the archive's {name} does not match its manifest")
+    return destination
 
 
 def _sha256(path: Path) -> str:
@@ -190,19 +274,21 @@ def _sha256(path: Path) -> str:
 # --- backup ---
 
 
-async def _wait_until_quiet(engine: AsyncEngine) -> None:
-    """Wait until no run is queued or running, so that the database and the workspaces match (ADR-0077)."""
-    deadline = asyncio.get_running_loop().time() + QUIET_TIMEOUT_SECONDS
+async def active_conversations(engine: AsyncEngine, seconds: float = QUIET_TIMEOUT_SECONDS) -> list[str]:
+    """Wait up to `seconds` until no run is queued or running, so that the database and the workspaces match;
+    the conversations still answering then, which a backup names and goes on without (ADR-0077, ADR-0130)."""
+    deadline = asyncio.get_running_loop().time() + seconds
     while True:
         async with engine.connect() as connection:
-            active = (
-                await connection.execute(text("SELECT count(*) FROM runs WHERE status IN ('queued', 'running')"))
-            ).scalar_one()
-        if active == 0:
-            return
-        if asyncio.get_running_loop().time() > deadline:
-            raise BackupError(f"{active} runs were still active after {QUIET_TIMEOUT_SECONDS} seconds")
-        await asyncio.sleep(QUIET_POLL_SECONDS)
+            active = [
+                str(row[0])
+                for row in await connection.execute(
+                    text("SELECT DISTINCT conversation_id FROM runs WHERE status IN ('queued', 'running')")
+                )
+            ]
+        if not active or asyncio.get_running_loop().time() > deadline:
+            return sorted(active)
+        await asyncio.sleep(min(QUIET_POLL_SECONDS, max(0.1, seconds / 4)))
 
 
 async def _conversations(engine: AsyncEngine) -> list[tuple[str, str, str]]:
@@ -233,14 +319,18 @@ async def make_backup(configuration: BackupConfiguration) -> Path:
     folder = configuration.backup_dir
     target = recipient(configuration.backup_key)
     engine = create_engine(configuration.database_url)
-    staging = await asyncio.to_thread(_temporary_folder, ".backup-", folder)
+    # Nothing unencrypted in the backup folder, not even what an interrupted backup left (ADR-0130).
+    await asyncio.to_thread(remove_leftovers, folder)
+    await asyncio.to_thread(remove_leftovers, staging_parent())
+    staging = await asyncio.to_thread(_temporary_folder, ".backup-", staging_parent())
     try:
-        await _wait_until_quiet(engine)
+        answering = await active_conversations(engine)
         created = datetime.now(UTC)
         contents = staging / "contents"
         (contents / "workspaces").mkdir(parents=True)
+        database, password = _libpq(configuration.database_url)
         await asyncio.to_thread(
-            _tool, ["pg_dump", "--format=custom", f"--file={contents / DATABASE}", _libpq(configuration.database_url)]
+            _tool, ["pg_dump", "--format=custom", f"--file={contents / DATABASE}", database], environment=password
         )
         database_taken = _now()
         (contents / SECRET_KEY).write_text(configuration.secret_key)
@@ -257,17 +347,22 @@ async def make_backup(configuration: BackupConfiguration) -> Path:
             "created": created.isoformat(timespec="seconds"),
             "database_taken": database_taken,
             "workspaces_taken": _now(),
+            # Their workspaces may be newer than the database (ADR-0130).
+            "active_conversations": answering,
             "entries": {
                 path.relative_to(contents).as_posix(): {"size": path.stat().st_size, "sha256": checksum}
                 for path, checksum in checksums.items()
             },
         }
-        (contents / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
+        document = (json.dumps(manifest, indent=2) + "\n").encode()
+        (contents / MANIFEST).write_bytes(document)
+        # Only the holder of the backup key can make an archive a restore accepts (ADR-0130).
+        (contents / MAC).write_text(manifest_mac(document, configuration.backup_key))
         plain = staging / "archive.tar"
 
         def pack() -> None:
             with tarfile.open(plain, "w") as archive:
-                for path in [contents / MANIFEST, *entries]:
+                for path in [contents / MANIFEST, contents / MAC, *entries]:
                     archive.add(path, arcname=path.relative_to(contents).as_posix(), recursive=False)
 
         await asyncio.to_thread(pack)
@@ -328,23 +423,10 @@ def _unpack(configuration: BackupConfiguration, archive: Path, folder: Path) -> 
     plain = folder / "archive.tar"
     _tool(["age", "--decrypt", "--identity", str(identity), "--output", str(plain), str(archive)])
     identity.unlink()
-    contents = folder / "contents"
-    with tarfile.open(plain, "r") as tar:
-        tar.extractall(contents, filter="data")
-    plain.unlink()
     try:
-        manifest = json.loads((contents / MANIFEST).read_text())
-    except (OSError, ValueError) as error:
-        raise BackupError("the archive has no manifest") from error
-    if manifest.get("version") != APPLICATION_VERSION:
-        raise BackupError(
-            f"the archive was made by Sibillo {manifest.get('version')}, and this is {APPLICATION_VERSION}"
-        )
-    for name, entry in manifest.get("entries", {}).items():
-        path = contents / name
-        if not path.is_file() or path.stat().st_size != entry["size"] or _sha256(path) != entry["sha256"]:
-            raise BackupError(f"the archive's {name} does not match its manifest")
-    return contents
+        return check_plain_archive(plain, configuration.backup_key, folder / "contents")
+    finally:
+        plain.unlink(missing_ok=True)
 
 
 async def _import_workspace(configuration: BackupConfiguration, sandbox: str, source: Path) -> None:
@@ -372,7 +454,9 @@ def _set_secret_key(env_file: Path, secret_key: str) -> None:
 
 async def restore(configuration: BackupConfiguration, archive: Path, env_file: Path | None) -> None:
     """Restore a whole instance into a fresh installation (OPS-006)."""
-    folder = await asyncio.to_thread(_temporary_folder, ".restore-", configuration.backup_dir)
+    # Staged outside the backup folder, where an interrupted one left nothing readable (ADR-0130).
+    await asyncio.to_thread(remove_leftovers, configuration.backup_dir)
+    folder = await asyncio.to_thread(_temporary_folder, ".restore-", staging_parent())
     engine = create_engine(configuration.database_url)
     try:
         contents = await asyncio.to_thread(_unpack, configuration, archive, folder)
@@ -380,6 +464,7 @@ async def restore(configuration: BackupConfiguration, archive: Path, env_file: P
             users = (await connection.execute(text("SELECT count(*) FROM users"))).scalar_one()
         if users:
             raise BackupError("the database has users: restore only into a fresh installation")
+        database, password = _libpq(configuration.database_url)
         await asyncio.to_thread(
             _tool,
             [
@@ -387,9 +472,10 @@ async def restore(configuration: BackupConfiguration, archive: Path, env_file: P
                 "--clean",
                 "--if-exists",
                 "--single-transaction",
-                f"--dbname={_libpq(configuration.database_url)}",
+                f"--dbname={database}",
                 str(contents / DATABASE),
             ],
+            environment=password,
         )
         for path in sorted((contents / "workspaces").glob("*/*/*.tar")):
             await _import_workspace(configuration, f"{path.parent.parent.name}/{path.parent.name}/{path.stem}", path)
@@ -405,7 +491,9 @@ async def restore_workspace(configuration: BackupConfiguration, archive: Path, u
 
     Only conversations that still exist are restored (OPS-006, T-33, ADR-0078).
     """
-    folder = await asyncio.to_thread(_temporary_folder, ".restore-", configuration.backup_dir)
+    # Staged outside the backup folder, where an interrupted one left nothing readable (ADR-0130).
+    await asyncio.to_thread(remove_leftovers, configuration.backup_dir)
+    folder = await asyncio.to_thread(_temporary_folder, ".restore-", staging_parent())
     engine = create_engine(configuration.database_url)
     try:
         contents = await asyncio.to_thread(_unpack, configuration, archive, folder)

@@ -1111,6 +1111,18 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     SET search_path = pg_catalog, pg_temp
     AS $$ SELECT r.id FROM public.runs r WHERE r.finished_at < now() - make_interval(days => $1) $$
     """,
+    # Runs a crash left queued or running (OPS-006, ADR-0130): identifiers only, across tenants, so the worker
+    # fails each under its owner's context.
+    """
+    CREATE FUNCTION abandoned_runs(hours integer)
+    RETURNS TABLE (run_id uuid, tenant_id uuid, owner_id uuid)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+      SELECT r.id, r.tenant_id, r.owner_id FROM public.runs r
+      WHERE r.status IN ('queued', 'running') AND r.created_at < now() - make_interval(hours => $1)
+    $$
+    """,
     # Temporary conversations to delete (CNV-011, ADR-0082): identifiers only,
     # across tenants, so the worker deletes each under its owner's context.
     """
@@ -1570,7 +1582,7 @@ PRIVILEGES = [
     """
     GRANT EXECUTE ON FUNCTION auth_find_login(text), auth_find_session(bytea), auth_touch_session(uuid),
       auth_record_login_attempt(text, inet, boolean), auth_check_login_attempt(text, inet), auth_take_sign_in(bytea),
-      retention_expired_runs(integer),
+      retention_expired_runs(integer), abandoned_runs(integer),
       expired_temporary_conversations(integer), expired_approvals(), default_model_configured(),
       due_task_triggers(), waiting_task_firings(), find_webhook_trigger(bytea), find_event_subscription(uuid)
       TO sibillo_app
@@ -1620,6 +1632,7 @@ def downgrade() -> None:
             "DROP FUNCTION bootstrap_instance(text, text, text, text)",
             "DROP FUNCTION remove_passkeys(text)",
             "DROP FUNCTION auth_take_sign_in(bytea)",
+            "DROP FUNCTION abandoned_runs(integer)",
             "DROP FUNCTION auth_check_login_attempt(text, inet)",
             "DROP FUNCTION auth_record_login_attempt(text, inet, boolean)",
             "DROP FUNCTION auth_touch_session(uuid)",

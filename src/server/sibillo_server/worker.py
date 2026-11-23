@@ -944,6 +944,36 @@ async def _apply_retention(days: int) -> None:
         logger.info("deleted %d expired workflows", len(existing))
 
 
+# A run still queued or running two days after it was made was left by a crash (OPS-006, ADR-0130).
+ABANDONED_HOURS = 48
+
+
+async def _fail_abandoned_runs() -> None:
+    """Fail each run a crash left active, under its owner's request context, so that backups and its
+    conversation go on (ADR-0130)."""
+    async with transaction(_engine(), None) as connection:
+        found = (
+            await connection.execute(text("SELECT * FROM abandoned_runs(:hours)"), {"hours": ABANDONED_HOURS})
+        ).all()
+    for row in found:
+        owner = Identity(
+            session_id=uuid.UUID(int=0),
+            user_id=row.owner_id,
+            tenant_id=row.tenant_id,
+            role="member",
+            instance_admin=False,
+        )
+        async with transaction(_engine(), owner) as connection:
+            await connection.execute(
+                text(
+                    "UPDATE runs SET status = 'failed', error_code = 'internal.error', finished_at = now()"
+                    " WHERE id = :id AND status IN ('queued', 'running')"
+                ),
+                {"id": row.run_id},
+            )
+        logger.warning("run %s was left active by a crash, and is failed", row.run_id)
+
+
 # A temporary conversation is deleted a day after its last activity (CNV-011, ADR-0082).
 TEMPORARY_HOURS = 24
 
@@ -1062,6 +1092,7 @@ async def _approval_loop(seconds: int) -> None:
     while True:
         try:
             await _deny_expired_approvals()
+            await _fail_abandoned_runs()
         except Exception:
             logger.exception("the sweep for expired approvals failed")
         await asyncio.sleep(seconds)

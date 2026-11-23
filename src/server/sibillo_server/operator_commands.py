@@ -13,6 +13,7 @@ import getpass
 import os
 import re
 import secrets
+import signal
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -196,8 +197,15 @@ def _backup_configuration(environment: Mapping[str, str]) -> BackupConfiguration
         return None
 
 
+def _stop_cleanly() -> None:
+    """Stopping the container interrupts a backup or a restore as Ctrl-C does, so that it removes what it staged
+    (ADR-0130)."""
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
+
+
 def run_backup(environment: Mapping[str, str], *, scheduled: bool) -> int:
     """Back the instance up once, or every day (OPS-006, OPS-010)."""
+    _stop_cleanly()
     configuration = _backup_configuration(environment)
     if configuration is None:
         return 2
@@ -215,6 +223,7 @@ def run_backup(environment: Mapping[str, str], *, scheduled: bool) -> int:
 
 def run_restore(environment: Mapping[str, str], archive: Path, env_file: Path | None, username: str | None) -> int:
     """Restore an instance into a fresh installation, or one user's workspace (OPS-006)."""
+    _stop_cleanly()
     configuration = _backup_configuration(environment)
     if configuration is None:
         return 2
