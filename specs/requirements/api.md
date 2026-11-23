@@ -108,7 +108,7 @@ transaction, and MUST NOT reach any other user's (ADR-0108).
 
 ## API-009: Bounded request bodies
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** security
