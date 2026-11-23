@@ -1,5 +1,6 @@
-// Approval requests, in place of the message box until the user answers them (UX-022, AGT-007, ADR-0090).
-import { ShieldAlert, TriangleAlert } from "lucide-react";
+// Approval requests, in place of the message box until the user answers them (UX-022, AGT-007, ADR-0090), and the
+// one request for internet access of a run (AGT-034, ADR-0113).
+import { Globe, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -24,11 +25,58 @@ function useTimeLeft(expiresAt: string | undefined): string | null {
   return minutes >= 60 ? t("approvals.deniedInHours", { count: Math.round(minutes / 60) }) : t("approvals.deniedInMinutes", { count: minutes });
 }
 
+/** The scopes an approval request offers, narrowest first. */
+export function scopesOf(interrupt: Interrupt): ApprovalScope[] {
+  const offered: ApprovalScope[] = interrupt.metadata?.internet_access?.scopes ?? interrupt.metadata?.approval?.scopes ?? [];
+  return SCOPE_ORDER.filter((scope) => offered.includes(scope));
+}
+
+/** A request for internet access: what it lets the assistant do, what could go out, and the calls that wait. */
+function InternetAccess({ interrupt }: { interrupt: Interrupt }) {
+  const { t } = useTranslation();
+  const request = interrupt.metadata?.internet_access;
+  const timeLeft = useTimeLeft(interrupt.expiresAt);
+  if (!request) return null;
+  return (
+    <div className="flex flex-col gap-2 text-body">
+      <p className="flex items-center gap-2 font-semibold text-pretty">
+        <Globe className="size-4 flex-none" aria-hidden="true" />
+        {t("approvals.internet.title")}
+      </p>
+      <p className="text-pretty">{t("approvals.internet.does")}</p>
+      <Notice role="note">{t("approvals.internet.sentOut")}</Notice>
+      {/* Content from elsewhere in the run may be what asks (AGT-003). */}
+      {request.untrusted_content && (
+        <Notice tone="error" role="note" icon={<TriangleAlert aria-hidden="true" />}>
+          <span className="font-semibold">{t("approvals.internet.untrusted")}</span>
+        </Notice>
+      )}
+      {request.calls.length === 0 ? (
+        <p className="text-small text-ink-2">{t("approvals.internet.asked")}</p>
+      ) : (
+        <>
+          <p className="text-small font-semibold text-ink-2">{t("approvals.internet.waiting")}</p>
+          {request.calls.map((call, index) => (
+            <Facts key={index}>
+              <Fact term={toolLabel(t, call.tool)} mono>
+                {call.data}
+              </Fact>
+              <Fact term={t("approvals.destination")}>{call.destination}</Fact>
+            </Facts>
+          ))}
+        </>
+      )}
+      {timeLeft && <p className="text-small text-ink-2">{timeLeft}</p>}
+    </div>
+  );
+}
+
 /** One approval request: what the call does, with what and where, and why it asks. */
 function Request({ interrupt }: { interrupt: Interrupt }) {
   const { t } = useTranslation();
   const request = interrupt.metadata?.approval;
   const timeLeft = useTimeLeft(interrupt.expiresAt);
+  if (interrupt.metadata?.internet_access) return <InternetAccess interrupt={interrupt} />;
   if (!request) return null;
   return (
     <div className="flex flex-col gap-2 text-body">
@@ -64,7 +112,7 @@ export function ApprovalCard({ interrupts, onDecided }: { interrupts: Interrupt[
   const [decisions, setDecisions] = useState<ResumeEntry[]>([]);
   const current = interrupts[decisions.length];
   if (!current) return null;
-  const scopes = SCOPE_ORDER.filter((scope) => current.metadata?.approval?.scopes.includes(scope));
+  const scopes = scopesOf(current);
 
   function decide(entry: ResumeEntry) {
     const all = [...decisions, entry];

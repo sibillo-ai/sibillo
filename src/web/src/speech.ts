@@ -248,7 +248,7 @@ function output(): AudioContext {
   return context;
 }
 
-export type Cue = "start" | "end" | "tick" | "answer" | "error";
+export type Cue = "start" | "end" | "tick" | "answer" | "error" | "request";
 
 // Each sound: its notes, in hertz, and how long each lasts, in seconds (ADR-0088).
 const CUES: Record<Cue, { notes: number[]; length: number; volume: number }> = {
@@ -257,6 +257,8 @@ const CUES: Record<Cue, { notes: number[]; length: number; volume: number }> = {
   tick: { notes: [1320], length: 0.03, volume: 0.07 },
   answer: { notes: [784, 1047, 1319], length: 0.08, volume: 0.2 },
   error: { notes: [220, 196], length: 0.18, volume: 0.25 },
+  // An approval request: a sound of its own, rising twice, unlike any of a turn (UX-041).
+  request: { notes: [523, 784, 523, 784], length: 0.11, volume: 0.25 },
 };
 
 /** Play one of hands-free mode's sounds. */

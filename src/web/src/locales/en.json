@@ -506,7 +506,8 @@
       "update_task": "Change a task",
       "list_tasks": "List your tasks",
       "search_conversations": "Search your chats",
-      "read_conversation": "Read one of your chats"
+      "read_conversation": "Read one of your chats",
+      "request_internet_access": "Ask for internet access"
     },
     "cannotReason": "This model can't reason.",
     "additional": "Additional prompt",
@@ -541,7 +542,8 @@
       "transcribing": "Transcribing",
       "waiting": "Working on it",
       "reading": "Reading. Tap to talk",
-      "failed": "Something went wrong. Tap to try again"
+      "failed": "Something went wrong. Tap to try again",
+      "asking": "Answer on the screen"
     },
     "said": {
       "code": "There is a code block in the conversation.",
@@ -569,7 +571,11 @@
       "answer": "The assistant could not answer.",
       "notRead": "The answer could not be read aloud"
     },
-    "refused": "Voice uses a remote model, and only local models are allowed."
+    "refused": "Voice uses a remote model, and only local models are allowed.",
+    "request": {
+      "internet": "The assistant asks to access the internet. Answer on the screen.",
+      "other": "A request waits on the screen: {{tool}}."
+    }
   },
   "approvals": {
     "title": "Approval needed",
@@ -590,7 +596,8 @@
       "permission": "Your household's admin asked that this tool ask you before it runs.",
       "consequential": "This can't be undone, or acts in the real world, so it asks every time.",
       "device": "Calls to your devices and connected services always ask.",
-      "task_proposal": "The assistant proposes a task, or a change to one, that runs on its own with the calls it may make without asking. Read it before you approve."
+      "task_proposal": "The assistant proposes a task, or a change to one, that runs on its own with the calls it may make without asking. Read it before you approve.",
+      "internet_access": "The assistant needs the internet."
     },
     "outcomes": {
       "not_needed": "No approval needed",
@@ -608,13 +615,21 @@
     "allowedHint": "What you allowed when the assistant asked. Withdraw it and it asks again.",
     "nothingAllowed": "Nothing allowed yet.",
     "nothingAllowedHint": "When you allow something as the assistant asks, it appears here, for you to withdraw.",
-    "webAndCommands": "Web and commands",
+    "internetAccess": "Internet access",
     "withdraw": "Withdraw",
-    "proposalUntrusted": "This chat holds content from elsewhere, which may have asked for this task."
+    "proposalUntrusted": "This chat holds content from elsewhere, which may have asked for this task.",
+    "internet": {
+      "title": "Access the internet",
+      "does": "The assistant could search the web and read pages, and its sandbox could reach the internet, for as long as you allow it.",
+      "sentOut": "What this chat holds, and its files, could be sent out.",
+      "untrusted": "This chat has content from elsewhere, such as web pages or command output, which could be trying to steer the assistant into sending your data out. Check that this is what you asked for.",
+      "waiting": "Waiting for it",
+      "asked": "The assistant asks for it; its answer says why."
+    }
   },
   "permissions": {
     "title": "Tool permissions",
-    "hint": "What each user's assistant may use. Ask makes every call wait for their approval; Deny takes the tool away. Tools still ask when a chat has content from elsewhere.",
+    "hint": "What each user's assistant may use. Ask makes every call wait for their approval; Deny takes the tool away. The web also needs internet access, which only the user gives, in each chat; denying Sends data out denies it.",
     "user": "User",
     "chooseUser": "Choose a user",
     "byClass": "By kind of tool",
@@ -1045,7 +1060,8 @@
       "remember": "Remember things",
       "memory": "your memory",
       "event_trigger": "the event that starts it",
-      "manual": "you"
+      "manual": "you",
+      "internet_access": "Internet access"
     },
     "edit": "Edit task",
     "editShort": "Edit",

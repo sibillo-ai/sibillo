@@ -15,14 +15,14 @@ import { useNotify } from "../notices";
 import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
-import { outcomeLabel } from "../tools";
+import { outcomeLabel, toolLabel } from "../tools";
 import { Badge, Button, cx, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
 import { ModelSelect } from "./ModelPicker";
 import { MenuButton } from "./Shell";
 import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
 import { useVoice, type VoiceMode } from "../voice";
 import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, listFolder, previewUrl, useAttachments } from "../workspace";
-import { ApprovalCard } from "./Approvals";
+import { ApprovalCard, scopesOf } from "./Approvals";
 import { ChatSettings } from "./AssistantSettings";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
@@ -154,8 +154,12 @@ export function ConversationView() {
   useEffect(() => showRun?.(pose), [showRun, pose]);
   const liveStatus = live?.status;
   const liveParts = live?.parts;
+  // A hands-free turn that ended asking for approval waits for the conversation's requests (UX-041).
+  const [voiceAsks, setVoiceAsks] = useState(false);
   useEffect(() => {
-    if (liveStatus === "finished") voice?.answered((liveParts ?? []).flatMap((part) => (part.kind === "text" ? [part.text] : [])).join("\n\n"));
+    const said = (liveParts ?? []).flatMap((part) => (part.kind === "text" ? [part.text] : [])).join("\n\n");
+    if (liveStatus === "finished" && live?.interrupted && voice?.handsFree) setVoiceAsks(true);
+    else if (liveStatus === "finished") voice?.answered(said);
     else if (liveStatus === "failed") voice?.failed();
     // Only when the run ends: its parts are complete then.
   }, [liveStatus]);
@@ -206,6 +210,40 @@ export function ConversationView() {
   const pendingKey = pendingInterrupts.map((interrupt) => interrupt.id).join();
   const [decided, setDecided] = useState<{ key: string; entries: ResumeEntry[] } | null>(null);
   const decisions = decided?.key === pendingKey ? decided.entries : null;
+
+  // In hands-free mode, each approval request is said and answered by its buttons, one after another (UX-041).
+  const requested = voice?.requested;
+  useEffect(() => {
+    if (!voiceAsks || running || !requested || pendingInterrupts.length === 0) return;
+    setVoiceAsks(false);
+    if (questions.length > 0) {
+      // Questions in hands-free mode are not decided yet (AGT-015): they wait on the screen, as before.
+      voice?.answered("");
+      return;
+    }
+    const ask = (index: number, entries: ResumeEntry[]) => {
+      const interrupt = approvals[index];
+      if (!interrupt) return;
+      const decide = (entry: ResumeEntry) => {
+        const all = [...entries, entry];
+        if (all.length >= approvals.length) start({ conversationId, text: "", resume: all, voice: "hands_free" });
+        else ask(index + 1, all);
+      };
+      const tool = interrupt.metadata?.approval?.tool;
+      requested({
+        key: interrupt.id,
+        sentence: interrupt.metadata?.internet_access ? t("voice.request.internet") : t("voice.request.other", { tool: tool ? toolLabel(t, tool) : "" }),
+        answers: [
+          { label: t("approvals.deny"), choose: () => decide({ interruptId: interrupt.id, status: "resolved", payload: { approved: false } }) },
+          ...scopesOf(interrupt).map((scope) => ({
+            label: t(`approvals.allow.${scope}`),
+            choose: () => decide({ interruptId: interrupt.id, status: "resolved", payload: { approved: true, scope } }),
+          })),
+        ],
+      });
+    };
+    ask(0, []);
+  }, [voiceAsks, running, requested, pendingKey]);
 
   // A temporary conversation goes when its user leaves it (CNV-011).
   const temporary = conversation.data?.temporary === true;

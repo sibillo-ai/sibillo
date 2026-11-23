@@ -23,7 +23,7 @@ export const SETTINGS = ["me", "settings"] as const;
 const REASONING: Reasoning[] = ["off", "on", "deep"];
 // Every tool of the assistant, by group (CNV-013, ADR-0087); the groups are the client's own.
 const TOOL_GROUPS: { id: string; tools: ToolName[] }[] = [
-  { id: "web", tools: ["web_search", "read_page"] },
+  { id: "web", tools: ["web_search", "read_page", "request_internet_access"] },
   { id: "commands", tools: ["run_command", "start_command", "check_command", "stop_command"] },
   { id: "files", tools: ["read_file", "write_file", "edit_file", "create_directory", "list_directory", "find_files", "search_files", "file_info", "view_image"] },
   { id: "showing", tools: ["offer_download"] },
@@ -351,7 +351,7 @@ function ChatSettingsForm({ conversation, defaults, onDone }: { conversation: Co
   const [additional, setAdditional] = useState(conversation.additional_instructions ?? inheritedAdditional);
   const [allowances, setAllowances] = useState<Allowances>(conversation.allowances);
   const { busy, run } = useBusy();
-  const withdrawn = allowances.web_and_commands !== conversation.allowances.web_and_commands || allowances.tools.length !== conversation.allowances.tools.length;
+  const withdrawn = allowances.internet_access !== conversation.allowances.internet_access || allowances.tools.length !== conversation.allowances.tools.length;
 
   async function save() {
     try {
@@ -434,7 +434,7 @@ function SkillSwitches({ off, onChange }: { off: string[]; onChange: (off: strin
 function AllowedInChat({ allowances, onChange }: { allowances: Allowances; onChange: (allowances: Allowances) => void }) {
   const { t } = useTranslation();
   const items: { key: string; label: string; withdraw: () => void }[] = [
-    ...(allowances.web_and_commands ? [{ key: "web_and_commands", label: t("approvals.webAndCommands"), withdraw: () => onChange({ ...allowances, web_and_commands: false }) }] : []),
+    ...(allowances.internet_access ? [{ key: "internet_access", label: t("approvals.internetAccess"), withdraw: () => onChange({ ...allowances, internet_access: false }) }] : []),
     ...allowances.tools.map((tool) => ({ key: tool, label: toolLabel(t, tool), withdraw: () => onChange({ ...allowances, tools: allowances.tools.filter((name) => name !== tool) }) })),
   ];
   return (

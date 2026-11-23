@@ -25,8 +25,9 @@ export const TASKS = ["tasks"] as const;
 const NAME = "min-w-0 truncate underline-offset-2 hover:underline";
 // What a recurrence looks like: the first Monday of the month, twice (RFC 5545).
 const RECURRENCE_EXAMPLE = "RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2";
-// The tools a task may be given for any arguments, in the order the app offers them (TSK-004).
-const OPEN_GRANTS = ["web_search", "read_page", "read_file", "list_directory", "find_files", "search_files", "write_file", "edit_file", "remember"] as const;
+// The tools a task may be given for any arguments, in the order the app offers them (TSK-004). The web tools take
+// no grant: they follow the task's internet access (ADR-0113).
+const OPEN_GRANTS = ["read_file", "list_directory", "find_files", "search_files", "write_file", "edit_file", "remember"] as const;
 
 export function useTasks() {
   return useQuery({ queryKey: TASKS, queryFn: async () => unwrap(await api.GET("/tasks")).items });
@@ -188,10 +189,13 @@ function TaskEntry({ task, onWebhook }: { task: Task; onWebhook: (path: string) 
         ))}
         below={
           <>
-            {task.grants.length !== 0 && (
+            {(task.grants.length !== 0 || task.internet_access) && (
               <p className="text-small text-ink-2">
                 {t("taskSettings.grantsSummary", {
-                  grants: task.grants.map((grant) => (grant.arguments ? `${grantLabel(t, grant.tool)} (${JSON.stringify(grant.arguments)})` : grantLabel(t, grant.tool))).join(", "),
+                  grants: [
+                    ...(task.internet_access ? [grantLabel(t, "internet_access")] : []),
+                    ...task.grants.map((grant) => (grant.arguments ? `${grantLabel(t, grant.tool)} (${JSON.stringify(grant.arguments)})` : grantLabel(t, grant.tool))),
+                  ].join(", "),
                 })}
               </p>
             )}
@@ -313,6 +317,7 @@ function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => 
   const [kept, setKept] = useState<TaskTrigger[]>(task?.triggers ?? []);
   const [triggers, setTriggers] = useState<DraftTrigger[]>([]);
   const [open, setOpen] = useState<Set<string>>(() => new Set((task?.grants ?? []).filter((grant) => grant.arguments === null).map((grant) => grant.tool)));
+  const [internet, setInternet] = useState(task?.internet_access ?? false);
   const [fixed, setFixed] = useState(() => {
     const exact = (task?.grants ?? []).find((grant) => grant.arguments !== null);
     return exact ? JSON.stringify({ tool: exact.tool, arguments: exact.arguments }) : "";
@@ -357,11 +362,11 @@ function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => 
       });
       let shown: string | null = null;
       if (task === undefined) {
-        const created = unwrap(await api.POST("/tasks", { body: { name, instructions, time_zone: zone, triggers: added, grants } }));
+        const created = unwrap(await api.POST("/tasks", { body: { name, instructions, time_zone: zone, triggers: added, grants, internet_access: internet } }));
         shown = created.triggers.find((item) => item.webhook_path)?.webhook_path ?? null;
       } else {
         const path = { task_id: task.id };
-        unwrap(await api.PATCH("/tasks/{task_id}", { params: { path }, body: { name, instructions, time_zone: zone, grants } }));
+        unwrap(await api.PATCH("/tasks/{task_id}", { params: { path }, body: { name, instructions, time_zone: zone, grants, internet_access: internet } }));
         // New triggers first, so that the task always keeps one (TSK-001).
         for (const trigger of added) {
           const made = unwrap(await api.POST("/tasks/{task_id}/triggers", { params: { path }, body: trigger }));
@@ -459,6 +464,11 @@ function TaskDialog({ task, onClose, onWebhook }: { task?: Task; onClose: () => 
           {t("taskSettings.grantsHint")}
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {/* The grant of internet access: the web tools, and the sandbox's network (AGT-034, ADR-0113). */}
+          <label className="flex cursor-pointer items-center gap-2 text-body">
+            <Checkbox checked={internet} onChange={(event) => setInternet(event.target.checked)} />
+            {grantLabel(t, "internet_access")}
+          </label>
           {OPEN_GRANTS.map((tool) => (
             <label key={tool} className="flex cursor-pointer items-center gap-2 text-body">
               <Checkbox

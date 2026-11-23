@@ -1,6 +1,8 @@
 // Voice turns: dictation, reading aloud, and hands-free mode with its large button, media buttons and
 // sounds (UX-005, ADR-0088). Hands-free mode lives above the routes, so that a turn spoken on the
-// new-chat screen carries on in the conversation it creates.
+// new-chat screen carries on in the conversation it creates. An approval request that ends a hands-free
+// turn is heard, with a sound of its own and a sentence of the client, and answered only by its buttons
+// (UX-041, ADR-0113).
 import { Headphones, LoaderCircle, Mic, Volume2, X } from "lucide-react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,10 +13,17 @@ import { useNotify } from "./notices";
 import { type Pose, Sprite } from "./components/Sprite";
 import { VoiceLevel } from "./components/VoiceLevel";
 import { Button, cx } from "./ui";
-import { VoiceButton } from "./ui/Voice";
+import { VoiceAnswerButton, VoiceButton } from "./ui/Voice";
 import { type Cue, playCue, Reader, type ReadingStep, Recorder, silenceUrl, speakable, type SpokenNames, transcribe } from "./speech";
 
-export type VoiceState = "idle" | "listening" | "transcribing" | "waiting" | "reading" | "failed";
+export type VoiceState = "idle" | "listening" | "transcribing" | "waiting" | "reading" | "failed" | "asking";
+
+/** An approval request in hands-free mode: the client's sentence for it, and its answers, Deny first (UX-041). */
+export interface SpokenRequest {
+  key: string;
+  sentence: string;
+  answers: { label: string; choose: () => void }[];
+}
 
 /** Which step a hands-free turn is at, since when, and, while it is read, which piece (UX-005). */
 export interface Step {
@@ -52,6 +61,10 @@ interface Voice {
   register: (sender: Sender) => () => void;
   /** The answer to the hands-free turn, or its failure. */
   answered: (markdown: string) => void;
+  /** The approval request the hands-free turn ended with, said aloud and shown with its answers (UX-041). */
+  requested: (request: SpokenRequest) => void;
+  asking: SpokenRequest | null;
+  choose: (index: number) => void;
   /** What the run in view is doing, for the sprite of hands-free mode (UX-013). */
   showRun: (pose: Pose) => void;
   runPose: Pose;
@@ -94,6 +107,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [step, setStep] = useState<Step | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [asking, setAsking] = useState<SpokenRequest | null>(null);
+  const askingRef = useRef<SpokenRequest | null>(null);
   const { t } = useTranslation();
   const notify = useNotify();
   const begin = useCallback((kind: Step["kind"], part?: { part: number; total: number }) => {
@@ -179,9 +194,23 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     }
   }, [begin, fail]);
 
-  // The large button, and the media buttons: start the turn, end it, or stop the reading and talk.
+  // A request is said, and said again on a media button; a speech model that fails leaves it on the screen.
+  const say = useCallback(
+    (sentence: string) => {
+      stopReading();
+      void read(sentence).catch(() => undefined);
+    },
+    [read, stopReading],
+  );
+
+  // The large button, and the media buttons: start the turn, end it, or stop the reading and talk. While a
+  // request waits, they say it again: the microphone stays closed (UX-041).
   const press = useCallback(async () => {
     const now = stateRef.current;
+    if (now === "asking") {
+      if (askingRef.current) say(askingRef.current.sentence);
+      return;
+    }
     if (now === "idle" || now === "failed") return listen();
     if (now === "reading") {
       stopReading();
@@ -203,7 +232,38 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       awaiting.current = false;
       fail(error);
     }
-  }, [begin, fail, go, listen, stopReading]);
+  }, [begin, fail, go, listen, say, stopReading]);
+
+  const requested = useCallback(
+    (request: SpokenRequest) => {
+      // The turn's own request, or the next of its requests.
+      if (!awaiting.current && stateRef.current !== "asking") return;
+      awaiting.current = false;
+      askingRef.current = request;
+      setAsking(request);
+      setStep(null);
+      go("asking", "request");
+      say(request.sentence);
+    },
+    [go, say],
+  );
+
+  const choose = useCallback(
+    (index: number) => {
+      const request = askingRef.current;
+      const answer = request?.answers[index];
+      if (!request || !answer || stateRef.current !== "asking") return;
+      stopReading();
+      askingRef.current = null;
+      setAsking(null);
+      // The turn goes on as any other: its answer is read aloud (UX-041).
+      awaiting.current = true;
+      go("waiting");
+      begin("writing");
+      answer.choose();
+    },
+    [begin, go, stopReading],
+  );
 
   const answered = useCallback(
     (markdown: string) => {
@@ -230,6 +290,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const close = useCallback(() => {
     setHandsFree(false);
     awaiting.current = false;
+    askingRef.current = null;
+    setAsking(null);
     stopReading();
     void recorder.current.stop();
     go("idle");
@@ -329,12 +391,15 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       close,
       register,
       answered,
+      requested,
+      asking,
+      choose,
       failed,
       reading,
       readAloud,
       stopReading,
     }),
-    [transcription, speech, transcriptionRefused, speechRefused, handsFree, state, cue, press, runPose, stream, step, failure, open, close, register, answered, failed, reading, readAloud, stopReading],
+    [transcription, speech, transcriptionRefused, speechRefused, handsFree, state, cue, press, runPose, stream, step, failure, open, close, register, answered, requested, asking, choose, failed, reading, readAloud, stopReading],
   );
 
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
@@ -345,7 +410,20 @@ export function HandsFreeOverlay() {
   const voice = useVoice();
   if (!voice?.handsFree) return null;
   return (
-    <HandsFree state={voice.state} cue={voice.cue} runPose={voice.runPose} stream={voice.stream} step={voice.step} failure={voice.failure} onPress={voice.press} onClose={voice.close} transcription={voice.transcription} speech={voice.speech} />
+    <HandsFree
+      state={voice.state}
+      cue={voice.cue}
+      runPose={voice.runPose}
+      stream={voice.stream}
+      step={voice.step}
+      failure={voice.failure}
+      asking={voice.asking}
+      onChoose={voice.choose}
+      onPress={voice.press}
+      onClose={voice.close}
+      transcription={voice.transcription}
+      speech={voice.speech}
+    />
   );
 }
 
@@ -357,6 +435,8 @@ function HandsFree(props: {
   stream: MediaStream | null;
   step: Step | null;
   failure: string | null;
+  asking: SpokenRequest | null;
+  onChoose: (index: number) => void;
   onPress: () => void;
   onClose: () => void;
   transcription: ModelOption | undefined;
@@ -368,6 +448,7 @@ function HandsFree(props: {
   const busy = state === "transcribing" || state === "waiting";
   // The sprite acts out what happens: listening, the run's work, reading aloud (UX-013).
   const pose: Pose = state === "listening" ? "listening" : state === "transcribing" ? "thinking" : state === "waiting" ? props.runPose : state === "reading" ? "answering" : state === "failed" ? "error" : "waiting";
+  const { asking } = props;
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") props.onClose();
@@ -395,7 +476,17 @@ function HandsFree(props: {
       <p id="hands-free-hint" className="text-center text-small text-ink-2">
         {t("voice.hint")} {remote ? t("voice.remote", { connection: remote.connection_name }) : t("voice.local")}
       </p>
-      {/* The lower half: the large button. */}
+      {/* The lower half: a request's answers, Deny first and none chosen, in place of the large button (UX-041). */}
+      {state === "asking" && asking ? (
+        <div role="group" aria-label={t("approvals.title")} data-voice-request="" data-voice-state={state} data-voice-cue={props.cue ?? undefined} className="flex min-h-52 flex-5 flex-col gap-4">
+          <p className="text-center text-reading font-semibold text-pretty">{asking.sentence}</p>
+          {asking.answers.map((answer, index) => (
+            <VoiceAnswerButton key={answer.label} onClick={() => props.onChoose(index)}>
+              {answer.label}
+            </VoiceAnswerButton>
+          ))}
+        </div>
+      ) : (
       <div className="relative flex min-h-52 flex-5">
         <VoiceButton onClick={props.onPress} disabled={busy} active={state === "listening"} data-voice-state={state} data-voice-cue={props.cue ?? undefined} aria-describedby="hands-free-hint">
           {state === "listening" ? (
@@ -415,6 +506,7 @@ function HandsFree(props: {
           <VoiceLevel stream={props.stream} label={t("voice.capturing")} className="pointer-events-none absolute top-1/2 left-1/2 mt-2 h-16 w-3/5 -translate-x-1/2 -translate-y-full text-on-accent" />
         )}
       </div>
+      )}
     </section>
   );
 }

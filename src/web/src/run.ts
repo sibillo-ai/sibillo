@@ -19,6 +19,8 @@ export interface LiveRun {
   attachments?: { path: string; size: number }[];
   parts: LivePart[];
   status: "running" | "finished" | "failed";
+  // Whether it finished asking the user: a question or an approval request (UX-041).
+  interrupted?: boolean;
   errorCode?: string;
   // What the provider said, when it refused the request (MOD-014).
   reason?: string;
@@ -82,8 +84,10 @@ export function apply(run: LiveRun, event: RunEvent): LiveRun {
         return { ...run, parts, plan: (event.value as { steps: PlanStep[] }).steps };
       }
       break;
-    case "RUN_FINISHED":
-      return { ...run, parts, status: "finished" };
+    case "RUN_FINISHED": {
+      const outcome = event["outcome"] as { type?: string } | undefined;
+      return { ...run, parts, status: "finished", interrupted: outcome?.type === "interrupt" };
+    }
     case "RUN_ERROR": {
       const code = text("code") || "internal.error";
       const message = text("message");

@@ -24,3 +24,17 @@ export function VoiceButton({ active = false, children, ...rest }: VoiceButtonPr
     </button>
   );
 }
+
+/** One answer to an approval request in hands-free mode: wide and tall, with room between answers, so that a
+ * stray touch meant for another misses it (UX-041). */
+export function VoiceAnswerButton({ children, ...rest }: Omit<ComponentProps<"button">, "className" | "type">) {
+  return (
+    <button
+      type="button"
+      className="flex min-h-20 w-full flex-1 cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface px-4 text-title font-semibold text-ink transition-[background-color,scale] duration-120 ease-soft hover:bg-sunken active:scale-[0.99]"
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
