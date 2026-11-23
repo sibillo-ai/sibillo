@@ -9,6 +9,21 @@ with migration notes.
 
 ## [Unreleased]
 
+### Security
+
+- A security audit's findings, fixed in ADR-0116 to ADR-0132: untrusted
+  skills, connection keys and MCP client secrets sent to new addresses,
+  sign-in rate limits checked before passwords, bounded request bodies and
+  outbound responses, the egress table kept while sandboxes run, gates of
+  the repository run from the base branch, OAuth mix-up, what a rewind
+  leaves behind, web pages and links, memory in untrusted runs, the sandbox
+  driver's bounds, backups, accounts and the HTTP surface, and durable runs.
+- Migration notes: the database must be recreated (migration 0001 changed);
+  everyone signs in again once (the session cookie is now
+  `__Host-sibillo_session`); archives made before ADR-0130 cannot be
+  restored; an MCP service with a client given by hand needs its new
+  callback registered at the service, shown in its settings (ADR-0122).
+
 ### Added
 
 - Project foundation: vision, governance, contribution rules, security policy.

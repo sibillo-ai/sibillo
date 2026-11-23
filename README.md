@@ -259,7 +259,9 @@ passkeys, and refuses the others. Then each person adds a passkey in
 
 A passkey that is lost, with the phone it was on, never locks anyone out: a
 household's administrator removes a member's passkeys in **Settings**, then
-**Members**, and the member signs in with their password again. The
+**Members**, and the member signs in with their password again. An
+administrator cannot remove their own passkeys there, nor the instance
+administrator's, so that a stolen session cannot weaken them (ADR-0131). The
 instance administrator's own are removed on the server:
 
 ```bash
