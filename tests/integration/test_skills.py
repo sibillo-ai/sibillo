@@ -510,24 +510,32 @@ def test_runs_keep_no_copy_of_skills_in_their_inputs(
 
 
 @pytest.mark.spec("AGT-025", "AGT-003", "AGT-004")
-def test_loading_an_untrusted_skill_makes_the_run_untrusted_until_the_user_trusts_it(
+def test_an_untrusted_skill_makes_every_run_it_reaches_untrusted_until_the_user_trusts_it(
     server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
 ) -> None:
     name = _name("untrusted")
     response = _upload(server, token, _zip({f"{name}/SKILL.md": _skill_md(name)}))
     assert response.status_code == 201, response.text
     skill = body(response)
-    # Offered, marked as from an untrusted source; a run that does not load it stays trusted.
+    # Offered, marked as from an untrusted source.
     request = _new_request(server, token, default_model)
     system = json.dumps(request.body)
     around = system[max(0, system.index(name) - 300) : system.index(name) + 300].lower()
     assert "untrusted" in around
-    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is False
-    # Loaded: what follows in the conversation is untrusted, and the next request for internet access says so.
-    conversation_id = create_conversation(server, token)["id"]
-    completed(server, token, conversation_id, _load(name))
-    assert holds_untrusted_content(server, token, conversation_id) is True
-    # Marked trusted by the user: loading it no longer does.
+    # Its description reaches the run whether or not it is loaded: the run is untrusted from its start, and its
+    # first request for internet access says so (ADR-0116).
+    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is True
+    # A conversation that turns it off is not offered it, and is trusted.
+    off = create_conversation(server, token)["id"]
+    with server.client(token) as client:
+        response = client.patch(f"/conversations/{off}", json={"disabled_skills": [name]})
+    assert response.status_code == 200, response.text
+    assert holds_untrusted_content(server, token, off) is False
+    # Loaded: what it brought in stays untrusted content of the conversation.
+    loaded = create_conversation(server, token)["id"]
+    completed(server, token, loaded, _load(name))
+    # Marked trusted by the user: runs that are offered it, or load it, are trusted again; the conversation that
+    # loaded it while it was untrusted still holds untrusted content.
     with server.client(token) as client:
         assert_problem(
             client.patch(f"/me/skills/{skill['id']}", json={"untrusted": True}), 422, "request.validation_failed"
@@ -535,9 +543,11 @@ def test_loading_an_untrusted_skill_makes_the_run_untrusted_until_the_user_trust
     response = _patch(server, token, skill["id"], untrusted=False)
     assert response.status_code == 200, response.text
     assert body(response)["untrusted"] is False
+    assert holds_untrusted_content(server, token, create_conversation(server, token)["id"]) is False
     trusted_conversation = create_conversation(server, token)["id"]
     completed(server, token, trusted_conversation, _load(name))
     assert holds_untrusted_content(server, token, trusted_conversation) is False
+    assert holds_untrusted_content(server, token, loaded) is True
 
 
 @pytest.mark.spec("AGT-025")
