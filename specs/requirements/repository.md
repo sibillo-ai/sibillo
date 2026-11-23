@@ -154,7 +154,7 @@ pull requests MAY raise them (ADR-0059).
 
 ## REPO-012: Images and tools pinned by digest
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 2
 - **Verification:** unit
