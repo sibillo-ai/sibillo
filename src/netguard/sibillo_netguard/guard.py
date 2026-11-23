@@ -16,6 +16,10 @@ network; a table the guard installs, or installs again, starts with none.
 The guard shares the network namespace of the sandbox engine, where the
 sandbox bridge is, and nothing of the host's (SBX-025). The sandbox driver
 follows it over a Unix socket that only the two share (ADR-0113).
+
+The guard never removes the table: it stays when the guard stops, fails or
+times out, and goes with the engine's namespace (ADR-0120). It is in place
+only while it lists as the guard installed it, but for the set's elements.
 """
 
 from __future__ import annotations
@@ -50,6 +54,12 @@ CHECK_INTERVAL_SECONDS = 1.0
 # The guard reports unhealthy this long after it last found the table missing (ADR-0053).
 UNHEALTHY_AFTER_MISSING_SECONDS = 10.0
 STATE_FILE = Path("/run/sibillo-netguard/last-missing")
+# The table as `nft` listed it once installed, without the set's elements, for the health check (ADR-0120).
+EXPECTED_FILE = Path("/run/sibillo-netguard/expected-table")
+# A port of the engine's namespace where the guard accepts connections and closes them: the canary must not reach
+# it from a sandbox bridge, so that "blocked" is not a timeout of an address nobody answers (ADR-0120).
+CANARY_PORT = 9000
+NFT_TIMEOUT_SECONDS = 10
 
 BLOCKED_IPV4 = (
     "0.0.0.0/8",
@@ -139,25 +149,55 @@ table {TABLE_FAMILY} {TABLE_NAME} {{
 
 
 def _nft(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603 - nft with fixed arguments
-        ["nft", *args],  # noqa: S607 - nft from the image's PATH
-        input=stdin,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
+    """`nft` with `args`; one that hangs past its timeout answers as a failure, and the table counts as missing."""
+    try:
+        return subprocess.run(  # noqa: S603 - nft with fixed arguments
+            ["nft", *args],  # noqa: S607 - nft from the image's PATH
+            input=stdin,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=NFT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(["nft", *args], 124, "", "nft timed out")
+
+
+def _listing() -> str | None:
+    """The table as `nft` lists it, without the set's elements, in a canonical form; None when it is missing."""
+    listed = _nft("--json", "list", "table", TABLE_FAMILY, TABLE_NAME)
+    if listed.returncode != 0:
+        return None
+    try:
+        items = cast("list[dict[str, object]]", json.loads(listed.stdout)["nftables"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    kept: list[dict[str, object]] = []
+    item: dict[str, object]
+    for item in items:
+        if "metainfo" in item:
+            continue
+        found = item.get("set")
+        if isinstance(found, dict):
+            bare: dict[str, object] = {k: v for k, v in cast("dict[str, object]", found).items() if k != "elem"}
+            item = {"set": bare}
+        kept.append(item)
+    return json.dumps(kept, sort_keys=True)
+
+
+def table_exists() -> bool:
+    """Whether a table of that name is there, whatever it holds."""
+    return _nft("list", "table", TABLE_FAMILY, TABLE_NAME).returncode == 0
 
 
 def table_present() -> bool:
-    """Whether the table is installed with its set and both of its chains."""
-    listed = _nft("list", "table", TABLE_FAMILY, TABLE_NAME)
-    return (
-        listed.returncode == 0
-        and f"set {ONLINE_SET}" in listed.stdout
-        and "chain forward" in listed.stdout
-        and "chain input" in listed.stdout
-    )
+    """Whether the table is in place: as the guard installed it, but for the bridges in its set (ADR-0120)."""
+    listing = _listing()
+    try:
+        expected = EXPECTED_FILE.read_text()
+    except FileNotFoundError:
+        return False
+    return listing is not None and listing == expected
 
 
 def online() -> list[str] | None:
@@ -194,15 +234,21 @@ def install(resolver: str) -> None:
     result = _nft("-f", "-", stdin=script)
     if result.returncode != 0:
         raise RuntimeError(f"nft refused the egress table: {result.stderr.strip()}")
-
-
-def remove() -> None:
-    _nft("delete", "table", TABLE_FAMILY, TABLE_NAME)
+    listing = _listing()
+    if listing is None:
+        raise RuntimeError("nft does not list the egress table it installed")
+    EXPECTED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    EXPECTED_FILE.write_text(listing)
 
 
 def _mark_missing() -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(str(time.time()))
+
+
+def sandbox_bridges() -> list[str]:
+    """The sandbox bridges in this network namespace."""
+    return [name for _, name in socket.if_nameindex() if name.startswith(BRIDGE_PREFIX)]
 
 
 def engine_present() -> bool:
@@ -269,8 +315,41 @@ def serve(path: str) -> _Server:
     return server
 
 
+def listen_for_the_canary() -> socket.socket:
+    """Accept connections on the canary's port and close them at once (ADR-0120)."""
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("0.0.0.0", CANARY_PORT))  # noqa: S104 - every address of the engine's namespace, for the canary
+    listener.listen(16)
+
+    def accept() -> None:
+        while True:
+            try:
+                connection, _ = listener.accept()
+            except OSError:
+                return
+            connection.close()
+
+    threading.Thread(target=accept, name="canary", daemon=True).start()
+    return listener
+
+
+def _keep(resolver: str) -> None:
+    """Reinstall the table when it is not in place, and remember that it was missing."""
+    if table_present():
+        return
+    # Reinstalled with no bridge with network: the driver gives the list again (ADR-0113).
+    logger.warning("egress table missing or changed: reinstalling it")
+    _mark_missing()
+    with _CHANGES:
+        try:
+            install(resolver)
+        except RuntimeError:
+            logger.exception("the egress table could not be reinstalled; trying again")
+
+
 def run(configuration: GuardConfiguration) -> int:
-    """Install the table, keep it in place, and remove it on shutdown; the exit code."""
+    """Install the table and keep it in place, never removing it (ADR-0120); the exit code."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     stopping = False
     resolver = configuration.resolver
@@ -284,8 +363,13 @@ def run(configuration: GuardConfiguration) -> int:
     if not engine_present():
         logger.error("no %s here: the guard must share the sandbox engine's network namespace", UPLINK_INTERFACE)
         return EXIT_ENGINE_LEFT
+    if not table_exists() and sandbox_bridges():
+        # Sandboxes may have run without it: unhealthy for a while, so that the driver stops them (ADR-0120).
+        logger.warning("egress table missing at start while sandbox bridges exist")
+        _mark_missing()
     install(resolver)
     logger.info("egress table %s %s installed for the bridges %s*", TABLE_FAMILY, TABLE_NAME, BRIDGE_PREFIX)
+    listener = listen_for_the_canary()
     server = serve(configuration.socket)
     try:
         while not stopping:
@@ -294,15 +378,11 @@ def run(configuration: GuardConfiguration) -> int:
                 # The engine restarted, in a new namespace: this one guards nothing (SBX-025).
                 logger.error("the sandbox engine left this network namespace: stopping, to join its new one")
                 return EXIT_ENGINE_LEFT
-            if not table_present():
-                # Reinstalled with no bridge with network: the driver gives the list again (ADR-0113).
-                logger.warning("egress table missing: reinstalling it")
-                _mark_missing()
-                with _CHANGES:
-                    install(resolver)
+            _keep(resolver)
     finally:
+        # The table stays: it goes with the engine's namespace (ADR-0120).
         server.shutdown()
+        listener.close()
         Path(configuration.socket).unlink(missing_ok=True)
-        remove()
-        logger.info("egress table removed")
+        logger.info("stopped; the egress table stays in place")
     return 0

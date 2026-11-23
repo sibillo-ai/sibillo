@@ -27,7 +27,7 @@ import tempfile
 import time
 import uuid
 import zipfile
-from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -73,6 +73,10 @@ DELETE_ATTEMPTS = 20
 DELETE_PAUSE_SECONDS = 0.5
 
 
+async def _assume_in_place() -> bool:
+    return True
+
+
 class NoSubnetError(Exception):
     """Every subnet of the sandbox bridges' range is taken: no more sandboxes run at once (SBX-024)."""
 
@@ -110,6 +114,8 @@ class Sandboxes:
         self._online: set[str] = set()
         self._online_lock = asyncio.Lock()
         self._networks_lock = asyncio.Lock()
+        # Asks the guard whether the egress table is in place; the isolation monitor sets it (ADR-0120).
+        self.egress_in_place: Callable[[], Awaitable[bool]] = _assume_in_place
 
     @property
     def online(self) -> frozenset[str]:
@@ -171,6 +177,12 @@ class Sandboxes:
         config = container_config(self.configuration, volume, labels, skills=skills, network=network_name(name))
         container = await self.docker.containers.create(config, name=name)
         await container.start()
+        # The table may have gone while this request was past its own check of readiness: nothing runs in the
+        # container until the guard says again that it is in place (SBX-015, ADR-0120).
+        if not await self.egress_in_place():
+            await self._delete_container(name)
+            await self._delete_network(name)
+            raise GuardUnavailableError("the egress table went missing while a sandbox started")
         await self._write_resolver(container)
         return container
 
