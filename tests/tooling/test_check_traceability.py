@@ -116,6 +116,24 @@ class TraceabilityTest(unittest.TestCase):
         self.assertEqual(report.errors, [])
         self.assertEqual(report.references, 2)
 
+    def test_a_test_that_is_always_skipped_does_not_count(self) -> None:
+        # Its marker is still checked, but it verifies nothing (REPO-004, ADR-0121).
+        for skip in ("@pytest.mark.skip", '@pytest.mark.skip(reason="later")', '@unittest.skip("later")'):
+            with self.subTest(skip=skip):
+                self.write(
+                    "tests/test_a.py",
+                    f'import pytest\nimport unittest\n\n{skip}\n@pytest.mark.spec("ABC-001")\ndef test_a(): ...\n',
+                )
+                report = check_traceability.check(self.root)
+                self.assertIn("ABC-001 is implemented but no test references it", report.errors)
+        # A skip that depends on a condition still counts: the test runs somewhere.
+        self.write(
+            "tests/test_a.py",
+            'import sys\nimport pytest\n\n@pytest.mark.skipif(sys.platform == "win32", reason="x")\n'
+            '@pytest.mark.spec("ABC-001")\ndef test_a(): ...\n',
+        )
+        self.assertEqual(check_traceability.check(self.root).errors, [])
+
     def test_non_literal_arguments_fail(self) -> None:
         self.write("tests/test_a.py", 'import pytest\nIDS = "ABC-001"\n\n@pytest.mark.spec(IDS)\ndef test_a(): ...\n')
         errors = check_traceability.check(self.root).errors
