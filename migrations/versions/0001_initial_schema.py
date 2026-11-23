@@ -378,7 +378,8 @@ TABLES = [
       listed jsonb,
       accepted jsonb,
       problem text CHECK (
-        problem IN ('name', 'description_too_long', 'schema_too_large', 'too_many_tools', 'requires_tasks')
+        problem IN ('name', 'description_too_long', 'schema_too_large', 'too_many_tools', 'requires_tasks',
+          'hidden_characters')
       ),
       accepted_at timestamptz,
       PRIMARY KEY (server_id, name),

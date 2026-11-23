@@ -32,7 +32,7 @@ from sibillo_server.connections import SecretKey
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
 from sibillo_server.encryption import decrypt, decrypt_labelled, encrypt, encrypt_labelled
-from sibillo_server.mcp_client import Listing, ServerError, Target, digest, list_tools, problems, reviewed
+from sibillo_server.mcp_client import MAX_TOOLS, Listing, ServerError, Target, digest, list_tools, problems, reviewed
 from sibillo_server.mcp_events import EventType, list_event_types
 from sibillo_server.mcp_events import digest as event_digest
 from sibillo_server.mcp_events import problems as event_problems
@@ -57,6 +57,7 @@ router = APIRouter()
 MAX_SERVERS = 20
 CONNECTIONS_PER_MINUTE = 20
 SIGN_IN_MINUTES = 10
+MAX_PENDING_SIGN_INS = 10
 # An access token expiring this soon is renewed before it is used (ADR-0100, point 7).
 RENEW_BEFORE_SECONDS = 60
 SERVER_COLUMNS = (
@@ -171,17 +172,28 @@ class Credential:
 
 
 async def credential_of(connection: AsyncConnection, server: Server) -> Credential | None:
-    """The user's credential for the server, of its current generation; an older one is deleted."""
+    """The user's credential for the server, of its current generation; an older one is deleted.
+
+    Older is judged by the generation the database has now, not by `server`, which a run read when it started:
+    a run that started before a change must not delete the credential given since (ADR-0128).
+    """
     row = (
         await connection.execute(
-            text("SELECT id, kind, status, expires_at, server_generation FROM mcp_credentials WHERE server_id = :id"),
+            text(
+                "SELECT c.id, c.kind, c.status, c.expires_at, c.server_generation,"
+                " c.server_generation = s.generation AS current"
+                " FROM mcp_credentials c JOIN mcp_servers s ON s.id = c.server_id WHERE c.server_id = :id"
+            ),
             {"id": server.id},
         )
     ).one_or_none()
     if row is None:
         return None
-    if row.server_generation != server.generation:
+    if not row.current:
         await connection.execute(text("DELETE FROM mcp_credentials WHERE id = :id"), {"id": row.id})
+        return None
+    if row.server_generation != server.generation:
+        # Given for the server as it is now, which this caller does not know yet.
         return None
     return Credential(row.id, row.kind, row.status, row.expires_at)
 
@@ -456,7 +468,9 @@ async def _view(connection: AsyncConnection, server: Server, origin: str | None)
 async def store_listing(connection: AsyncConnection, server: Server, tenant_id: uuid.UUID, listing: Listing) -> None:
     """Keep the tools as just listed: `listed` and `problem` for every tool (ADR-0099, point 6)."""
     found = problems(server.prefix, listing.tools)
-    for listed in listing.tools:
+    # No more are kept than a server may offer; a longer listing is unusable anyway (ADR-0128).
+    kept = listing.tools[:MAX_TOOLS]
+    for listed in kept:
         await connection.execute(
             text(
                 "INSERT INTO mcp_server_tools (tenant_id, server_id, name, listed, problem)"
@@ -471,7 +485,7 @@ async def store_listing(connection: AsyncConnection, server: Server, tenant_id: 
                 "problem": found[listed.name],
             },
         )
-    names = [listed.name for listed in listing.tools]
+    names = [listed.name for listed in kept]
     await connection.execute(
         text(
             "UPDATE mcp_server_tools SET listed = NULL, problem = NULL WHERE server_id = :server"
@@ -674,6 +688,15 @@ async def update_mcp_server(
     client_changed = bool(present & {"oauth_client_id", "oauth_client_secret"})
     if client_changed and auth != "oauth":
         raise errors.invalid("/oauth_client_id", "only_for_oauth")
+    # A client secret a tenant admin gave goes only to the address it was given for: a new address needs it
+    # again, or another client (AGT-030, ADR-0128).
+    if (
+        moved
+        and auth == "oauth"
+        and server.client_secret_ciphertext is not None
+        and not present & {"oauth_client_id", "oauth_client_secret"}
+    ):
+        raise errors.invalid("/oauth_client_secret", "required_with_new_address")
     new_generation = moved or auth != server.auth or client_changed
     # A new address is private only when the instance admin sets it (ADR-0099, point 4).
     target = Target(url, identity.instance_admin if moved else server.private_network)
@@ -1025,6 +1048,14 @@ async def start_mcp_sign_in(
         if origin is None or server.oauth is None:
             raise errors.conflict()
         await connection.execute(text("DELETE FROM mcp_sign_ins WHERE expires_at < now()"))
+        # At most ten pending sign-ins of a user: a new one takes the place of the oldest (ADR-0128).
+        await connection.execute(
+            text(
+                "DELETE FROM mcp_sign_ins WHERE id IN (SELECT id FROM mcp_sign_ins WHERE owner_id = :owner"
+                " ORDER BY created_at DESC OFFSET :keep)"
+            ),
+            {"owner": identity.user_id, "keep": MAX_PENDING_SIGN_INS - 1},
+        )
         state, verifier = secrets.token_urlsafe(32), new_verifier()
         expires_at = (
             await connection.execute(

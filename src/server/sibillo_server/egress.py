@@ -73,7 +73,7 @@ async def check(engine: AsyncEngine, identity: Identity, location: str) -> None:
         async with transaction(engine, identity) as connection:
             allowed = await allows(connection, location)
     except Exception as error:
-        logger.warning("the data egress policy could not be read", exc_info=True)
+        logger.warning("the data egress policy could not be read: %s", type(error).__name__)
         raise EgressRefusedError("the data egress policy could not be read") from error
     if not allowed:
         raise EgressRefusedError("only local models are allowed")

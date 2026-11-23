@@ -211,7 +211,16 @@ class ModelPricesOut(Response):
 type ConnectionKind = Literal["openrouter", "openai"]
 # Where inference runs (MOD-010, ADR-0066).
 type Location = Literal["local", "remote"]
-type Address = Annotated[HttpUrl, UrlConstraints(max_length=2000)]
+
+
+def _without_userinfo(address: HttpUrl) -> HttpUrl:
+    """An address with a user or a password would keep them in clear, and show them back (ADR-0128)."""
+    if address.username is not None or address.password is not None:
+        raise ValueError("an address may not hold a user or a password")
+    return address
+
+
+type Address = Annotated[HttpUrl, UrlConstraints(max_length=2000), AfterValidator(_without_userinfo)]
 type ApiKey = Annotated[str, Field(min_length=1, max_length=1000)]
 
 
@@ -932,7 +941,9 @@ type McpServerPrefix = Annotated[str, Field(min_length=1, max_length=20, pattern
 type McpServerAuth = Literal["none", "token", "oauth"]
 type McpCredentialState = Literal["not_needed", "missing", "valid", "expired"]
 type McpToolStatus = Literal["accepted", "changed", "gone", "not_accepted", "unusable"]
-type McpToolProblem = Literal["name", "description_too_long", "schema_too_large", "too_many_tools", "requires_tasks"]
+type McpToolProblem = Literal[
+    "name", "description_too_long", "schema_too_large", "too_many_tools", "requires_tasks", "hidden_characters"
+]
 type McpServerName = Annotated[str, Field(min_length=1, max_length=100)]
 type OAuthClientId = Annotated[str, Field(min_length=1, max_length=2000)]
 type OAuthClientSecret = Annotated[str, Field(min_length=1, max_length=4000)]

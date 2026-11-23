@@ -45,7 +45,7 @@ from sibillo_server.costs import amount
 from sibillo_server.database import Identity, transaction
 from sibillo_server.egress import check
 from sibillo_server.encryption import decrypt
-from sibillo_server.endpoints import tenant_http_client
+from sibillo_server.endpoints import bounded_client
 from sibillo_server.tool_policy import Allowances, Permissions
 
 logger = logging.getLogger(__name__)
@@ -236,9 +236,9 @@ async def connection_model(deps: RunDeps, connection_id: uuid.UUID, model: str) 
     deps.context_window = min(deps.connection_window, row.served_context_window or deps.connection_window)
     deps.private_network = row.private_network
     deps.ollama_root = str(row.base_url).rstrip("/").removesuffix("/v1") if row.server_product == "ollama" else None
-    # Addresses not set by the instance admin connect only to checked public addresses,
-    # without redirects (MOD-009, ADR-0061).
-    http_client = None if row.private_network else tenant_http_client()
+    # Addresses not set by the instance admin connect only to checked public addresses; none follows a
+    # redirect, and every answer is bounded (MOD-009, ADR-0061, ADR-0128).
+    http_client = bounded_client(private_network=row.private_network, model=True)
     if row.kind == "openrouter":
         # A client of our own: the provider would add attribution headers from the environment.
         # The SDK's signature names httpx2, and it also accepts a legacy httpx client, as here.
@@ -364,11 +364,7 @@ async def _learn_served_window(deps: RunDeps) -> None:
     """
     if deps.ollama_root is None or deps.connection_id is None:
         return
-    client = (
-        httpx.AsyncClient(follow_redirects=False, timeout=SERVED_WINDOW_SECONDS)
-        if deps.private_network
-        else tenant_http_client()
-    )
+    client = bounded_client(private_network=deps.private_network, timeout=httpx.Timeout(SERVED_WINDOW_SECONDS))
     try:
         async with client:
             response = await client.get(f"{deps.ollama_root}/api/ps", timeout=SERVED_WINDOW_SECONDS)
@@ -431,9 +427,10 @@ async def _compacted(ctx: RunContext[RunDeps], messages: list[ModelMessage]) -> 
         response = await model.request(
             [ModelRequest(parts=[UserPromptPart(SUMMARY_PROMPT + transcript)])], None, ModelRequestParameters()
         )
-    except Exception:
-        # Without a summary, the request goes as it is; the model may then see less than all of it.
-        logger.warning("run %s could not be compacted", deps.run_id, exc_info=True)
+    except Exception as error:
+        # Without a summary, the request goes as it is; the model may then see less than all of it. The error is
+        # named by its class: a provider's message may repeat the conversation (OBS-003, ADR-0128).
+        logger.warning("run %s could not be compacted: %s", deps.run_id, type(error).__name__)
         return messages
     deps.compactions += 1
     await record_usage(deps, uuid.uuid5(deps.run_id, f"compaction-{deps.compactions}"), response, "compaction")
@@ -496,7 +493,8 @@ def _cost(deps: RunDeps, response: ModelResponse) -> tuple[Decimal | None, str |
         # A cost of zero still names a currency; any one will do.
         return Decimal(0), "USD", "free"
     reported = (response.provider_details or {}).get("cost")
-    if isinstance(reported, int | float) and not isinstance(reported, bool):
+    # A cost that is not a finite amount, or is negative, is unknown (ADR-0128).
+    if isinstance(reported, int | float) and not isinstance(reported, bool) and 0 <= reported < float("inf"):
         # OpenRouter reports the cost in credits of one US dollar each (ADR-0057).
         return Decimal(str(reported)), "USD", "provider"
     try:

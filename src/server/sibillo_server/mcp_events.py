@@ -116,7 +116,9 @@ class _Session:
         }
         if token is not None:
             headers["Authorization"] = f"Bearer {token}"
-        self._client = mcp_http_client(private_network=target.private_network, headers=headers, timeout=REQUEST_SECONDS)
+        self._client = mcp_http_client(
+            private_network=target.private_network, server_url=target.url, headers=headers, timeout=REQUEST_SECONDS
+        )
         self._url = target.url
         self._session: str | None = None
         self._next = 0

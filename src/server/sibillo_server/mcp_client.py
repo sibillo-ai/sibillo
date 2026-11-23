@@ -30,6 +30,9 @@ MAX_DESCRIPTION_CHARS = 4000
 MAX_SCHEMA_BYTES = 16 * 1024
 MAX_TOOLS = 100
 MODEL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Characters an admin reviewing a tool cannot see, or that reorder what they read: format characters, such as
+# zero-width spaces and joiners, and bidirectional controls (T-29, ADR-0128).
+HIDDEN = re.compile(r"[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\U000e0000-\U000e007f]")
 DETAIL_CHARS = 300
 
 
@@ -133,6 +136,8 @@ def problems(prefix: str, tools: list[ListedTool]) -> dict[str, str | None]:
             problem = "schema_too_large"
         elif listed.requires_tasks:
             problem = "requires_tasks"
+        elif any(HIDDEN.search(text or "") for text in (listed.name, listed.title, listed.description)):
+            problem = "hidden_characters"
         found[listed.name] = problem
     return found
 
@@ -140,7 +145,9 @@ def problems(prefix: str, tools: list[ListedTool]) -> dict[str, str | None]:
 def _toolset(target: Target, token: str | None, timeout: float) -> tuple[MCPToolset[Any], _Watch]:
     watch = _Watch()
     headers = {} if token is None else {"Authorization": f"Bearer {token}"}
-    client = mcp_http_client(private_network=target.private_network, headers=headers, timeout=timeout)
+    client = mcp_http_client(
+        private_network=target.private_network, server_url=target.url, headers=headers, timeout=timeout
+    )
     client.event_hooks["response"].append(watch)
     toolset = MCPToolset[Any](
         target.url,

@@ -32,7 +32,7 @@ from sibillo_server.auth import Authenticated, Engine
 from sibillo_server.credentials import uuid7
 from sibillo_server.database import UNIQUE_VIOLATION, Identity, sqlstate, transaction
 from sibillo_server.encryption import decrypt, encrypt
-from sibillo_server.endpoints import Address, is_public, resolve, tenant_http_client
+from sibillo_server.endpoints import Address, bounded_client, is_public, resolve
 from sibillo_server.gateway import IMAGES
 
 logger = logging.getLogger(__name__)
@@ -157,12 +157,8 @@ def _record(name: str, outcome: str, started: float, detail: str) -> schemas.Con
 def connection_client(target: Target, timeout: httpx.Timeout | None = None) -> httpx.AsyncClient:
     """The HTTP client that reaches a connection, by its rules (MOD-009, ADR-0061)."""
     limit = timeout or httpx.Timeout(READ_SECONDS, connect=CONNECT_SECONDS)
-    if target.private_network:
-        return httpx.AsyncClient(follow_redirects=False, timeout=limit)
-    # Checked addresses only, and no redirects (ADR-0061).
-    client = tenant_http_client()
-    client.timeout = limit
-    return client
+    # Checked addresses only unless the instance admin set it, no redirects, bounded (ADR-0061, ADR-0128).
+    return bounded_client(private_network=target.private_network, timeout=limit)
 
 
 async def _get(target: Target, path: str, params: dict[str, str] | None = None) -> httpx.Response:
@@ -427,9 +423,24 @@ def _check_admin(identity: Identity) -> None:
         raise errors.permission_denied()
 
 
-def _refused(test: schemas.ConnectionTest) -> errors.ApiError:
+_ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7}\b")
+
+
+def shown_to(identity: Identity, test: schemas.ConnectionTest) -> schemas.ConnectionTest:
+    """A test as the caller may see it: addresses and excerpts of an answer only for the instance admin, whose
+    connections may reach the household's network (MOD-013, ADR-0128)."""
+    if identity.instance_admin:
+        return test
+    steps = [step.model_copy(update={"detail": _ADDRESS.sub("an address", step.detail)}) for step in test.steps]
+    return test.model_copy(update={"steps": steps, "technical_detail": None})
+
+
+def _refused(test: schemas.ConnectionTest, identity: Identity) -> errors.ApiError:
     return errors.ApiError(
-        422, "connection.test_failed", "The connection failed its test", test=test.model_dump(mode="json")
+        422,
+        "connection.test_failed",
+        "The connection failed its test",
+        test=shown_to(identity, test).model_dump(mode="json"),
     )
 
 
@@ -603,9 +614,14 @@ async def create_connection(
 ) -> schemas.Connection:
     _check_admin(identity)
     target, location = _new_target(body, identity)
+    # Only an address the instance admin set may be local: the data egress policy trusts it (ADR-0128).
+    if location == "local" and not target.private_network:
+        raise errors.invalid("/location", "local_needs_instance_admin")
+    # Creating tests the connection, which counts toward the limit (T-31, ADR-0128).
+    _LIMIT.take(identity.tenant_id)
     test, models, server = await listing(target)
     if not test.passed:
-        raise _refused(test)
+        raise _refused(test, identity)
     connection_id = uuid7()
     try:
         async with transaction(engine, identity) as connection:
@@ -700,12 +716,17 @@ async def update_connection(
         target = Target(target.kind, str(body.base_url).rstrip("/"), target.api_key, identity.instance_admin)
     if "api_key" in present:
         target = Target(target.kind, target.base_url, body.api_key, target.private_network)
+    # Only an address the instance admin set may be local (ADR-0128).
+    location_after = body.location if "location" in present else row.location
+    if location_after == "local" and not target.private_network:
+        raise errors.invalid("/location", "local_needs_instance_admin")
     models: list[ListedModel] | None = None
     server: schemas.Server | None = None
     if "base_url" in present or "api_key" in present:
+        _LIMIT.take(identity.tenant_id)
         test, models, server = await listing(target)
         if not test.passed:
-            raise _refused(test)
+            raise _refused(test, identity)
     changes: dict[str, object] = {}
     if "name" in present:
         changes["name"] = body.name
@@ -763,7 +784,7 @@ async def test_connection(
         async with transaction(engine, identity) as connection:
             await store_models(connection, identity.tenant_id, connection_id, models, server)
             await _default_if_none(connection, connection_id, target.kind, models)
-    return test
+    return shown_to(identity, test)
 
 
 @router.post("/tenant/connection-tests", response_model=schemas.ConnectionTest)
@@ -772,7 +793,7 @@ async def test_new_connection(body: schemas.CreateConnectionRequest, identity: A
     target, _ = _new_target(body, identity)
     _LIMIT.take(identity.tenant_id)
     test, _ = await probe(target)
-    return test
+    return shown_to(identity, test)
 
 
 async def offered(connection: AsyncConnection, choice: schemas.ModelChoice, kind: schemas.ModelKind = "chat") -> bool:
@@ -929,6 +950,21 @@ async def _refresh_stale(engine: AsyncEngine, identity: Identity, secret: bytes)
 
 
 _REFRESHING: set[asyncio.Task[None]] = set()
+# One refresh of a tenant's connections at a time, and none again within a few minutes of the last (ADR-0128).
+_REFRESHING_TENANTS: set[uuid.UUID] = set()
+_LAST_REFRESH: dict[uuid.UUID, float] = {}
+REFRESH_BACKOFF_SECONDS = 300
+
+
+def _may_refresh(tenant_id: uuid.UUID) -> bool:
+    now = time.monotonic()
+    if tenant_id in _REFRESHING_TENANTS or now - _LAST_REFRESH.get(tenant_id, -REFRESH_BACKOFF_SECONDS) < (
+        REFRESH_BACKOFF_SECONDS
+    ):
+        return False
+    _REFRESHING_TENANTS.add(tenant_id)
+    _LAST_REFRESH[tenant_id] = now
+    return True
 
 
 @router.get("/models", response_model=schemas.ModelList)
@@ -954,10 +990,11 @@ async def list_models(identity: Authenticated, engine: Engine, secret: SecretKey
         default = await default_model(connection)
         speech = await speech_settings(connection)
         policies = await egress.policies(connection)
-    if any(row.stale for row in rows):
+    if any(row.stale for row in rows) and _may_refresh(identity.tenant_id):
         task = asyncio.create_task(_refresh_stale(engine, identity, secret))
         _REFRESHING.add(task)
         task.add_done_callback(_REFRESHING.discard)
+        task.add_done_callback(lambda _done: _REFRESHING_TENANTS.discard(identity.tenant_id))
     items = [
         schemas.ModelOption(
             connection_id=row.connection_id,

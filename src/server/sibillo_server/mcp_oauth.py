@@ -28,6 +28,8 @@ from sibillo_server.mcp_http import mcp_http_client
 SECONDS = 15
 # The page of the web app the redirect lands on (ADR-0100, point 4).
 REDIRECT_PATH = "/mcp-sign-in"
+# The longest lifetime of a token that is believed (ADR-0128).
+YEAR_SECONDS = 365 * 24 * 3600
 # Where the API serves Sibillo's Client ID Metadata Document (ADR-0100, point 3).
 CLIENT_METADATA_PATH = "/v1/mcp-client"
 CLIENT_NAME = "Sibillo"
@@ -193,8 +195,11 @@ async def _json(client: httpx2.AsyncClient, address: str, step: str) -> dict[str
 
 
 async def discover(url: str, private_network: bool) -> Discovered:
-    """Find the server's authorization server, and check it offers what sign-in needs (ADR-0100, point 2)."""
-    async with mcp_http_client(private_network=private_network, timeout=SECONDS) as client:
+    """Find the server's authorization server, and check it offers what sign-in needs (ADR-0100, point 2).
+
+    Addresses the server names off its own origin are checked, whoever set the server (ADR-0128).
+    """
+    async with mcp_http_client(private_network=private_network, server_url=url, timeout=SECONDS) as client:
         try:
             response = await client.post(
                 url,
@@ -310,7 +315,7 @@ async def settings_for(
         if found.registration_endpoint is None:
             raise OAuthError("register", "the authorization server registers no clients: give a client ID")
         client_id, secret, method = await _register(
-            found.registration_endpoint, private_network, public_origin, server_id
+            found.registration_endpoint, private_network, url, public_origin, server_id
         )
         registration = "dynamic"
     settings = OAuthSettings(
@@ -328,10 +333,10 @@ async def settings_for(
 
 
 async def _register(
-    endpoint: str, private_network: bool, public_origin: str, server_id: uuid.UUID
+    endpoint: str, private_network: bool, server_url: str, public_origin: str, server_id: uuid.UUID
 ) -> tuple[str, str | None, str]:
     """Register Sibillo as a client, dynamically (RFC 7591)."""
-    async with mcp_http_client(private_network=private_network, timeout=SECONDS) as client:
+    async with mcp_http_client(private_network=private_network, server_url=server_url, timeout=SECONDS) as client:
         try:
             response = await client.post(
                 endpoint,
@@ -378,7 +383,12 @@ def authorization_url(
 
 
 async def _token_request(
-    settings: OAuthSettings, secret: str | None, private_network: bool, form: dict[str, str], step: str
+    settings: OAuthSettings,
+    secret: str | None,
+    private_network: bool,
+    server_url: str,
+    form: dict[str, str],
+    step: str,
 ) -> Tokens:
     headers: dict[str, str] = {"Accept": "application/json"}
     form = {**form}
@@ -389,7 +399,7 @@ async def _token_request(
         form["client_id"] = settings.client_id
         if settings.token_endpoint_auth_method == POST and secret is not None:
             form["client_secret"] = secret
-    async with mcp_http_client(private_network=private_network, timeout=SECONDS) as client:
+    async with mcp_http_client(private_network=private_network, server_url=server_url, timeout=SECONDS) as client:
         try:
             response = await client.post(settings.token_endpoint, data=form, headers=headers)
         except httpx2.HTTPError as error:
@@ -400,7 +410,9 @@ async def _token_request(
         answer = None
     if response.status_code != 200 or not isinstance(answer, dict):
         error = cast(dict[str, Any], answer).get("error") if isinstance(answer, dict) else None
-        raise OAuthError(step, f"the token endpoint answered {response.status_code} {error or ''}".strip())
+        # The service's own word, bounded (ADR-0128).
+        said = str(error)[:200] if error else ""
+        raise OAuthError(step, f"the token endpoint answered {response.status_code} {said}".strip())
     tokens = cast(dict[str, Any], answer)
     access = tokens.get("access_token")
     if not isinstance(access, str) or not access or str(tokens.get("token_type", "")).lower() != "bearer":
@@ -410,7 +422,10 @@ async def _token_request(
     return Tokens(
         access_token=access,
         refresh_token=refresh if isinstance(refresh, str) and refresh else None,
-        expires_in=int(expires) if isinstance(expires, int | float) and expires > 0 else None,
+        # Up to a year: a longer lifetime is not believed (ADR-0128).
+        expires_in=min(int(expires), YEAR_SECONDS)
+        if isinstance(expires, int | float) and not isinstance(expires, bool) and 0 < expires < float("inf")
+        else None,
     )
 
 
@@ -429,6 +444,7 @@ async def exchange(
         replace(settings, client_id=sign_in_client_id(settings, public_origin, server_id)),
         secret,
         private_network,
+        url,
         {
             "grant_type": "authorization_code",
             "code": code,
@@ -446,6 +462,7 @@ async def renew(settings: OAuthSettings, secret: str | None, url: str, private_n
         settings,
         secret,
         private_network,
+        url,
         {"grant_type": "refresh_token", "refresh_token": refresh, "resource": settings.resource or url},
         "renew",
     )

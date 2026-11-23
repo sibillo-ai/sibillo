@@ -930,7 +930,8 @@
         "description_too_long": "Its description is longer than 4,000 characters.",
         "schema_too_large": "Its input is described in more than 16 KB.",
         "too_many_tools": "The server lists more than 100 tools.",
-        "requires_tasks": "It works only as a background task, which Sibillo does not support."
+        "requires_tasks": "It works only as a background task, which Sibillo does not support.",
+        "hidden_characters": "Its name, title or description holds characters you cannot see, or that change the order you read it in."
       }
     },
     "services": {

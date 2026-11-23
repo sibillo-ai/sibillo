@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, cast
@@ -30,10 +31,10 @@ router = APIRouter()
 
 # The largest recording a transcription takes, as OpenRouter's and OpenAI's (ADR-0088).
 RECORDING_BYTES = 25 * 1024 * 1024
+_EXTENSION = re.compile(r"[a-z0-9]{1,5}")
 # The file name a recording is sent under: servers tell its format by the extension.
 EXTENSIONS = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/mpeg": "mp3", "audio/wav": "wav"}
 # The most of a provider's error that is logged and said.
-ERROR_CHARS = 300
 # A speech model takes seconds for a long text; the connection test's limit is for listing models (ADR-0088).
 SPEECH_SECONDS = 120
 SPEECH_TIMEOUT = httpx.Timeout(SPEECH_SECONDS, connect=10)
@@ -109,9 +110,9 @@ async def _post(target: Target, path: str, **request: Any) -> httpx.Response:
         logger.warning("speech request to %s failed: %s", path, type(error).__name__)
         raise _failed(f"The speech model could not be reached ({type(error).__name__}).") from None
     if not response.is_success:
-        excerpt = " ".join(response.text[:ERROR_CHARS].split())
-        logger.warning("speech request to %s answered %s: %s", path, response.status_code, excerpt)
-        raise _failed(f"The speech model answered {response.status_code} {response.reason_phrase}: {excerpt}")
+        # The status alone: what the provider wrote may repeat the request, or a key (OBS-003, ADR-0128).
+        logger.warning("speech request to %s answered %s", path, response.status_code)
+        raise _failed(f"The speech model answered {response.status_code} {response.reason_phrase}.")
     return response
 
 
@@ -190,7 +191,9 @@ async def _recording(request: Request) -> tuple[bytes, str]:
         raise errors.invalid("/audio", "empty")
     media = (upload.content_type or "").split(";")[0].strip().lower()
     name = upload.filename or ""
-    extension = EXTENSIONS.get(media) or (name.rpartition(".")[2].lower() if "." in name else "webm")
+    given = name.rpartition(".")[2].lower() if "." in name else ""
+    # Only a short extension of letters and digits reaches a Content-Type (ADR-0128).
+    extension = EXTENSIONS.get(media) or (given if _EXTENSION.fullmatch(given) else "webm")
     return audio, extension
 
 
