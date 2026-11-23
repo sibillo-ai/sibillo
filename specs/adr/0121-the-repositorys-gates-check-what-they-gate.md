@@ -56,9 +56,9 @@ audit of the repository found that the gate can be walked around:
    and lock file, the Dockerfiles of `deploy/images/` and
    `deploy/compose.yaml`; nothing else of `deploy/`.
 4. **Required checks are written down.** REPO-005 names the checks that a
-   merge into `master` requires, and the repository keeps the ruleset of
-   `master` in `.github/rulesets/master.json`, as GitHub exports it, so that
-   a change to it is reviewed like any rule.
+   merge into `master` requires, and the repository keeps the rulesets of
+   `master` in `.github/rulesets/`, as GitHub exports them, so that a change
+   to them is reviewed like any rule.
 5. **The workflow check reads every line.** Events are found at any
    indentation under `on:`; `workflow_run` and `issue_comment` are refused
    beside `pull_request_target`; untrusted expressions are refused in every

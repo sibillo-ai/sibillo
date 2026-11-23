@@ -78,8 +78,8 @@ Changes to specifications, project rules, CI configuration and governance
 files MUST require approval by a maintainer, enforced through code owners
 and branch protection on `master`. A merge into `master` MUST require the
 checks Spec lint, Tooling tests, Traceability, Python checks and Pull
-request policy to pass, and the repository MUST keep the ruleset of
-`master` in `.github/rulesets/master.json` (ADR-0121).
+request policy to pass, and the repository MUST keep the rulesets of
+`master` in `.github/rulesets/` (ADR-0121).
 
 ## REPO-006: English artifacts
 
