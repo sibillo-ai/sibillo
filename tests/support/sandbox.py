@@ -192,12 +192,14 @@ class Driver:
         ]
 
     def sandbox_containers(self) -> list[dict[str, Any]]:
-        """`docker inspect` of every container of the session's sandbox image."""
+        """`docker inspect` of every container of the session's sandbox image, but the driver's canary, which it
+        starts again whenever the egress table recovers, without a workspace (SBX-003)."""
         ids = docker("ps", "-aq", "--filter", f"ancestor={self.image}").split()
         if not ids:
             return []
         # The driver removes sandboxes as they stop (SBX-018): one listed may be gone by now.
-        return cast(list[dict[str, Any]], json.loads(docker("inspect", *ids, check=False) or "[]"))
+        found = cast(list[dict[str, Any]], json.loads(docker("inspect", *ids, check=False) or "[]"))
+        return [item for item in found if f"{SANDBOX_LABEL}.canary" not in (item["Config"]["Labels"] or {})]
 
     def wait_until_ready(self, timeout: float = READY_TIMEOUT_SECONDS) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
