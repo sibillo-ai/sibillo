@@ -8,8 +8,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.tooling.marks import mark
 from tools.check_pr_paths import commit_type, milestone_violations, target_violations, violations
+
+from tests.tooling.marks import mark
 
 
 @mark.spec("REPO-001")

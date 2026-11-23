@@ -23,9 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    from tools.check_specs import REQUIREMENTS_DIR, parse_requirement_file
+    from tools.check_specs import REQUIREMENTS_DIR, Requirement, parse_requirement_file
 except ModuleNotFoundError:  # executed as a script from the tools/ directory
-    from check_specs import REQUIREMENTS_DIR, parse_requirement_file  # type: ignore[no-redef]
+    from check_specs import REQUIREMENTS_DIR, Requirement, parse_requirement_file  # type: ignore[no-redef]  # ty: ignore[unresolved-import]
 
 TESTS_DIR = Path("tests")
 AUTOMATED = {"unit", "integration", "e2e", "design", "security", "eval"}
@@ -82,7 +82,7 @@ def find_references(root: Path) -> tuple[list[Reference], list[str]]:
 
 
 def check(root: Path) -> Report:
-    requirements = {}
+    requirements: dict[str, Requirement] = {}
     for path in sorted((root / REQUIREMENTS_DIR).glob("*.md")):
         parsed, _ = parse_requirement_file(root, path)
         for req in parsed:
@@ -97,7 +97,10 @@ def check(root: Path) -> Report:
             continue
         status = req.fields.get("Status", "")
         if status not in REFERENCEABLE:
-            errors.append(f"{ref.location}: {ref.requirement} is {status or 'without status'}; tests may only reference accepted or implemented requirements")
+            errors.append(
+                f"{ref.location}: {ref.requirement} is {status or 'without status'};"
+                " tests may only reference accepted or implemented requirements"
+            )
             continue
         tested[ref.requirement].append(ref.location)
 

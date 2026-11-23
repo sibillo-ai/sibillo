@@ -46,8 +46,8 @@ class Requirement:
     id: str
     path: Path
     line: int
-    fields: dict[str, str] = field(default_factory=dict)
-    body: list[str] = field(default_factory=list)
+    fields: dict[str, str] = field(default_factory=dict[str, str])
+    body: list[str] = field(default_factory=list[str])
 
 
 def _rel(root: Path, path: Path) -> str:

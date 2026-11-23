@@ -8,8 +8,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-from tests.tooling.marks import mark
 from tools.check_test_durations import main, parse_report, problems
+
+from tests.tooling.marks import mark
 
 REPORT = """<?xml version="1.0" encoding="utf-8"?>
 <testsuites name="pytest tests">

@@ -154,7 +154,8 @@ def merge_violations(sha: str, parents: list[str]) -> list[str]:
         return [f"{commit}: its parents cannot be merged again to check it: {merged.stderr.strip()}"]
     tree, *conflicting = [line for line in merged.stdout.splitlines() if line]
     problems = [
-        f"{commit}: a merge resolves a conflict in {path}, a rules file" for path in conflicting
+        f"{commit}: a merge resolves a conflict in {path}, a rules file"
+        for path in conflicting
         if matches_any(RULES_PATHS, path)
     ]
     changed = git("diff", "--name-only", "--no-renames", tree, sha)

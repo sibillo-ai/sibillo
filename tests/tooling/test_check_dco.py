@@ -8,9 +8,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.tooling.marks import mark
 from tools import check_dco
 from tools.check_dco import Commit, problem
+
+from tests.tooling.marks import mark
 
 
 def commit(message: str, email: str = "ada@example.org", name: str = "Ada", parents: int = 1) -> Commit:

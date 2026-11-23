@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.tooling.marks import mark
 from tools.check_workflows import check
+
+from tests.tooling.marks import mark
 
 SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 GOOD = f"""name: CI

@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.tooling.marks import mark
 from tools import check_specs
+
+from tests.tooling.marks import mark
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
