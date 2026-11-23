@@ -29,6 +29,8 @@ CONTENT_SECURITY_POLICY = "; ".join(
         # Answers read aloud play from audio the app fetched (UX-005).
         "media-src 'self' blob:",
         "connect-src 'self'",
+        # Only the app's own pages, which run in an opaque origin (ART-003, ADR-0125).
+        "frame-src 'self'",
         "worker-src 'self'",
         "manifest-src 'self'",
         "form-action 'self'",

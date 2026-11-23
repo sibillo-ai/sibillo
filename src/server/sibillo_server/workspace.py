@@ -89,14 +89,16 @@ PREVIEW_TYPES: dict[str, str] = {
 }
 # A file opened by itself, as from a link in an answer, runs nothing in the app's origin (UX-020, T-22).
 FILE_POLICY = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"
-# A web page runs as a stranger to the app, an opaque origin, with nothing from the network (ART-003, ADR-0086).
+# A web page runs as a stranger to the app, an opaque origin, with nothing from the network, and no other way out
+# that a policy can close: forms, a base address, frames, WebRTC (ART-003, ADR-0086, ADR-0125).
 PAGE_POLICY = (
     "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline';"
-    " img-src data: blob:; font-src data:; media-src data: blob:; sandbox allow-scripts"
+    " img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none';"
+    " frame-src 'none'; webrtc 'block'; sandbox allow-scripts"
 )
 PAGE_EXTENSIONS = frozenset({".html", ".htm"})
 # The browser's PDF viewer does not open in a sandboxed document; a PDF runs nothing of the app either.
-PDF_POLICY = "default-src 'none'; object-src 'self'; plugin-types application/pdf"
+PDF_POLICY = "default-src 'none'; object-src 'self'"
 SAFE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "private, no-store",
@@ -255,6 +257,10 @@ async def read_workspace_file(
     name = posixpath.basename(path.rstrip("/")) or "file"
     if page and posixpath.splitext(name)[1].lower() not in PAGE_EXTENSIONS:
         raise errors.ApiError(415, "file.not_previewable", "Only a web page runs; download this file instead")
+    # Only to a frame: a page opened as a document of its own, as from a link, could navigate the tab anywhere
+    # with what it holds (ADR-0125).
+    if page and request.headers.get("sec-fetch-dest") != "iframe":
+        raise errors.ApiError(415, "file.not_previewable", "A web page runs only in the app's viewer")
     preview_type = PREVIEW_TYPES.get(posixpath.splitext(name)[1].lower()) if preview else None
     if preview and preview_type is None:
         raise errors.ApiError(415, "file.not_previewable", "This file has no preview; download it instead")
@@ -272,6 +278,7 @@ async def read_workspace_file(
             headers={
                 **SAFE_HEADERS,
                 "Content-Security-Policy": PAGE_POLICY,
+                "X-DNS-Prefetch-Control": "off",
                 "Content-Disposition": _disposition("inline", name),
             },
             background=BackgroundTask(close),
