@@ -31,9 +31,7 @@ dev = [
 [tool.ruff]
 target-version = "py313"
 line-length = 120
-src = ["src/server", "src/sandboxd", "src/netguard", "tests", "evals"]
-# Repository governance tooling is stdlib-only and checked by its own tests.
-extend-exclude = ["tools", "tests/tooling"]
+src = ["src/server", "src/sandboxd", "src/netguard", "tests", "evals", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "SIM", "PT", "RUF"]
@@ -41,19 +39,22 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "SIM", "PT", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "evals/**" = ["S101"]
+# Repository governance tooling is stdlib-only: its tests use unittest, and the tools run git with fixed
+# arguments (ADR-0121).
+"tests/tooling/**" = ["PT009", "PT013", "PT027", "N802", "S603", "S607"]
+"tools/**" = ["S603", "S607"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.13"
-include = ["src", "tests", "evals"]
-exclude = ["tests/tooling", "**/__pycache__", "**/.venv"]
+include = ["src", "tests", "evals", "tools"]
+exclude = ["**/__pycache__", "**/.venv"]
 
 [tool.ty.environment]
 python-version = "3.13"
 
 [tool.ty.src]
-include = ["src", "tests", "evals"]
-exclude = ["tests/tooling"]
+include = ["src", "tests", "evals", "tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
