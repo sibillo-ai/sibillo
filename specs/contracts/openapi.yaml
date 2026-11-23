@@ -2296,8 +2296,9 @@ paths:
         Returns the address of the service's sign-in page, for the client to
         open in the browser. The sign-in is bound to the user, valid for 10
         minutes and used once; the service redirects the browser to
-        `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in`, whose page
-        completes it with `completeMcpSignIn` (AGT-031, ADR-0100). A server
+        `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in/{server_id}`, whose
+        page completes it with `completeMcpSignIn` (AGT-031, ADR-0100,
+        ADR-0122). A server
         whose `auth` is not `oauth` answers `resource.conflict`; a server
         denied to the user, `permission.denied`.
       x-requirements: [AGT-031, TEN-006, TEN-007]
@@ -2313,15 +2314,19 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
-  /mcp-client:
+  /mcp-client/{server_id}:
+    parameters:
+      - $ref: "#/components/parameters/McpServerId"
     get:
       tags: [conversations]
       operationId: getMcpClientMetadata
-      summary: Sibillo's Client ID Metadata Document, for the authorization servers of remote MCP servers.
+      summary: Sibillo's Client ID Metadata Document for one remote MCP server.
       description: |
-        Its address is the client ID of sign-ins to an authorization server
-        that reads Client ID Metadata Documents (ADR-0100, point 3). Served
-        without authentication; it holds nothing secret. Not found when
+        Its address is the client ID of sign-ins to that server, when its
+        authorization server reads Client ID Metadata Documents (ADR-0100,
+        point 3). It lists only that server's redirect address (ADR-0122).
+        Served without authentication, for any identifier, without looking
+        the server up; it holds nothing secret. Not found when
         `SIBILLO_PUBLIC_ORIGIN` is not an `https` origin.
       security: []
       x-requirements: [AGT-031]
@@ -2339,8 +2344,9 @@ paths:
       operationId: completeMcpSignIn
       summary: Complete a sign-in to an `oauth` server with what the redirect carried.
       description: |
-        The `state` must be of a pending sign-in of the same user, which is
-        used up at once; when the authorization server returns its issuer,
+        The `state` must be of a pending sign-in of the same user to the
+        server whose redirect address received it, `server_id`; the sign-in
+        is used up at once (ADR-0122). When the authorization server returns its issuer,
         or said it would, `iss` must be that issuer. Sibillo exchanges the
         code for tokens, tries them by listing the server's tools, and keeps
         them as the user's credential (AGT-030, AGT-031, ADR-0100). Any
@@ -3878,10 +3884,14 @@ components:
           description: For `oauth`, the authorization server found and the client (ADR-0100); `null` otherwise.
           oneOf:
             - type: object
-              required: [issuer, client_id, client_registration, has_client_secret, scope]
+              required: [issuer, client_id, client_registration, has_client_secret, scope, redirect_uri]
               properties:
                 issuer: { type: string, format: uri }
                 client_id: { type: string }
+                redirect_uri:
+                  type: string
+                  format: uri
+                  description: The server's redirect address, to register with the service for a given client (ADR-0122).
                 client_registration:
                   type: string
                   enum: [given, metadata_document, dynamic]
@@ -4097,11 +4107,13 @@ components:
     CompleteMcpSignInRequest:
       type: object
       description: |
-        The query parameters the redirect to `/mcp-sign-in` carried: `code`
-        on success, `error` and `error_description` on failure.
-      required: [state]
+        The server of the redirect address, `/mcp-sign-in/{server_id}`, and
+        the query parameters the redirect carried: `code` on success, `error`
+        and `error_description` on failure.
+      required: [server_id, state]
       additionalProperties: false
       properties:
+        server_id: { $ref: "#/components/schemas/Id" }
         state: { type: string, minLength: 1, maxLength: 200 }
         code: { type: string, minLength: 1, maxLength: 4000 }
         iss: { type: string, maxLength: 2000 }

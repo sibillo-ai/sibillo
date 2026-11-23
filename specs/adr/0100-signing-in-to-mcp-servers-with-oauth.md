@@ -77,7 +77,9 @@ process.
 4. **The redirect lands in the web app.** The redirect address is
    `SIBILLO_PUBLIC_ORIGIN` followed by `/mcp-sign-in`, a page of the web
    app that sends what it received to the API with the user's session, and
-   then shows the server's settings. Without `SIBILLO_PUBLIC_ORIGIN`,
+   then shows the server's settings. Amended by ADR-0122: each server has
+   its own redirect address, `/mcp-sign-in/{server_id}`, and its own client
+   document, `/v1/mcp-client/{server_id}`. Without `SIBILLO_PUBLIC_ORIGIN`,
    `oauth` servers cannot be added. Since the redirect passes only through
    the browser, Sibillo need not be reachable from the internet.
 5. **A sign-in is bound to its user.** `POST

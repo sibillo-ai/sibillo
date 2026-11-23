@@ -154,6 +154,13 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **An OAuth mix-up through Sibillo's client documents.** A malicious
+  remote MCP server of the household can name its own client document of
+  Sibillo at an honest authorization server that reads them and does not
+  send `iss`, and obtain a code of that server for its token endpoint. It
+  needs a tenant admin to add the malicious server and a user to sign in to
+  it; redirect addresses and documents of each server stop every other form
+  of the mix-up (AGT-031, ADR-0122).
 - **Exfiltration from a compromised sandbox.** A sandbox whose conversation
   has internet access can send out the data it contains. This is bounded to
   the conversations whose user gave them internet access, to that

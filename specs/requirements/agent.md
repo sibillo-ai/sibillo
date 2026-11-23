@@ -520,7 +520,10 @@ code flow and PKCE (`S256`), as the MCP authorization specification
 describes. The control plane MUST find the server's authorization server
 from its metadata, and use a client given by a tenant admin, its own Client
 ID Metadata Document when the authorization server reads them, or a client
-registered dynamically. Each sign-in MUST be bound to the user who started it, used
+registered dynamically. Each server MUST have a redirect address and a
+Client ID Metadata Document of its own, the document naming only its
+address, and a sign-in MUST be completed only at the redirect address of its
+server (ADR-0122). Each sign-in MUST be bound to the user who started it, used
 once, and expire after 10 minutes; its `state` MUST be checked, and the
 issuer when the authorization server returns it. Tokens MUST be asked for
 the resource the server's metadata names (`resource`), which MUST be the
