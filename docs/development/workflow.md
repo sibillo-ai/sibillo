@@ -67,6 +67,34 @@ Tests reference requirements with a marker, e.g.
 `@pytest.mark.spec("SBX-005")`, which feeds the traceability check
 (REPO-004).
 
+### Running the checks before a push
+
+While working, run only the tests a change touches, such as
+`uv run --locked pytest tests/integration/test_delegations.py`. Most tests
+start real sandboxes, servers and a database, so the whole suite in one
+pytest session takes about an hour.
+
+Before pushing, run every check of CI with its test parts in parallel, as CI
+runs them (ADR-0137):
+
+```bash
+python3 tools/run_ci_parts.py
+```
+
+It reads the parts and their budgets from `.github/workflows/ci.yml`,
+builds the images and the web app once, runs each part in a pytest session
+of its own, all at once, beside the lint, type, spec and tooling checks, and
+prints a line per part. It takes about as long as the slowest part, plus the
+builds. It runs as many parts at once as Docker's disk holds, about 3 GB
+each with 5 GB kept free, and says so when that is fewer than all.
+`--parts runs tasks` runs only those parts, `--jobs 4` fewer at a time on a
+machine with less memory, and `--logs DIR` keeps the logs and
+reports there. The end-to-end parts are left out: they remove the images a
+local deployment runs from, and CI runs them. Times over CI's budgets are
+reported but fail the run only with `--strict-time`, since one machine
+running every part is slower per part than CI's runners. The web parts need
+Chromium for Playwright (`uv run --locked playwright install chromium`).
+
 Test strength is measured: mutation testing on security-critical modules,
 property-based testing for parsers, policies and permission logic.
 
