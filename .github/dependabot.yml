@@ -1,7 +1,37 @@
 version: 2
+# Every pin of the repository, kept up to date (REPO-012, ADR-0121).
 updates:
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+  - package-ecosystem: npm
+    directory: /src/web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+  - package-ecosystem: docker
+    directories:
+      - /deploy/images/engine
+      - /deploy/images/netguard
+      - /deploy/images/sandbox
+      - /deploy/images/sandboxd
+      - /deploy/images/server
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+  - package-ecosystem: docker-compose
+    directory: /deploy
     schedule:
       interval: weekly
     commit-message:

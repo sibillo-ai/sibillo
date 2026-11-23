@@ -36,6 +36,8 @@ jobs:
         run: python3 -m unittest discover -s tests/tooling -t . -v
       - name: Check the workflows (REPO-007, REPO-008, REPO-009)
         run: python3 tools/check_workflows.py
+      - name: Check images and tools are pinned (REPO-012)
+        run: python3 tools/check_pins.py
 
   traceability:
     name: Traceability
