@@ -824,7 +824,7 @@
     "trust": "Trust",
     "trustLabel": "Trust {{name}}",
     "trustTitle": "Trust {{name}}",
-    "trustHint": "Read every file before you trust this skill. Once trusted, using it no longer makes the assistant ask before it searches or runs commands.",
+    "trustHint": "Read every file before you trust this skill. While it is untrusted, every chat it is on in counts as holding content from elsewhere.",
     "untrusted": "Untrusted:",
     "untrustedHint": "someone other than you wrote it, so using it in a chat makes the assistant ask before it searches the web or runs commands.",
     "fromInstance": "Comes with Sibillo",
