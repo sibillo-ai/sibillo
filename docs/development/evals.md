@@ -47,7 +47,7 @@ whole conversation.
 - Every run starts with a fresh household on a stack of its own, like the
   tests: nothing touches your deployment.
 - The suite plays a careless user: it approves every approval request, for
-  the conversation, and answers every question with "Do what you think
+  the conversation, internet access included, and answers every question with "Do what you think
   best". Integration tests already prove that the approval gate holds; the
   evals measure what the model does once the gate is open.
 - The data is synthetic, and attackers' addresses use the reserved

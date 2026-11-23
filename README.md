@@ -23,8 +23,8 @@ your family, and keeps what it knows inside your home.
   data, and every conversation a private, strongly isolated sandbox. Nothing
   runs on the host on behalf of users.
 - **Capable.** The assistant can search the web, read pages, run code, install
-  software and launch programs — inside each conversation's sandbox, with internet
-  access but no view of your home network. Searches go through a search
+  software and launch programs — inside each conversation's sandbox, which
+  reaches the internet only once you allow it, and never your home network. Searches go through a search
   engine running on your server, never through the model's provider.
 - **Model-agnostic.** Local models (Ollama, llama.cpp, any OpenAI-compatible
   server) or remote providers (e.g. OpenRouter), with per-user and per-space
@@ -315,8 +315,8 @@ so the data egress policy applies to it as to the rest of the chat.
 
 An item the assistant wrote after reading a web page, a command's output or
 an attached file is marked untrusted: it could have been planted by what it
-read. Until its owner saves it, the assistant treats it with caution, and
-asks before searching or running commands. Deleting an item deletes it from
+read. Until its owner saves it, the assistant treats it with caution, and a
+request for internet access says that the chat holds content from elsewhere. Deleting an item deletes it from
 the database for good. It stays in three places outside memory: the chat
 where the assistant wrote it, until that chat is deleted; backup archives,
 until they are rotated; and, for remote models, whatever the provider keeps
@@ -341,8 +341,9 @@ A skill's files are in the sandbox, read-only, at `/skills`: the assistant
 runs a skill's scripts there, like any command, and cannot change them. A
 skill someone else wrote, uploaded, imported, or saved by the assistant after
 it read a web page or a command's output, is marked untrusted: using one
-makes the assistant ask before it searches the web or runs commands, until
-its owner reads its files and marks it trusted. Imports are downloaded in a
+makes the chat count as holding content from elsewhere, which a request for
+internet access then says, until its owner reads its files and marks it
+trusted. Imports are downloaded in a
 sandbox of their own, never by the server. Skills are kept in the database,
 so backups hold them.
 
@@ -355,6 +356,22 @@ who asked (ADR-0075). It keeps no logs. The engines it uses are set in
 `deploy/search/settings.yml`: SearXNG's defaults, plus Google. Edit the file
 and run `docker compose restart search` to change them. Pages the assistant
 reads are fetched from the conversation's sandbox.
+
+**Internet access**
+
+A chat has no internet access until you give it (AGT-034, ADR-0113): its
+sandbox has no network at all, and the assistant can neither search the web
+nor read pages. Commands need no approval: without network they cannot
+send anything out, and the tools of the sandbox need none. When the work
+needs the internet, the assistant asks once, for all it is about to do:
+**Deny**, **Allow for this turn** or **Allow in this chat**. The request
+says what the assistant could then do, that what the chat holds could be
+sent out, and whether the chat holds content from elsewhere that could be
+steering it. A denial holds for the rest of the turn. **Chat settings**
+lists internet access allowed in the chat, to withdraw it: the sandbox
+loses its network at once. A fork starts without it, and no setting gives it
+to new chats. In hands-free mode, the request plays a sound of its own, is
+said aloud, and is answered only by its large buttons, never by voice.
 
 Every setting is listed in the
 [configuration contract](specs/contracts/configuration.md).
@@ -392,8 +409,7 @@ description, and a server could hide instructions in it. A tool that
 changes afterwards is not offered until it is accepted again; **Refresh**
 shows what changed. The assistant asks before every call, showing its
 arguments and the server's address, and treats what comes back as content
-from elsewhere: after a call, it asks before searching the web or running
-commands too. In **Settings**, then **Tool permissions**, an administrator
+from elsewhere: after a call, a request for internet access says so. In **Settings**, then **Tool permissions**, an administrator
 can deny a server to a member, and each person switches a server on or off
 for themselves or for a chat, beside the other tools. A server on the
 household's network, such as `http://homeassistant.local:8123/api/mcp`, can
@@ -429,14 +445,14 @@ task has instructions, written as in a chat, and one or more triggers:
 
 Each time it runs, the task starts a new conversation, listed with the
 others and under the task, and the notification says it is ready. Nobody is
-there to approve calls, so a task carries **grants**: the tools it may use
-without asking, such as **Search the web**, or one exact call, such as a
-fixed command. A call no grant covers is denied without asking, and the
-answer says what could not be done; continue the conversation to do it with
-the usual approvals. Sibillo refuses grants that would let content read on
-the way send private data out: a task that searches the web can't also read
-files or use memory, and a task started by an event can't search the web
-unattended. A task runs at most 10 times an hour and one run at a time; the
+there to approve calls, so a task carries **grants**: **Internet access**,
+for the web and its sandbox's network, the tools it may use without asking,
+such as **Read files**, or one exact call, such as a fixed command. A call
+no grant covers is denied without asking, and the answer says what could not
+be done; continue the conversation to do it with the usual approvals.
+Sibillo refuses grants that would let content read on the way send private
+data out: a task with internet access can't also read files or use memory,
+and a task started by an event can't have internet access. A task runs at most 10 times an hour and one run at a time; the
 worker checks for due tasks every 30 seconds (`SIBILLO_TASK_SWEEP_SECONDS`).
 
 **Run now** starts a task at once, also while it is paused, to try it;
@@ -452,7 +468,7 @@ The assistant can search your earlier chats and read one, to pick up where
 you left off or say how a task went (AGT-032, AGT-033). It never sees
 temporary chats, what you rewound, or anyone else's. If a chat it reads
 holds content from elsewhere, such as web pages, the current chat counts as
-holding it too, and asks before searching the web or running commands.
+holding it too, and a request for internet access says so.
 Switch **Your other chats** off among the tools to keep each chat apart.
 
 **Sandboxes and workspaces**
