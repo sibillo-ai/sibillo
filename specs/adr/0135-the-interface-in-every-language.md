@@ -40,11 +40,15 @@ a layout that reads from right to left.
    reviewed is marked as translated automatically. A contributor who reviews
    a translation completes it and adds its tag to `reviewed`.
 3. **Translations follow the English text.** `src/web/src/locales/sources.json`
-   records, for each language but English and each of its keys, a hash of the
-   English text it was translated from. A translation whose English text has
-   changed since is stale, and CI fails on it, as on a key `en.json` no longer
-   has, and on a translation whose placeholders (`{{name}}`) differ from the
-   English text's. A script of the web client, `pnpm translate`, translates
+   records, for each language but English and each of its keys, the source
+   the text was translated from, as `{"<tag>": {"<key>": "<source>"}}`. The
+   source is the first 16 hexadecimal digits of the SHA-256 of the English
+   text in UTF-8; for a plural form, of the English texts of every plural
+   form of its key, in the order of their names, joined by a line feed. A
+   translation whose English text has changed since is stale, and CI fails on
+   it, as on a key `en.json` no longer has, and on a translation whose
+   placeholders (`{{name}}`) differ from the English text's; a plural form may
+   leave out `{{count}}`, as "un file" does. A script of the web client, `pnpm translate`, translates
    the missing and stale keys of the model-made languages with a model, given
    an OpenAI-compatible endpoint and key from the environment, and records
    their sources; `pnpm translate --prune` only removes stale and unknown
@@ -66,9 +70,14 @@ a layout that reads from right to left.
    language. Until it arrives, the interface shows English.
 6. **Plurals, dates and numbers by the platform.** Plural forms use i18next's
    plural keys, which follow `Intl.PluralRules`, so each language has the
-   forms its rules need (`_one`, `_few`, `_many`, `_other` …). Dates, times,
-   numbers, sizes, durations and costs are formatted by `Intl` in the
-   interface language, never by hand or in a fixed locale.
+   forms its rules need (`_one`, `_few`, `_many`, `_other` …). A key with
+   plural forms has no form of its own: in English, `<key>_one` and
+   `<key>_other`. Every string that shows a count is such a key, chosen by
+   the count, never by the code comparing the count to 1; a reviewed
+   translation has every form the language's rules name, and a model-made one
+   only forms they name. Dates, times, numbers, sizes, durations and costs
+   are formatted by `Intl` in the interface language, never by hand
+   (`toFixed`, `toPrecision`) or in a fixed or default locale.
 7. **Right to left.** The document's `lang` and `dir` follow the interface
    language. The styles use logical properties (`margin-inline-start`,
    `inset-inline-end`, `text-align: start` …), never physical left and
