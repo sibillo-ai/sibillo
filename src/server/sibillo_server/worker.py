@@ -833,7 +833,12 @@ def _deferred_results(run: RunWorkflowInput, offered: frozenset[str] = frozenset
             approvals[tool_call_id] = ToolDenied(CHANGED)
         elif decision.get("approved"):
             approvals[tool_call_id] = True
-            metadata[tool_call_id] = {"scope": decision.get("scope"), "reason": decision.get("reason")}
+            metadata[tool_call_id] = {
+                "scope": decision.get("scope"),
+                "reason": decision.get("reason"),
+                # The folder `save_skill` may save, as the user approved it (ADR-0124).
+                "skill_digest": decision.get("skill_digest"),
+            }
         else:
             approvals[tool_call_id] = ToolDenied(EXPIRED if decision.get("expired") else DENIED)
     return DeferredToolResults(calls=run.answers or {}, approvals=dict(approvals), metadata=metadata)

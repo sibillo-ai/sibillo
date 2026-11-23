@@ -242,6 +242,7 @@ async def create_run(
             "reason": decision.reason,
             "expired": expired,
             "tool": decision.tool,
+            "skill_digest": decision.skill_digest,
         }
         internet = decision.reason == "internet_access"
         if internet and not decision.approved:

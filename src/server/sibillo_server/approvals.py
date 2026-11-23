@@ -31,6 +31,7 @@ from sibillo_server.database import Identity, transaction
 from sibillo_server.gateway import RunDeps
 from sibillo_server.internet import current_allowances
 from sibillo_server.mcp_runs import offered_names, shown
+from sibillo_server.skills import save_preview
 from sibillo_server.task_policy import NOT_GRANTED, Grant, covering, refusal
 from sibillo_server.tool_policy import (
     DENIED_INTERNET_ACCESS,
@@ -41,6 +42,9 @@ from sibillo_server.tool_policy import (
     has_external_effects,
     has_untrusted_content,
 )
+
+# Saves a folder as a skill: its approval shows the skill (AGT-026, ADR-0124).
+SAVE_SKILL = "save_skill"
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +194,20 @@ class Approvals(AbstractCapability[RunDeps]):
                 # A remote MCP server's tool says what it is and where the call goes (AGT-018, ADR-0099).
                 if (described := shown(deps, call.tool_name)) is not None:
                     metadata["approval"] = described
+                # A save shows the skill its folder holds now, and saves only that (AGT-026, ADR-0124).
+                if call.tool_name == SAVE_SKILL:
+                    preview = await save_preview(deps, str(args.get("path", "")))
+                    if isinstance(preview, str):
+                        return f"The skill was not saved: {preview}"
+                    skill = cast(dict[str, Any], preview["skill"])
+                    metadata["skill_digest"] = preview["digest"]
+                    metadata["approval"] = {
+                        "action": f"Save the skill {skill['name']}",
+                        "destination": "Your skills, given to your later conversations"
+                        + (", replacing your skill of that name" if skill["replaces"] else ""),
+                        "data": skill["description"],
+                        "skill": skill,
+                    }
                 # A proposed task says whether the run holds untrusted content (TSK-006, ADR-0106).
                 if call.tool_name in TASK_PROPOSALS:
                     metadata["untrusted_content"] = untrusted

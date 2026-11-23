@@ -14,6 +14,7 @@ marks them trusted, and loading one makes the run untrusted (AGT-025).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import posixpath
 import re
@@ -535,7 +536,8 @@ async def replace_skill(
         text(
             "UPDATE skills SET name = :name, description = :description, size_bytes = :size, updated_at = now(),"
             " origin = coalesce(CAST(:origin AS text), origin),"
-            " untrusted = coalesce(CAST(:untrusted AS boolean), untrusted),"
+            # A replace never makes a skill trusted: only the user does (AGT-025, ADR-0124).
+            " untrusted = untrusted OR coalesce(CAST(:untrusted AS boolean), false),"
             " source_url = CASE WHEN CAST(:origin AS text) IS NULL THEN source_url ELSE CAST(:source_url AS text) END,"
             " conversation_id = CASE WHEN CAST(:origin AS text) IS NULL THEN conversation_id"
             " ELSE CAST(:conversation_id AS uuid) END WHERE id = :id"
@@ -1164,32 +1166,16 @@ async def save_skill(ctx: RunContext[RunDeps], path: str) -> str:
         path: The folder's absolute path in the sandbox, such as `/scratch/budget-report`.
     """
     deps = ctx.deps
-    folder = posixpath.normpath(path.strip())
-    if not folder.startswith("/") or folder in ("/", SKILLS_ROOT) or folder.startswith(f"{SKILLS_ROOT}/"):
-        return "The skill was not saved: give the absolute path of a folder of yours, outside /skills."
-    backend = SandboxBackend(
-        SandboxDriver(deps.sandboxd_url, deps.sandboxd_token),
-        str(deps.identity.tenant_id),
-        str(deps.identity.user_id),
-        str(deps.conversation_id),
-    )
-    target = f"/workspace/{TRANSFER}"
-    copied = await backend.run(  # noqa: S604 - in the sandbox
-        f"if [ ! -f {shlex.quote(folder)}/{SKILL_MD} ]; then echo 'no SKILL.md in the folder' >&2; exit 3; fi;"
-        f" rm -rf {target} && cp -a {shlex.quote(folder)} {target}",
-        shell=True,
-    )
-    try:
-        if copied.exit_code != 0:
-            return f"The skill was not saved: {(copied.stderr or copied.stdout).strip()[:300]}"
-        try:
-            data = await _zipped(SandboxDriver(deps.sandboxd_url, deps.sandboxd_token), backend.path, TRANSFER)
-            entries = await asyncio.to_thread(zip_entries, data, limit_files=SKILL_FILES, limit_bytes=SKILL_BYTES)
-            package = await validated(entries, posixpath.basename(folder))
-        except SkillError as error:
-            return f"The skill was not saved: {error}"
-    finally:
-        await backend.run(f"rm -rf {target}", shell=True)  # noqa: S604 - in the sandbox
+    package = await read_folder(deps, path)
+    if isinstance(package, str):
+        return f"The skill was not saved: {package}"
+    # The skill saved is the one the user approved, as its folder was when they were asked (ADR-0124).
+    approved = cast(dict[str, Any], ctx.tool_call_metadata or {}).get("skill_digest")
+    if ctx.tool_call_approved and approved is not None and approved != skill_digest(package):
+        return (
+            "The skill was not saved: its folder changed after the user approved it. Tell the user, and ask before"
+            " saving it again."
+        )
     if package.name in BUILTIN_FILES:
         return f"The skill was not saved: {package.name!r} is the name of a built-in skill. Choose another name."
     provenance = Provenance(
@@ -1211,6 +1197,67 @@ async def save_skill(ctx: RunContext[RunDeps], path: str) -> str:
         except errors.ApiError as error:
             return f"The skill was not saved: {error.extra.get('detail') or error.title}."
     return f"{done} the skill {package.name!r}, with {len(package.files)} files. It is on in later runs."
+
+
+async def read_folder(deps: RunDeps, path: str) -> SkillPackage | str:
+    """The skill a folder of the sandbox holds, checked as a save would; or why it is not one."""
+    folder = posixpath.normpath(path.strip())
+    if not folder.startswith("/") or folder in ("/", SKILLS_ROOT) or folder.startswith(f"{SKILLS_ROOT}/"):
+        return "give the absolute path of a folder of yours, outside /skills."
+    backend = SandboxBackend(
+        SandboxDriver(deps.sandboxd_url, deps.sandboxd_token),
+        str(deps.identity.tenant_id),
+        str(deps.identity.user_id),
+        str(deps.conversation_id),
+    )
+    target = f"/workspace/{TRANSFER}"
+    copied = await backend.run(  # noqa: S604 - in the sandbox
+        f"if [ ! -f {shlex.quote(folder)}/{SKILL_MD} ]; then echo 'no SKILL.md in the folder' >&2; exit 3; fi;"
+        f" rm -rf {target} && cp -a {shlex.quote(folder)} {target}",
+        shell=True,
+    )
+    try:
+        if copied.exit_code != 0:
+            return (copied.stderr or copied.stdout).strip()[:300]
+        try:
+            data = await _zipped(SandboxDriver(deps.sandboxd_url, deps.sandboxd_token), backend.path, TRANSFER)
+            entries = await asyncio.to_thread(zip_entries, data, limit_files=SKILL_FILES, limit_bytes=SKILL_BYTES)
+            return await validated(entries, posixpath.basename(folder))
+        except SkillError as error:
+            return str(error)
+    finally:
+        await backend.run(f"rm -rf {target}", shell=True)  # noqa: S604 - in the sandbox
+
+
+def skill_digest(package: SkillPackage) -> str:
+    """A digest of a skill's files: their paths, contents and whether each is executable (ADR-0124)."""
+    digest = hashlib.sha256()
+    for path, file in sorted(package.files.items()):
+        digest.update(f"{path}\0{int(file.executable)}\0{len(file.content)}\0".encode())
+        digest.update(file.content)
+    return digest.hexdigest()
+
+
+async def save_preview(deps: RunDeps, path: str) -> dict[str, Any] | str:
+    """What the approval of a save shows, read when it is asked: the skill, its digest; or why it is not one."""
+    package = await read_folder(deps, path)
+    if isinstance(package, str):
+        return package
+    if package.name in BUILTIN_FILES:
+        return f"{package.name!r} is the name of a built-in skill. Choose another name."
+    async with transaction(deps.engine, deps.identity) as connection:
+        replaces = (
+            await connection.execute(text("SELECT 1 FROM skills WHERE name = :name"), {"name": package.name})
+        ).first() is not None
+    return {
+        "skill": {
+            "name": package.name,
+            "description": package.description,
+            "files": sorted(package.files),
+            "replaces": replaces,
+        },
+        "digest": skill_digest(package),
+    }
 
 
 async def _while_saving_is_possible(ctx: RunContext[RunDeps], tool_def: ToolDefinition) -> ToolDefinition | None:

@@ -59,6 +59,7 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
         described = cast(dict[str, Any], shown)
         action = str(described.get("action") or action)
         destination = str(described.get("destination") or destination)
+        data = str(described.get("data") or data)
     request: dict[str, Any] = {
         "tool": call.tool_name,
         "arguments": arguments,
@@ -68,6 +69,9 @@ def approval_request(requests: DeferredToolRequests, call: Any) -> dict[str, Any
         "reason": metadata.get("reason", "consequential"),
         "scopes": list(metadata.get("scopes") or ["once"]),
     }
+    # A save shows the skill it saves, as its folder was read when it asked (AGT-026, ADR-0124).
+    if isinstance(shown, dict) and isinstance(cast(dict[str, Any], shown).get("skill"), dict):
+        request["skill"] = cast(dict[str, Any], shown)["skill"]
     # A proposed task says whether the run that proposed it held untrusted content (TSK-006, ADR-0106).
     if request["reason"] == "task_proposal":
         request["untrusted_content"] = bool(metadata.get("untrusted_content"))
@@ -187,6 +191,8 @@ class Decision:
     reason: str
     approved: bool
     scope: str | None = None
+    # For `save_skill`, the digest of the folder the user approved (ADR-0124).
+    skill_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -219,7 +225,16 @@ def _decision(requests: DeferredToolRequests, call: Any, entry: dict[str, Any]) 
     scope = decided.get("scope")
     if scope not in offered["scopes"]:
         raise _invalid("Approve with one of the scopes the request offers")
-    return Decision(call.tool_call_id, call.tool_name, reason, approved=True, scope=str(scope))
+    stored: Any = requests.metadata.get(call.tool_call_id) or {}
+    digest = cast(dict[str, Any], stored).get("skill_digest") if isinstance(stored, dict) else None
+    return Decision(
+        call.tool_call_id,
+        call.tool_name,
+        reason,
+        approved=True,
+        scope=str(scope),
+        skill_digest=digest if isinstance(digest, str) else None,
+    )
 
 
 def answer(stored: Any, resume: list[dict[str, Any]], expires_at: datetime.datetime | None = None) -> Answers:
