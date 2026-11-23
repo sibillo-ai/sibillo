@@ -488,6 +488,23 @@ holds content from elsewhere, such as web pages, the current chat counts as
 holding it too, and a request for internet access says so.
 Switch **Your other chats** off among the tools to keep each chat apart.
 
+**Delegated work**
+
+The assistant can hand a self-contained piece of work to another run of
+itself, with a fresh context: it writes a brief, the delegated run works on
+it in the same sandbox, and its report comes back as the result of the call
+(AGT-035 to AGT-038, ADR-0136). Several delegations of one answer run at the
+same time, up to four at once and ten per answer, which suits independent
+parts of a job, long work whose details the chat doesn't need, or a second
+opinion formed from the brief alone. A delegated run sees nothing of the
+chat but its brief, can't ask you anything, and is denied, without asking,
+every call that would need your approval, such as internet access the chat
+doesn't have; its report says what it needed. Whatever it read counts as
+read in the chat, as if the assistant had read it itself. Stopping the
+answer stops its delegated runs, and their cost counts toward the answer's.
+Switch **Delegated work** off among the tools to keep every answer in one
+run.
+
 **Sandboxes and workspaces**
 
 Every conversation has a sandbox of its own, which no other conversation
