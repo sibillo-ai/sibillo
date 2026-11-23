@@ -95,6 +95,13 @@ runs as expected; every grant check has security tests that try to break it.
 
 ## Phase 3 — Connected devices
 
+**First:** the interface in every language of the preferred language's list,
+English and Italian reviewed by a person and the others translated by a
+model, with right-to-left layout and the plurals, dates and numbers of each
+language (I18N-002, I18N-004 to I18N-006, ADR-0135). It moved here from
+phase 4, ahead of the devices, so that households beyond the first use
+Sibillo in their own language.
+
 **Goal:** the assistant helps with the household's own machines: diagnosing a
 server, installing updates, checking logs and firewall rules, editing files,
 from any device where the user is signed in.
@@ -120,7 +127,7 @@ Includes: multi-step research producing reports, browser automation in the
 sandbox, connectors over open protocols (calendar, mail,
 files, home automation through mediated tools), OpenID Connect (AUTH-003),
 budgets (MOD-004), debug mode (OBS-004), signed multi-architecture images,
-upgrade guarantees, English and Italian translations, release gating by evals.
+upgrade guarantees, release gating by evals.
 
 **Exit criteria:** first public release `0.1.0`; installation and upgrade
 documentation verified on a clean machine; public announcement.
@@ -131,8 +138,9 @@ documentation verified on a clean machine; public announcement.
 
 Candidates: tenant administration for operators hosting several households,
 Kata Containers and Kubernetes providers, a native mobile app with push
-notifications, community translations, a second maintainer and the governance
-transition described in [GOVERNANCE.md](GOVERNANCE.md).
+notifications, reviews of the model-made translations by their communities,
+a second maintainer and the governance transition described in
+[GOVERNANCE.md](GOVERNANCE.md).
 
 ## Later
 

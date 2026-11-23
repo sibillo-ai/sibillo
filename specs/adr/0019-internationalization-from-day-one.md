@@ -17,6 +17,10 @@ We will externalize every user-facing string from the first line of client
 and server code, ship English and Italian from the first release, and let
 the assistant answer in each user's preferred language.
 
+Amended by ADR-0135: the interface comes in every language of the list of
+ADR-0103, English and Italian reviewed by a person, the others translated
+by a model.
+
 ## Consequences
 
 - Slightly more ceremony when adding UI text.
