@@ -25,6 +25,7 @@ import { type AttachedFile, download, downloadUrl, formatSize, isImagePath, list
 import { ApprovalCard, scopesOf } from "./Approvals";
 import { ChatSettings } from "./AssistantSettings";
 import { Composer } from "./Composer";
+import { InternetSwitch } from "./InternetSwitch";
 import { Markdown } from "./Markdown";
 import { QuestionCard, TaskList } from "./Questions";
 import { Sprite } from "./Sprite";
@@ -245,6 +246,35 @@ export function ConversationView() {
     ask(0, []);
   }, [voiceAsks, running, requested, pendingKey]);
 
+  // Internet access, for the conversation or for the turn that is going on (UX-042, ADR-0115).
+  const allowances = conversation.data?.allowances;
+  const [wanted, setWanted] = useState<{ key: string; on: boolean } | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const stateKey = `${conversationId}:${allowances?.internet_access}:${allowances?.turn_internet_access}`;
+  const online = wanted?.key === stateKey ? wanted.on : Boolean(allowances?.internet_access || allowances?.turn_internet_access);
+  // The turn's internet access shows while the turn goes on: read again as a run starts.
+  useEffect(() => {
+    if (running) void queries.invalidateQueries({ queryKey: ["conversation", conversationId] });
+  }, [running, queries, conversationId]);
+  async function switchInternet(on: boolean) {
+    setWanted({ key: stateKey, on });
+    const waiting = approvals.find((interrupt) => interrupt.metadata?.internet_access);
+    // A request that waits, alone, is answered as "Allow in this chat".
+    if (on && waiting && pendingInterrupts.length === 1 && !running) {
+      start({ conversationId, text: "", resume: [{ interruptId: waiting.id, status: "resolved", payload: { approved: true, scope: "conversation" } }] });
+      return;
+    }
+    setSwitching(true);
+    try {
+      await updateConversation(conversationId, { allowances: { internet_access: on, tools: allowances?.tools ?? [] } });
+      await queries.invalidateQueries({ queryKey: ["conversation", conversationId] });
+    } catch {
+      setWanted(null);
+    } finally {
+      setSwitching(false);
+    }
+  }
+
   // A temporary conversation goes when its user leaves it (CNV-011).
   const temporary = conversation.data?.temporary === true;
   useEffect(() => {
@@ -397,6 +427,7 @@ export function ConversationView() {
             <ModelSelect compact value={conversation.data.model ?? null} onChange={(choice) => void chooseModel(choice)} />
           </span>
         )}
+        {conversation.data && <InternetSwitch checked={online} disabled={switching} onChange={(on) => void switchInternet(on)} />}
         <Button variant="ghost" size="sm" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen} aria-label={t("files.title")}>
           <FolderOpen aria-hidden="true" />
           <span className="max-md:hidden">{t("files.title")}</span>

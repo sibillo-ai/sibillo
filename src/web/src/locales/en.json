@@ -1106,5 +1106,9 @@
   "ui": {
     "close": "Close",
     "loading": "Loading…"
+  },
+  "internet": {
+    "switch": "Internet access",
+    "switchHint": "Lets the assistant search the web, read pages and use the internet"
   }
 }

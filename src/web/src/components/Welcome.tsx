@@ -4,13 +4,14 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
 
 import type { ModelChoice, User } from "../api/client";
-import { createConversation, useRefreshConversations } from "../conversations";
+import { createConversation, updateConversation, useRefreshConversations } from "../conversations";
 import { useModels } from "../models";
 import { useNotify } from "../notices";
 import { messageOf, takeShare } from "../share";
 import { Button, IconButton, TopBar } from "../ui";
 import { type AttachedFile, useAttachments } from "../workspace";
 import { Composer } from "./Composer";
+import { InternetSwitch } from "./InternetSwitch";
 import { ModelSelect } from "./ModelPicker";
 import { MenuButton } from "./Shell";
 import { Sprite } from "./Sprite";
@@ -31,6 +32,8 @@ export function Welcome({ me }: { me: User }) {
   const [chosen, setChosen] = useState<ModelChoice | null>(null);
   // Not listed, and deleted when left (CNV-011).
   const [temporary, setTemporary] = useState(false);
+  // Given to the conversation as it is created, never by default (UX-042, ADR-0115).
+  const [internet, setInternet] = useState(false);
   const quotes = t("quotes", { returnObjects: true }) as Quote[];
   const [index, setIndex] = useState(() => Math.floor(Math.random() * quotes.length));
   const quote = quotes[index % quotes.length];
@@ -42,9 +45,15 @@ export function Welcome({ me }: { me: User }) {
   // The conversation is created with the first attachment, whose workspace receives it, or else with the first message.
   const created = useRef<Promise<string> | null>(null);
   const conversation = useCallback(() => {
-    created.current ??= createConversation(chosen ?? undefined, temporary).then((made) => made.id);
+    created.current ??= createConversation(chosen ?? undefined, temporary, internet).then((made) => made.id);
     return created.current;
-  }, [chosen, temporary]);
+  }, [chosen, temporary, internet]);
+
+  // Turned on or off after an attachment created the conversation: the conversation follows.
+  function switchInternet(on: boolean) {
+    setInternet(on);
+    if (created.current) void created.current.then((id) => updateConversation(id, { allowances: { internet_access: on, tools: [] } }));
+  }
   const attachments = useAttachments(conversation);
 
   // A share from another app, which the service worker kept: offered once, and sent only by the user (UX-006, ADR-0102).
@@ -88,6 +97,7 @@ export function Welcome({ me }: { me: User }) {
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
       {/* The top bar: on a phone the button for the conversation list, and the temporary chat at its end (UX-039). */}
       <TopBar start={<MenuButton />}>
+        <InternetSwitch checked={internet} onChange={switchInternet} />
         <Button
           // Ghost, as a toolbar's button is; with a border when it is on, which is what shows that it is.
           variant={temporary ? "secondary" : "ghost"}
