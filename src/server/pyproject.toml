@@ -16,7 +16,7 @@ dependencies = [
     "python-dateutil==3.0.0",
     "pydantic-ai-slim[ag-ui,dbos,mcp,openai]==2.64.0",
     "python-multipart==0.0.32",
-    "sqlalchemy[asyncio]==2.1.6",
+    "sqlalchemy[asyncio]==2.1.9",
     "tzdata==2026.6",
     "uvicorn==0.54.0",
     "webauthn==3.0.1",
