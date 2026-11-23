@@ -304,7 +304,11 @@ each person can choose a preferred language (I18N-003, ADR-0103): the
 assistant then uses it for messages without a language of their own, such as
 a shared link, a pasted equation or a file sent without a word, while a
 message in another language, or a request for one, still gets its answer in
-that language. The interface itself is in English for now.
+that language. The interface follows the same preference, or the browser's
+language when there is none: it comes in every language of that list, with
+English and Italian reviewed by a person and the others translated by a model
+(I18N-002, I18N-004, ADR-0135). Arabic, Hebrew, Persian and Urdu read from
+right to left.
 
 **Memory**
 
