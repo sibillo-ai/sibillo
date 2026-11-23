@@ -74,8 +74,15 @@ class CheckPinsTest(unittest.TestCase):
             (root / ".github" / "dependabot.yml").write_text(dependabot)
             return check(root)
 
-    def assertProblem(self, fragment: str, **files: object) -> None:
-        found = self.problems(**files)  # type: ignore[arg-type]
+    def assertProblem(
+        self,
+        fragment: str,
+        dockerfile: str = DOCKERFILE,
+        compose: str = COMPOSE,
+        package: dict[str, str] | None = None,
+        dependabot: str = DEPENDABOT,
+    ) -> None:
+        found = self.problems(dockerfile, compose, package, dependabot)
         self.assertTrue(any(fragment in problem for problem in found), found)
 
     def test_pinned_files_pass(self) -> None:
