@@ -34,7 +34,9 @@ other component can read a workspace volume.
    - `database.dump`: `pg_dump` of the database in its custom format, made
      as PostgreSQL's superuser, so row-level security hides nothing;
    - `secret-key`: the instance's `SIBILLO_SECRET_KEY`;
-   - `workspaces/<tenant>/<user>.tar`: every user's workspace.
+   - `workspaces/<tenant>/<user>.tar`: every user's workspace. Since
+     ADR-0078 each conversation has a workspace of its own:
+     `workspaces/<tenant>/<user>/<conversation>.tar` (ADR-0130).
 2. **Workspaces go through the driver** (SBX-020): it streams a workspace as
    a tar archive, and replaces a stopped sandbox's workspace with one. The
    backup never touches Docker.
@@ -62,7 +64,8 @@ other component can read a workspace volume.
 6. **One workspace from an older archive:** `restore --workspace USERNAME
    FILE` replaces only that user's workspace, in a running instance, after
    stopping their sandbox: the way back from a workspace that went wrong
-   (T-33).
+   (T-33). Each workspace is replaced through a container of its own, the
+   sandbox removed first (ADR-0129).
 7. **Every night, by itself** (OPS-010): a `backup` service in the Compose
    deployment makes an archive every day at `SIBILLO_BACKUP_TIME` (03:00 UTC by
    default) and keeps the newest `SIBILLO_BACKUP_KEEP` (14). It writes the

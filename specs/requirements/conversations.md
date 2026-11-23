@@ -167,7 +167,8 @@ A temporary conversation MUST NOT be listed with the others or found by
 search, MUST NOT be forked, moved into a folder, pinned or archived, and
 MUST NOT create or use memory items. It MUST be physically deleted, with its
 runs and its workspace, when the user leaves it in a client or signs out, and
-at the latest 24 hours after its last activity. Its entries in the cost
+at the latest 24 hours after its last activity; a backup made meanwhile keeps
+it until the archive is pruned (OPS-010). Its entries in the cost
 ledger are kept, without content. Clients MUST show that a conversation is
 temporary while it is open (ADR-0082).
 

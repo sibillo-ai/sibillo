@@ -37,7 +37,8 @@ Deleting a memory item MUST remove it and every derived copy (embeddings,
 search indexes, caches) so that it can no longer influence the assistant.
 A user MUST be able to delete all their memory items at once. Runs MUST NOT
 keep copies of memory items in their durable inputs or in stored messages
-(ADR-0095).
+(ADR-0095), but for the arguments and results of the memory tools a run
+called, which are the conversation's own and go with it.
 
 ## MEM-004: Memory is private
 

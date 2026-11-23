@@ -34,7 +34,8 @@ tested.
 4. **Defaults**, all configurable by the instance admin
    ([configuration contract](../contracts/configuration.md)): 1 CPU, 1 GiB of
    memory, 512 processes (`RLIMIT_NPROC`), 300 seconds per command, 1 MiB of
-   command output returned, and sandboxes stopped after 30 idle minutes. The
+   command output returned, and sandboxes stopped after 30 idle minutes
+   (since ADR-0078, 5 idle minutes by default, `SIBILLO_SANDBOX_IDLE_MINUTES`). The
    default resolver is Quad9, `9.9.9.9`, a non-profit resolver that does not
    log client addresses.
 5. **Minimum gVisor release:** `release-20261026.0`, the release the project

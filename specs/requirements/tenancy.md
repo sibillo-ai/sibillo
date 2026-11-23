@@ -11,8 +11,8 @@ other. Background: ADR-0009, ADR-0011.
 - **Verification:** design
 
 The data model MUST organize data as one instance containing tenants, each
-tenant containing users and shared spaces. Every user and every shared space
-belongs to exactly one tenant.
+tenant containing users. Every user belongs to exactly one tenant. Shared
+spaces, which a tenant would also contain, are set aside (ROADMAP, Later).
 
 ## TEN-002: Ownership columns
 

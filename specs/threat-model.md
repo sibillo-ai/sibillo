@@ -92,7 +92,7 @@ beyond keeping them configurable and updatable.
 | T-12 | Personal data leaks through logs, traces or telemetry | X4, X5 | OBS-001, OBS-002, OBS-003, OBS-004, OBS-005 |
 | T-13 | A user cannot see or remove what the assistant retained about them | — | MEM-001, MEM-002, MEM-003, MEM-004 |
 | T-14 | Unauthenticated access or account takeover through the exposed endpoint | X4 | AUTH-001, AUTH-002, AUTH-004, AUTH-005, AUTH-006, AUTH-007, AUTH-010, OPS-003 |
-| T-15 | Resource exhaustion: a sandbox or a user consumes all CPU, memory, disk or model budget | X2, X3 | SBX-011, SBX-016, MOD-004 |
+| T-15 | Resource exhaustion: a sandbox, a user or anyone who reaches the instance consumes all CPU, memory, disk or model budget | X2, X3, X4 | SBX-011, SBX-016, MOD-004, API-009, AUTH-006 |
 | T-16 | Malicious pull request or compromised CI action injects code or steals secrets | X5 | REPO-001, REPO-002, REPO-005, REPO-007, REPO-008, REPO-012 |
 | T-17 | Tampered release images | X5 | REPO-012; OPS-007, still a draft: there is no release workflow yet, and images are built from source |
 | T-18 | The host egress rules disappear (firewall reload, reboot, manual change) while sandboxes run, leaving them unfiltered | — | SBX-015, OPS-002 |
@@ -154,6 +154,9 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
+- **Nothing deletes a user or a household yet.** A disabled account keeps
+  its data, which only its owner could read; its audit events would go with
+  it (AGT-008). Deleting accounts and households is future work.
 - **Audit events of a reused call ID.** A model server that gives two calls
   of one run the same ID makes them one audit event, with its attempts
   counted (AGT-008, ADR-0132).
