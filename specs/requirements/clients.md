@@ -798,7 +798,7 @@ hands-free mode above all.
 
 ## UX-043: A run's steps in compact lines
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** e2e, integration, review
