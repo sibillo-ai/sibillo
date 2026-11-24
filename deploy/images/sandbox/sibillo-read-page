@@ -5,11 +5,18 @@ Runs in the user's sandbox, under its egress rules. Only http and https
 addresses are fetched, redirects included. HTML keeps its main text, as
 Markdown, through Trafilatura; plain text is kept as it is. Anything else,
 and every failure, is reported on standard error with exit status 1.
+
+A page that cannot be read so, or whose main text is shorter than
+RENDER_BELOW characters, is loaded in the sandbox's browser, which runs its
+scripts, and returned as the browser renders it, marked as rendered
+(AGT-040, ADR-0138). That browser is a process of its own, which ends with
+the read.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -24,6 +31,12 @@ import trafilatura
 TIMEOUT_SECONDS = 30
 MAX_BYTES = 5 * 1024 * 1024
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
+# Less main text than this, and the page is rendered by the browser (AGT-040).
+RENDER_BELOW = 1000
+# How long the browser waits for the page's network to be idle, and when it gives up on its scripts.
+RENDER_WAIT_MS = 10_000
+RENDER_TERMINATE_MS = 12_000
+BROWSER = "lightpanda"
 
 
 class _HttpOnly(urllib.request.HTTPRedirectHandler):
@@ -40,11 +53,15 @@ def _fail(reason: str) -> None:
     sys.exit(1)
 
 
-def main(url: str) -> None:
-    if urlsplit(url).scheme not in ("http", "https"):
-        _fail("only http and https addresses can be read")
+class _UnreadError(Exception):
+    """Why the page could not be read."""
+
+
+def _read(url: str) -> dict[str, str]:
+    """The page read without running its scripts: its final address, title and main text."""
     opener = urllib.request.build_opener(_HttpOnly())
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,text/plain;q=0.9"})
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,text/plain;q=0.9"}
+    request = urllib.request.Request(url, headers=headers)  # noqa: S310 - main allows http and https only
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             final = response.geturl()
@@ -52,23 +69,80 @@ def main(url: str) -> None:
             charset = response.headers.get_content_charset() or "utf-8"
             body = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as error:
-        _fail(f"the server answered {error.code} {error.reason}")
-        return
+        raise _UnreadError(f"the server answered {error.code} {error.reason}") from error
     except (urllib.error.URLError, OSError, ValueError) as error:
-        _fail(f"the page could not be fetched: {getattr(error, 'reason', error)}")
-        return
+        raise _UnreadError(f"the page could not be fetched: {getattr(error, 'reason', error)}") from error
     if len(body) > MAX_BYTES:
-        _fail(f"the page is larger than {MAX_BYTES // (1024 * 1024)} MiB")
+        raise _UnreadError(f"the page is larger than {MAX_BYTES // (1024 * 1024)} MiB")
     text = body.decode(charset, errors="replace")
     if kind == "text/plain":
-        print(json.dumps({"url": final, "title": "", "text": text}))
-        return
+        return {"url": final, "title": "", "text": text, "kind": kind}
     if kind not in ("text/html", "application/xhtml+xml"):
-        _fail(f"the address is not a web page but {kind}")
+        raise _UnreadError(f"the address is not a web page but {kind}")
     content = trafilatura.extract(text, url=final, output_format="markdown", include_links=True, favor_recall=True)
     if not content:
         content = trafilatura.html2txt(text)
-    print(json.dumps({"url": final, "title": _title(text), "text": content or ""}))
+    return {"url": final, "title": _title(text), "text": content or "", "kind": kind}
+
+
+def _render(url: str) -> dict[str, str] | None:
+    """The page as the browser renders it, without what its reader mode strips as clutter; None if it cannot."""
+    command = [
+        BROWSER,
+        "fetch",
+        "--json",
+        "--dump",
+        "markdown",
+        "--strip-mode",
+        "clutter",
+        "--wait-until",
+        "networkidle",
+        "--wait-ms",
+        str(RENDER_WAIT_MS),
+        "--terminate-ms",
+        str(RENDER_TERMINATE_MS),
+        "--log-level",
+        "fatal",
+        url,
+    ]
+    try:
+        done = subprocess.run(  # noqa: S603 - a fixed program, the address as one argument
+            command, capture_output=True, timeout=RENDER_TERMINATE_MS / 1000 + 5, check=False
+        )
+        page = json.loads(done.stdout)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if not isinstance(page, dict) or page.get("error") or not str(page.get("content") or "").strip():
+        return None
+    status = page.get("http_status")
+    if isinstance(status, int) and status >= 400:
+        return None
+    final = str(page.get("url") or url)
+    if urlsplit(final).scheme not in ("http", "https"):
+        return None
+    return {"url": final, "title": "", "text": str(page["content"]).strip()}
+
+
+def main(url: str) -> None:
+    if urlsplit(url).scheme not in ("http", "https"):
+        _fail("only http and https addresses can be read")
+    try:
+        page: dict[str, str] | None = _read(url)
+        reason = ""
+    except _UnreadError as error:
+        page, reason = None, str(error)
+    if page is not None and (page["kind"] == "text/plain" or len(page["text"].strip()) >= RENDER_BELOW):
+        print(json.dumps({"url": page["url"], "title": page["title"], "text": page["text"]}))
+        return
+    rendered = _render(url)
+    if rendered is not None:
+        title = page["title"] if page is not None else ""
+        print(json.dumps({"url": rendered["url"], "title": title, "text": rendered["text"], "rendered": True}))
+        return
+    if page is None:
+        _fail(reason)
+        return
+    print(json.dumps({"url": page["url"], "title": page["title"], "text": page["text"]}))
 
 
 def _title(html: str) -> str:

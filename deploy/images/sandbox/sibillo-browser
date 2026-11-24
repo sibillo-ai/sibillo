@@ -1,0 +1,120 @@
+#!/opt/reader/bin/python
+"""Pass one call of a browser tool to the sandbox's browser, and print its result as JSON (AGT-039, ADR-0138).
+
+Usage: sibillo-browser TOOL ARGUMENTS
+
+TOOL is the name of one of the browser's own tools, ARGUMENTS their JSON
+object. The browser, Lightpanda, serves its tools over the Model Context
+Protocol, on the sandbox's loopback address only (SBX-026). When it does
+not answer, this starts it, as a background process of the sandbox that
+lives as long as the sandbox, and says so: the call then acts on a browser
+without a page, cookies or history.
+
+It prints one JSON object: `fresh`, whether the browser was started for this
+call; `ok`, whether the call succeeded; and `text`, what the browser said.
+Only a failure of this program itself exits with a status other than 0.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from typing import Any
+
+BROWSER = "lightpanda"
+HOST = "127.0.0.1"
+PORT = 39222
+ENDPOINT = f"http://{HOST}:{PORT}/mcp"
+STATE = "/tmp/sibillo-browser"  # noqa: S108 - the sandbox's own temporary folder, gone with it
+START_SECONDS = 10
+CALL_SECONDS = 60
+
+
+def _answers() -> bool:
+    try:
+        with socket.create_connection((HOST, PORT), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _start() -> bool:
+    """Start the browser unless it answers; whether it was started. One client starts it at a time."""
+    os.makedirs(STATE, mode=0o700, exist_ok=True)
+    with open(f"{STATE}/lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if _answers():
+            return False
+        # Nothing of the sandbox's environment but what the browser needs: no key reaches it (SBX-008).
+        environment = {
+            "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            "HOME": os.environ.get("HOME", "/tmp"),  # noqa: S108 - the sandbox's own
+            "LIGHTPANDA_DISABLE_TELEMETRY": "true",
+        }
+        with open(f"{STATE}/browser.log", "ab") as log:
+            subprocess.Popen(  # noqa: S603 - a fixed program and fixed arguments
+                [BROWSER, "mcp", "--host", HOST, "--port", str(PORT), "--log-level", "error"],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+                env=environment,
+                start_new_session=True,
+                close_fds=True,
+            )
+        deadline = time.monotonic() + START_SECONDS
+        while time.monotonic() < deadline:
+            if _answers():
+                return True
+            time.sleep(0.05)
+    raise RuntimeError("the browser did not start")
+
+
+def _call(tool: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+    body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": arguments}}
+    request = urllib.request.Request(
+        ENDPOINT,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=CALL_SECONDS) as response:  # noqa: S310 - as above
+            answer = json.loads(response.read())
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        return False, f"the browser did not answer: {getattr(error, 'reason', error)}"
+    if "error" in answer:
+        return False, str(answer["error"].get("message") or answer["error"])
+    result = answer.get("result") or {}
+    texts = [str(part.get("text", "")) for part in result.get("content") or [] if part.get("type") == "text"]
+    return not result.get("isError", False), "\n".join(texts)
+
+
+def main(tool: str, raw: str) -> None:
+    try:
+        arguments = json.loads(raw)
+    except ValueError:
+        arguments = None
+    if not isinstance(arguments, dict):
+        print("the arguments are not a JSON object", file=sys.stderr)
+        sys.exit(2)
+    fresh = _start()
+    ok, text = _call(tool, arguments)
+    print(json.dumps({"fresh": fresh, "ok": ok, "text": text}))
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("usage: sibillo-browser TOOL ARGUMENTS", file=sys.stderr)
+        sys.exit(2)
+    try:
+        main(sys.argv[1], sys.argv[2])
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

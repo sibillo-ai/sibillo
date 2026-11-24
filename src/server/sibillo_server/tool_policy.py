@@ -42,7 +42,35 @@ CONSEQUENTIAL: frozenset[CapabilityClass] = frozenset({"irreversible", "physical
 EXTERNAL_EFFECTS: frozenset[CapabilityClass] = frozenset({"external_communication", "irreversible", "physical"})
 # The tool that asks for internet access, and the tools that need it (AGT-034, ADR-0113).
 REQUEST_INTERNET_ACCESS = "request_internet_access"
-INTERNET_TOOLS = frozenset({"web_search", "read_page", REQUEST_INTERNET_ACCESS})
+# The browser tools of the sandbox's browser, web tools like `read_page` (AGT-039, ADR-0138).
+BROWSER_TOOLS = frozenset(
+    {
+        "browser_goto",
+        "browser_markdown",
+        "browser_tree",
+        "browser_links",
+        "browser_interactive_elements",
+        "browser_find_element",
+        "browser_click",
+        "browser_fill",
+        "browser_press",
+        "browser_select_option",
+        "browser_set_checked",
+        "browser_hover",
+        "browser_scroll",
+        "browser_wait_for_selector",
+        "browser_wait_for_state",
+        "browser_evaluate",
+        "browser_extract",
+        "browser_run",
+        "browser_download",
+        "browser_get_url",
+        "browser_popups",
+        "browser_page_tools",
+        "browser_call_page_tool",
+    }
+)
+INTERNET_TOOLS = frozenset({"web_search", "read_page", REQUEST_INTERNET_ACCESS}) | BROWSER_TOOLS
 # The classes of every tool of a remote MCP server (AGT-005, ADR-0099).
 SERVER_CLASSES: frozenset[CapabilityClass] = frozenset(
     {"reads_private_data", "ingests_untrusted", "external_communication"}
@@ -98,6 +126,8 @@ DECLARATIONS: Mapping[str, Declaration] = {
     "read_page": _declare("ingests_untrusted", "external_communication"),
     # Asks for internet access, and does nothing else.
     REQUEST_INTERNET_ACCESS: _OWN,
+    # The browser tools reach the web as `read_page` does, and read what it shows (AGT-039, ADR-0138).
+    **{name: _declare("ingests_untrusted", "external_communication") for name in sorted(BROWSER_TOOLS)},
     # A command's only way out is the sandbox's network, which internet access governs (ADR-0113).
     "run_command": _READS,
     "start_command": _READS,

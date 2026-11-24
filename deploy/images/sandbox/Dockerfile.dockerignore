@@ -5,3 +5,5 @@
 !deploy/images/sandbox/reader-requirements.txt
 # ... and the pins of the tools' Python environment (ADR-0080).
 !deploy/images/sandbox/tools-requirements.txt
+# ... and the browser tools' client (ADR-0138).
+!deploy/images/sandbox/sibillo-browser

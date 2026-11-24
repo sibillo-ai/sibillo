@@ -24,6 +24,17 @@ const REASONING: Reasoning[] = ["off", "on", "deep"];
 // Every tool of the assistant, by group (CNV-013, ADR-0087); the groups are the client's own.
 const TOOL_GROUPS: { id: string; tools: ToolName[] }[] = [
   { id: "web", tools: ["web_search", "read_page", "request_internet_access"] },
+  // The browser of the sandbox, loaded by the model on request (AGT-039, ADR-0138).
+  {
+    id: "browser",
+    tools: [
+      "browser_goto", "browser_markdown", "browser_tree", "browser_links", "browser_interactive_elements",
+      "browser_find_element", "browser_click", "browser_fill", "browser_press", "browser_select_option",
+      "browser_set_checked", "browser_hover", "browser_scroll", "browser_wait_for_selector", "browser_wait_for_state",
+      "browser_evaluate", "browser_extract", "browser_run", "browser_download", "browser_get_url", "browser_popups",
+      "browser_page_tools", "browser_call_page_tool",
+    ],
+  },
   { id: "commands", tools: ["run_command", "start_command", "check_command", "stop_command"] },
   { id: "files", tools: ["read_file", "write_file", "edit_file", "create_directory", "list_directory", "find_files", "search_files", "file_info", "view_image"] },
   { id: "showing", tools: ["offer_download"] },

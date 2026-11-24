@@ -67,6 +67,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sibillo_server import errors, schemas
 from sibillo_server.approvals import Approvals, record
+from sibillo_server.browser import Browser
 from sibillo_server.changes import announce
 from sibillo_server.changes import event as change_event
 from sibillo_server.config import WorkerConfiguration
@@ -431,6 +432,8 @@ agent = Agent[RunDeps, str | DeferredToolRequests](
         _instructions_while_on(Planning[RunDeps](store_resolver=_plan_store)),
         # The skills that are on, offered by name and description and loaded when needed (AGT-017, ADR-0096).
         RunSkills(),
+        # The browser of the sandbox, loaded by the model when a site needs it (AGT-039, ADR-0138).
+        Browser(),
         # The accepted tools of the household's remote MCP servers, each call asked (AGT-018, ADR-0099).
         McpServers(),
         # Tool permissions, approvals and audit events (AGT-002, AGT-004, AGT-006, AGT-008, ADR-0090).

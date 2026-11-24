@@ -60,6 +60,24 @@ RUN template=/usr/share/pandoc/data/templates/template.typst \
     && grep -q '^  font: (),$' "$template" \
     && sed -i 's/^  font: (),$/  font: ("Libertinus Serif", "DejaVu Sans", "Noto Sans"),/' "$template"
 
+# The browser of the sandbox (SBX-026, ADR-0138): Lightpanda, one release of
+# its own, checked against the release's SHA-256; it runs pages' JavaScript.
+# It sends no telemetry, and starts only when a browser tool or the page
+# reader needs it.
+ARG LIGHTPANDA_RELEASE=1.0.5
+ARG LIGHTPANDA_SHA256_AMD64=0ec21fa4867ab9e82b35285ff4ab0e7336c6c1d89f26fe991f27d73c8a678bd7
+ARG LIGHTPANDA_SHA256_ARM64=7527391c479f323eb9111b834b012d91a89057528c28ef027741b21739b12299
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) target=x86_64 sum="${LIGHTPANDA_SHA256_AMD64}" ;; \
+        arm64) target=aarch64 sum="${LIGHTPANDA_SHA256_ARM64}" ;; \
+        *) echo "no Lightpanda for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/lightpanda-io/browser/releases/download/${LIGHTPANDA_RELEASE}/lightpanda-${target}-linux" \
+        -o /usr/local/bin/lightpanda \
+    && echo "${sum}  /usr/local/bin/lightpanda" | sha256sum -c - \
+    && chmod 0755 /usr/local/bin/lightpanda
+ENV LIGHTPANDA_DISABLE_TELEMETRY=true
+
 # The Python of the agent's work, first on the PATH: office files, Markdown
 # for the model, tables and charts, pinned by hash and from wheels only.
 COPY deploy/images/sandbox/tools-requirements.txt /opt/tools-requirements.txt
@@ -78,6 +96,8 @@ RUN python3 -m venv /opt/reader \
         -r /opt/reader-requirements.txt \
     && rm /opt/reader-requirements.txt
 COPY --chmod=0755 deploy/images/sandbox/sibillo-read-page /usr/local/bin/sibillo-read-page
+# The client of the browser tools, which starts the browser when none answers (AGT-039, ADR-0138).
+COPY --chmod=0755 deploy/images/sandbox/sibillo-browser /usr/local/bin/sibillo-browser
 
 # The disk helper's tools (ADR-0098): the driver makes, checks and grows
 # workspaces' disks with them, in a privileged container of its own that runs
