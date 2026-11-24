@@ -1,6 +1,6 @@
 # ADR-0139: A test suite in tiers, its fast tier within two minutes
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-24
 - **Deciders:** @tapionx
 - **Related:** REPO-004, REPO-011, REPO-013, ADR-0015, ADR-0024, ADR-0045, ADR-0053, ADR-0059, ADR-0067, ADR-0114, ADR-0133, ADR-0137
@@ -41,6 +41,16 @@ start runs, and are a third of all the time: those of the agent's rules
 The database tests, row-level security among them, are already fast. One
 file, the sandboxes' network isolation, takes 267 s for 34 tests, waiting
 for addresses that never answer.
+
+A full run of every part on one machine, on 2026-11-25, confirms it: 1,812
+tests, 2,189 s of test time in 14 sessions of 105 to 514 s each, 3,346 s in
+all, because the disk held one session at a time (each keeps about 3 GB of
+engine). The sessions' own start, an engine, a database and a server, is the
+rest: about 55 s of a session of 200. The slowest files are the sandboxes'
+isolation (213 s, 34 tests), the evals (149 s, 14 tests) and the web client
+in Chromium (122 s, 43 tests). In the part of runs, five tests make a third
+of the time: two wait for a crash of the worker, one for a sandbox that does
+not answer (19 s).
 
 The tests are the executable form of the requirements (REPO-004), and many
 are security tests that try to break invariants. Whatever replaces a test
@@ -102,6 +112,26 @@ must catch what it caught.
    what it did not start, a run that survives the worker's crash, approvals
    forged through the API, one journey per persona in the browser. Those are
    the infrastructure tier, a few dozen tests in place of hundreds.
+
+8. **One entrypoint, the same everywhere.** `tools/test.py` runs the tiers
+   (`fast`, `infra`, `all`) and is the only way that CI and a developer run
+   tests: CI's jobs call it, and its parts, budgets and environment are
+   written once, in the script, not in the workflow, so that the two never
+   drift (ADR-0137's `tools/run_ci_parts.py` becomes part of it). The fast
+   tier gives the same result on any machine with the same Postgres image; the
+   infrastructure tier gives the same result and, run beside its other
+   parts, a longer time, which is reported, not enforced. A tooling test
+   fails a workflow that runs pytest by itself.
+9. **Fewer seconds in the infrastructure tier.** Its session starts once
+   per part, and shares what it can: one sandbox engine for a part, sandboxes
+   kept warm between tests and cleaned, the images built once and cached by
+   the hash of their inputs, and more, smaller parts (a part is as slow as its
+   slowest file). A change that touches only some areas runs the parts of
+   those areas; a push of `master`, of a milestone and a release run all of
+   them. Each lever is measured before and after, on CI.
+10. **Budgets after measuring.** The fast tier's two minutes are measured on
+    CI's runner, not on a developer's machine, with a first area moved,
+    before the other areas follow.
 
 ## Consequences
 

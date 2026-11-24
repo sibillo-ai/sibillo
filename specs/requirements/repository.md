@@ -171,7 +171,7 @@ tomorrow.
 
 ## REPO-013: A fast tier of tests
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 3
 - **Verification:** unit
@@ -182,7 +182,9 @@ on one CI runner, without starting a sandbox, a browser or a durable worker;
 the agent tier SHOULD replace real components only with fakes that a
 contract suite checks against the real ones, in the infrastructure tier.
 Each security invariant that crosses a process or a container boundary MUST
-keep at least one test in the infrastructure tier (ADR-0139).
+keep at least one test in the infrastructure tier. CI and a developer SHOULD
+run the tests the same way, through one entrypoint that holds the parts and
+their budgets (ADR-0139).
 
 Rationale: in November 2026 most of the suite's hour was spent starting
 infrastructure that the tests did not check, and every feature waited for
