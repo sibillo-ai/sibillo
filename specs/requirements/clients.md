@@ -795,3 +795,28 @@ MUST NOT see it. No setting MAY turn it on for new conversations (ADR-0115).
 Rationale: whether the assistant can reach the internet is worth seeing at
 a glance, and giving it before the work starts saves a request, in
 hands-free mode above all.
+
+## UX-043: A run's steps in compact lines
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** e2e, integration, review
+
+Clients MUST show an answer's consecutive tool calls and pieces of reasoning
+as one block of steps, a line each, without space between them. A step's
+line MUST show its label in full, never cut, and in the room left a preview
+of the argument that tells the call apart; a script MUST NOT be shown there.
+How a call needing approval was decided MUST be an icon on its line, with its
+words as its accessible name. An opened step MUST show its tool's own name,
+untranslated, its arguments, its result and, when known, how long it took.
+The history MUST give, for each tool result, how long its call took, as the
+worker measured it (API-003). Once an answer has ended, a block of more than
+three steps MUST show as one line that says how many steps it holds and what
+they were, and opens to them; while the run works, a block MUST show its
+last three steps and a line for the earlier ones. The browser's tools and
+its loading MUST be labelled as the browser's, never as a web search or a
+skill (ADR-0140).
+
+Rationale: a run of many steps was a column of cards to scroll past before
+the answer, with labels cut by their arguments and no word of what ran.

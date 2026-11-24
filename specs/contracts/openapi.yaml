@@ -5180,7 +5180,9 @@ components:
         See https://docs.ag-ui.com/ for the full definition. In history, a
         `user` message with attachments carries them as `attachments`, an
         array of `{path, size}` (CNV-017), and its `content` is the user's own
-        text alone.
+        text alone. A `tool` message carries `duration_ms`, how long its call
+        took as the worker measured it, an integer of milliseconds, when it
+        was measured (UX-043, ADR-0140).
       required: [id, role]
       additionalProperties: true
       properties:
