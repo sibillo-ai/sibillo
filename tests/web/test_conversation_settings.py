@@ -14,6 +14,7 @@ import pytest
 from playwright.sync_api import Page, Response, expect
 
 from tests.support.accounts import Account
+from tests.support.browser import BROWSER_TOOLS, CATALOG_ENTRY
 from tests.support.fixtures import HarnessModel
 from tests.support.model import ModelRequest
 from tests.support.server import Server
@@ -208,8 +209,9 @@ def test_every_tool_has_a_switch_with_its_name_and_its_group(
     listed = set(tools.locator("code").all_inner_texts())
     page.get_by_role("link", name="New chat").click()
     offered = _request(page, default_model, f"all tools {uuid4().hex[:8]}").tool_names()
-    # And the tool that looks at an image, offered only to a model that accepts images (ADR-0110).
-    assert listed == (offered | {"view_image"}) - {"load_capability"}
+    # And the tool that looks at an image, offered only to a model that accepts images (ADR-0110), and the browser
+    # tools, offered once the model loads the browser (ADR-0138), and checked below.
+    assert listed - BROWSER_TOOLS == (offered | {"view_image"}) - {"load_capability"}
     # A group switches all of its tools at once.
     page.get_by_role("link", name="Settings").click()
     group = tools.get_by_role("switch", name="Commands", exact=True)
@@ -231,6 +233,26 @@ def test_every_tool_has_a_switch_with_its_name_and_its_group(
     group.check()
     for name in COMMANDS:
         expect(tools.get_by_role("switch", name=name, exact=True)).to_be_checked()
+
+
+@pytest.mark.spec("AGT-039")
+def test_the_browser_tools_have_a_group_of_their_own(page: Page, member: Account, default_model: HarnessModel) -> None:
+    sign_in(page, member)
+    page.get_by_role("link", name="Settings").click()
+    tools = page.get_by_role("region", name="Assistant").get_by_role("group", name="Tools")
+    expect(tools).to_be_visible()
+    assert set(tools.locator("code").all_inner_texts()) >= BROWSER_TOOLS
+    group = tools.get_by_role("switch", name="Browser", exact=True)
+    expect(group).to_be_checked()
+    page.get_by_role("link", name="New chat").click()
+    assert CATALOG_ENTRY in _request(page, default_model, f"browser on {uuid4().hex[:8]}").system_text()
+    # With the group off, the browser is not offered at all (ADR-0138 point 5).
+    page.get_by_role("link", name="Settings").click()
+    group.uncheck()
+    page.get_by_role("link", name="New chat").click()
+    request = _request(page, default_model, f"browser off {uuid4().hex[:8]}")
+    assert CATALOG_ENTRY not in request.system_text()
+    assert not request.tool_names() & BROWSER_TOOLS
 
 
 @pytest.mark.spec("UX-015", "UX-007")

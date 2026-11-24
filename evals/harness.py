@@ -56,10 +56,47 @@ NO_SETTINGS: dict[str, Any] = {
     "additional_instructions": None,
 }
 # The tools that communicate externally (ADR-0090), with the argument that carries what they send.
-EXTERNAL = {"web_search": "query", "read_page": "url", "run_command": "command", "start_command": "command"}
+EXTERNAL = {
+    "web_search": "query",
+    "read_page": "url",
+    "run_command": "command",
+    "start_command": "command",
+    # The browser sends what it opens, what it types and the scripts it runs (ADR-0138).
+    "browser_goto": "url",
+    "browser_fill": "value",
+    "browser_evaluate": "script",
+    "browser_run": "script",
+    "browser_download": "url",
+}
 COMMANDS = frozenset({"run_command", "start_command"})
 # The tools that wait for internet access, which one request of the run covers (AGT-034, ADR-0113).
-INTERNET = frozenset({"web_search", "read_page", "request_internet_access"})
+INTERNET = frozenset({"web_search", "read_page", "request_internet_access"}) | frozenset(
+    {
+        "browser_goto",
+        "browser_markdown",
+        "browser_tree",
+        "browser_links",
+        "browser_interactive_elements",
+        "browser_find_element",
+        "browser_click",
+        "browser_fill",
+        "browser_press",
+        "browser_select_option",
+        "browser_set_checked",
+        "browser_hover",
+        "browser_scroll",
+        "browser_wait_for_selector",
+        "browser_wait_for_state",
+        "browser_evaluate",
+        "browser_extract",
+        "browser_run",
+        "browser_download",
+        "browser_get_url",
+        "browser_popups",
+        "browser_page_tools",
+        "browser_call_page_tool",
+    }
+)
 # Common words of each language the checks tell apart (I18N-003, ADR-0103): function words, which every
 # answer of a few sentences holds, and which the two languages do not share.
 COMMON_WORDS = {

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Any, get_args
+from typing import Any, cast, get_args
 
 import pytest
 from pydantic_ai.messages import (
@@ -17,10 +17,11 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.toolsets import FunctionToolset
+from pydantic_ai.toolsets import FunctionToolset, WrapperToolset
 
 from sibillo_server import schemas, tool_policy, worker
 from tests.support.approvals import DECLARED
+from tests.support.browser import BROWSER_TOOLS
 
 CLASSES = {"reads_private_data", "ingests_untrusted", "external_communication", "irreversible", "physical"}
 
@@ -34,6 +35,9 @@ def _registered_tools() -> set[str]:
     names = set(worker.agent._function_toolset.tools) | {LOAD_CAPABILITY}  # pyright: ignore[reportPrivateUsage]
     for capability in worker.agent.root_capability.capabilities:
         toolset: Any = capability.get_toolset()
+        # A deferred capability's tools are wrapped, as the browser's are (ADR-0138).
+        while isinstance(toolset, WrapperToolset):
+            toolset = cast(Any, toolset.wrapped)  # pyright: ignore[reportUnknownMemberType]
         if isinstance(toolset, FunctionToolset):
             names |= set(toolset.tools)  # pyright: ignore[reportUnknownArgumentType]
     return names
@@ -54,13 +58,27 @@ def test_declarations_are_those_of_adr_0090() -> None:
         name: (set(declaration.classes), declaration.approval_default)
         for name, declaration in tool_policy.DECLARATIONS.items()
     }
-    assert declared == DECLARED
+    # The browser tools are declared by ADR-0138, and checked below.
+    assert {name: value for name, value in declared.items() if name not in BROWSER_TOOLS} == DECLARED
     for declaration in tool_policy.DECLARATIONS.values():
         assert set(declaration.classes) <= CLASSES
         assert declaration.approval_default in {"allow", "ask"}
         # Consequential tools are always asked.
         if {"irreversible", "physical"} & set(declaration.classes):
             assert declaration.approval_default == "ask"
+
+
+@pytest.mark.spec("AGT-039")
+def test_the_browser_tools_are_web_tools_with_a_switch() -> None:
+    """They ingest untrusted content and communicate externally, as `read_page` does, and each has a switch
+    (ADR-0087, ADR-0138)."""
+    registered = _registered_tools()
+    assert registered >= BROWSER_TOOLS
+    assert set(get_args(schemas.ToolName.__value__)) >= BROWSER_TOOLS
+    for name in BROWSER_TOOLS:
+        declaration = tool_policy.DECLARATIONS[name]
+        assert set(declaration.classes) == {"ingests_untrusted", "external_communication"}, name
+        assert declaration.approval_default == "allow", name
 
 
 def _request(*parts: Any) -> ModelRequest:

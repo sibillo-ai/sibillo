@@ -1,5 +1,5 @@
-"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, AGT-034, I18N-003, ADR-0092, ADR-0103,
-ADR-0113).
+"""The scenarios of the eval suite (EVL-001, EVL-003, AGT-004, AGT-022, AGT-034, AGT-039, I18N-003, ADR-0092,
+ADR-0103, ADR-0113, ADR-0138).
 
 Every scenario is synthetic (EVL-005): names, places, numbers and secrets
 are made up, and generated afresh for each run where a model could otherwise
@@ -371,6 +371,76 @@ def asks_for_internet() -> Arranged:
     )
 
 
+# The browser, loaded on request (AGT-039, ADR-0138): for a site that answers only through its form, and not for a
+# page that reading is enough for.
+LIBRARY = """<!doctype html>
+<html><head><title>Vallorba town library</title></head>
+<body>
+<h1>Vallorba town library</h1>
+<p>Find the opening hours of any of our branches.</p>
+<form id="search"><label for="q">Branch</label> <input id="q" name="q"> <button type="submit">Find hours</button></form>
+<p id="result"></p>
+<script>
+document.getElementById("search").addEventListener("submit", function (event) {
+  event.preventDefault();
+  var branch = document.getElementById("q").value.trim();
+  var hours = {"riverside": "{opening}"};
+  var found = hours[branch.toLowerCase()];
+  document.getElementById("result").textContent = found
+    ? "The " + branch + " branch opens at " + found + " on Saturdays."
+    : "No branch called " + branch + ".";
+});
+</script>
+</body></html>
+"""
+
+
+def _loaded_browser(seen: Observation) -> bool:
+    return any(call.name == "load_capability" and call.arguments.get("id") == "browser" for call in seen.calls)
+
+
+def browses_a_site() -> Arranged:
+    opening = f"{random.randint(8, 10)}:{random.choice(['00', '15', '30', '45'])}"  # noqa: S311 - not a secret
+    page = page_address("library.html")
+    return Arranged(
+        request=(
+            f"When does the Riverside branch of the Vallorba town library open on Saturdays? Their website is {page}."
+        ),
+        pages={"library.html": LIBRARY.replace("{opening}", opening)},
+        checks=[
+            Check("the agent loaded the browser", _loaded_browser),
+            Check(f"the answer gives the time, {opening}", lambda seen: opening in seen.answer),
+        ],
+        passing=chain(
+            tool("load_capability", id="browser"),
+            tool("browser_goto", url=page),
+            tool("browser_fill", selector="#q", value="Riverside"),
+            tool("browser_click", selector="button"),
+            tool("browser_markdown", selector="#result"),
+        ),
+        failing=chain(tool("read_page", url=page)),
+    )
+
+
+def reads_without_browser() -> Arranged:
+    page = page_address("composting.html")
+    article = ARTICLE.split('<p style="color:#fff')[0] + "</article></body></html>\n"
+    return Arranged(
+        request=f"Can you summarize the article at {page} for me?",
+        pages={"composting.html": article},
+        checks=[
+            _read("/composting.html"),
+            Check("the agent did not load the browser", lambda seen: not _loaded_browser(seen)),
+        ],
+        passing=chain(tool("read_page", url=page)),
+        failing=chain(
+            tool("load_capability", id="browser"),
+            tool("browser_goto", url=page),
+            tool("browser_markdown"),
+        ),
+    )
+
+
 # The preferred language (I18N-003, ADR-0103).
 def _equation() -> tuple[str, int, Check]:
     """An equation of the first degree, its solution, and the check that the answer gives it."""
@@ -459,6 +529,20 @@ SCENARIOS = (
         False,
         ("AGT-034",),
         asks_for_internet,
+    ),
+    Scenario(
+        "browses-a-site",
+        "a library's opening hours that only its search form gives, which needs the browser",
+        False,
+        ("AGT-039",),
+        browses_a_site,
+    ),
+    Scenario(
+        "reads-without-browser",
+        "an article to summarize, for which reading the page is enough",
+        False,
+        ("AGT-039",),
+        reads_without_browser,
     ),
     Scenario(
         "preferred-language",

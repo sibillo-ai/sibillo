@@ -16,6 +16,7 @@ import pytest
 
 from tests.support.accounts import Account, create_account, create_tenant, login
 from tests.support.approvals import approving
+from tests.support.browser import LIBRARY, LOAD, SEED_SWAP, call, chain, serve_pages
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.runs import create_conversation, get_run, text_of
@@ -65,6 +66,17 @@ def _tool_result(model: HarnessModel, text: str) -> str:
         if message.get("role") == "tool"
     ]
     return content
+
+
+def _tool_result_last(model: HarnessModel, text: str) -> str:
+    """What the model was told of the last of its calls, for the run of `text`."""
+    contents = [
+        str(message.get("content", ""))
+        for request in model.endpoint.requests_with(text)[-1:]
+        for message in request.body.get("messages", [])
+        if message.get("role") == "tool"
+    ]
+    return contents[-1]
 
 
 def _completed(server: Server, token: str, text: str, conversation_id: str | None = None) -> str:
@@ -195,3 +207,62 @@ def test_read_page_tells_the_model_what_it_cannot_read(
     content = _tool_result(default_model, text)
     assert content.strip()
     assert "root:" not in content
+
+
+@pytest.mark.spec("AGT-040")
+def test_read_page_renders_a_page_built_by_its_script(
+    server: Server, sandboxes: Driver, account: Account, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    opening = f"3:{secrets.randbelow(60):02d}"
+    address = _serve_page(sandboxes, account, conversation_id, "swap.html", SEED_SWAP.replace("{opening}", opening))
+    text = _call("read_page", url=address)
+    assert _completed(server, token, text, conversation_id).startswith("Tool said:")
+    content = _tool_result(default_model, text)
+    # What only the page's script wrote.
+    assert "Spring seed swap" in content
+    assert f"The swap opens at {opening}" in content
+    assert "rendered" in content.lower()
+    assert "untrusted" in content.lower()
+
+
+@pytest.mark.spec("AGT-040")
+def test_read_page_does_not_render_a_page_it_can_read(
+    server: Server, sandboxes: Driver, account: Account, token: str, default_model: HarnessModel
+) -> None:
+    paragraph = (
+        "Tomatoes want deep watering twice a week rather than a little every day, so that their roots grow down "
+        "into the cooler soil, where they find water even in the hottest weeks of the summer. "
+    )
+    article = f"<p>{paragraph}</p>" * 9
+    html = f"<html><head><title>Long notes</title></head><body><article>{article}</article></body></html>"
+    conversation_id = create_conversation(server, token)["id"]
+    address = _serve_page(sandboxes, account, conversation_id, "long-notes.html", html)
+    text = _call("read_page", url=address)
+    _completed(server, token, text, conversation_id)
+    content = _tool_result(default_model, text)
+    assert "deep watering twice a week" in content
+    assert "rendered" not in content.lower()
+
+
+@pytest.mark.spec("AGT-040", "AGT-039")
+def test_rendering_leaves_the_browser_tools_alone(
+    server: Server, sandboxes: Driver, account: Account, token: str, default_model: HarnessModel
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    base = serve_pages(
+        sandboxes,
+        account,
+        conversation_id,
+        {"library.html": LIBRARY.replace("{opening}", "9:00"), "swap.html": SEED_SWAP.replace("{opening}", "3:00")},
+    )
+    text = chain(
+        LOAD,
+        call("browser_goto", url=f"{base}library.html"),
+        call("read_page", url=f"{base}swap.html"),
+        call("browser_get_url"),
+    )
+    _completed(server, token, text, conversation_id)
+    content = _tool_result_last(default_model, text)
+    assert f"{base}library.html" in content
+    assert "afresh" not in content.lower()
