@@ -3870,11 +3870,36 @@ components:
       type: string
       description: |
         A tool a user can switch off, by the name the model knows it by
-        (CNV-013, ADR-0081, ADR-0087): every tool the assistant has.
+        (CNV-013, ADR-0081, ADR-0087): every tool the assistant has. The
+        browser tools are offered once the model loads the browser
+        (AGT-039, ADR-0138).
       enum:
         - web_search
         - read_page
         - request_internet_access
+        - browser_goto
+        - browser_markdown
+        - browser_tree
+        - browser_links
+        - browser_interactive_elements
+        - browser_find_element
+        - browser_click
+        - browser_fill
+        - browser_press
+        - browser_select_option
+        - browser_set_checked
+        - browser_hover
+        - browser_scroll
+        - browser_wait_for_selector
+        - browser_wait_for_state
+        - browser_evaluate
+        - browser_extract
+        - browser_run
+        - browser_download
+        - browser_get_url
+        - browser_popups
+        - browser_page_tools
+        - browser_call_page_tool
         - run_command
         - start_command
         - check_command
