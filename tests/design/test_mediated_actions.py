@@ -7,10 +7,13 @@ from pathlib import Path
 
 import pytest
 from pydantic_ai.native_tools import AbstractNativeTool
+from pydantic_ai.toolsets import FunctionToolset
 
 from sibillo_server import worker
+from tests.support.browser import BROWSER_TOOLS
 from tests.support.database import ROOT
 
+BROWSER_CAPABILITY = "sibillo_server.browser.Browser"
 # Every capability of the agent: the gateway, the user's sandbox and the
 # tools that work in it, durability, and what Pydantic AI adds by itself.
 # None of them acts on the outside world except through the sandbox driver.
@@ -39,6 +42,9 @@ ALLOWED_CAPABILITIES = {
     # The accepted tools of the household's remote MCP servers, each call approved: the one exception of
     # AGT-013, a client of remote servers at checked addresses, never a program (AGT-018, AGT-019, ADR-0099).
     "sibillo_server.mcp_runs.McpServers",
+    # The browser of the conversation's sandbox, which the model loads on request: its tools run a client in the
+    # sandbox, through the sandbox driver (AGT-039, ADR-0138).
+    BROWSER_CAPABILITY,
 }
 # Tools the provider runs: only the search over the agent's own tools.
 ALLOWED_NATIVE_TOOLS = {"tool_search"}
@@ -96,6 +102,20 @@ HOST_COMMANDS = {
 def test_the_agent_has_only_mediated_capabilities() -> None:
     capabilities = {f"{type(c).__module__}.{type(c).__name__}" for c in worker.agent.root_capability.capabilities}
     assert capabilities == ALLOWED_CAPABILITIES
+
+
+@pytest.mark.spec("AGT-039")
+def test_the_browser_is_deferred_and_holds_the_browser_tools_only() -> None:
+    (browser,) = [
+        capability
+        for capability in worker.agent.root_capability.capabilities
+        if f"{type(capability).__module__}.{type(capability).__name__}" == BROWSER_CAPABILITY
+    ]
+    assert (browser.id, browser.defer_loading) == ("browser", True)
+    assert browser.get_native_tools() == []
+    toolset = browser.get_toolset()
+    assert isinstance(toolset, FunctionToolset)
+    assert set(toolset.tools) == BROWSER_TOOLS  # pyright: ignore[reportUnknownArgumentType]
 
 
 @pytest.mark.spec("AGT-001", "AGT-013")

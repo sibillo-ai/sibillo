@@ -232,9 +232,10 @@ def test_read_page_does_not_render_a_page_it_can_read(
 ) -> None:
     paragraph = (
         "Tomatoes want deep watering twice a week rather than a little every day, so that their roots grow down "
-        "into the cooler soil, where they find water even in the hottest weeks of the summer. "
+        "into the cooler soil, where they find water even in the hottest weeks of the summer."
     )
-    article = f"<p>{paragraph}</p>" * 9
+    # Paragraphs that differ, since the reader keeps one of each repeated paragraph.
+    article = "".join(f"<p>Week {week}: {paragraph}</p>" for week in range(1, 10))
     html = f"<html><head><title>Long notes</title></head><body><article>{article}</article></body></html>"
     conversation_id = create_conversation(server, token)["id"]
     address = _serve_page(sandboxes, account, conversation_id, "long-notes.html", html)

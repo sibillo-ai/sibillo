@@ -58,8 +58,7 @@ def test_declarations_are_those_of_adr_0090() -> None:
         name: (set(declaration.classes), declaration.approval_default)
         for name, declaration in tool_policy.DECLARATIONS.items()
     }
-    # The browser tools are declared by ADR-0138, and checked below.
-    assert {name: value for name, value in declared.items() if name not in BROWSER_TOOLS} == DECLARED
+    assert declared == DECLARED
     for declaration in tool_policy.DECLARATIONS.values():
         assert set(declaration.classes) <= CLASSES
         assert declaration.approval_default in {"allow", "ask"}

@@ -32,6 +32,7 @@ from tests.support.approvals import (
     interrupts,
     resumed,
 )
+from tests.support.browser import BROWSER_TOOLS
 from tests.support.database import ROOT, Database
 from tests.support.fixtures import HarnessModel
 from tests.support.model import ModelRequest
@@ -443,6 +444,17 @@ def test_every_run_is_offered_the_skills_that_are_on_by_name_and_description(
 @pytest.mark.spec("AGT-017", "AGT-024")
 def test_without_skills_on_there_is_nothing_to_load(server: Server, token: str, default_model: HarnessModel) -> None:
     with server.client(token) as client:
+        # Nor the browser, which is loaded the same way (AGT-039, ADR-0138).
+        settings = {
+            "model": None,
+            "reasoning": None,
+            "disabled_tools": sorted(BROWSER_TOOLS),
+            "disabled_servers": [],
+            "base_instructions": None,
+            "additional_instructions": None,
+            "language": None,
+        }
+        assert client.put("/me/settings", json=settings).status_code == 200
         for skill in _skills(server, token)["builtin"]:
             assert client.patch(f"/me/skills/builtin/{skill['name']}", json={"enabled": False}).status_code == 200
     assert all(not skill["enabled"] for skill in _skills(server, token)["builtin"])

@@ -175,7 +175,8 @@ def test_the_browser_does_not_outlive_the_answer(
     conversation_id = create_conversation(server, token)["id"]
     address = _library(sandboxes, account, conversation_id, "10:00")
     _completed(server, token, conversation_id, chain(LOAD, call("browser_goto", url=address)))
-    text = f"tool:browser_get_url {json.dumps({})}"
+    # A chain of one call: the browser's instructions may follow its result, and the chain still calls it once.
+    text = chain(call("browser_get_url"))
     _completed(server, token, conversation_id, text)
     # A new sandbox for the new answer, with no browser in it (SBX-018).
     result = _tool_results(default_model, text)[-1]
@@ -226,7 +227,8 @@ def test_with_every_browser_tool_off_the_browser_is_not_offered(
     with server.client(token) as client:
         response = client.patch(f"/conversations/{conversation_id}", json={"disabled_tools": sorted(BROWSER_TOOLS)})
     assert response.status_code == 200, response.text
-    text = chain(LOAD)
+    # A text of its own: the requests of other tests that load the browser hold `chain(LOAD)` too.
+    text = chain(LOAD, call("load_capability", id=f"browser-{secrets.token_hex(4)}"))
     _, events = start_run(server, token, conversation_id, text)
     assert wait_for_run(server, token, events[0].data["runId"])["status"] == "completed"
     requests = default_model.endpoint.requests_with(text)

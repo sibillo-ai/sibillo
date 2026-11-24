@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from tests.support.accounts import body
+from tests.support.browser import BROWSER_TOOLS
 from tests.support.database import uuid7
 from tests.support.runs import Event, create_conversation, parse_events, start_run, wait_for_run
 from tests.support.server import Server
@@ -25,6 +26,8 @@ DECLARED: dict[str, tuple[set[str], str]] = {
     "read_page": ({"ingests_untrusted", "external_communication"}, "allow"),
     # Asks for internet access, and does nothing else (AGT-034).
     "request_internet_access": (set[str](), "allow"),
+    # The browser tools reach the web as `read_page` does, and read what it shows (AGT-039, ADR-0138).
+    **{name: ({"ingests_untrusted", "external_communication"}, "allow") for name in BROWSER_TOOLS},
     # A command's only way out is the sandbox's network, which internet access governs (ADR-0113).
     "run_command": ({"reads_private_data", "ingests_untrusted"}, "allow"),
     "start_command": ({"reads_private_data", "ingests_untrusted"}, "allow"),
