@@ -385,7 +385,7 @@ host and to remove (T-47).
 
 ## SBX-026: A browser in the sandbox
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security
