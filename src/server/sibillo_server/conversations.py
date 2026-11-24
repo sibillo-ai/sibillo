@@ -19,7 +19,7 @@ from typing import Annotated, Any, cast
 
 from dbos import DBOSClient
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from pydantic_ai.messages import ModelMessagesTypeAdapter
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelRequest, ToolReturnPart
 from pydantic_ai.ui.ag_ui import AGUIAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -35,7 +35,7 @@ from sibillo_server.plans import CONVERSATION_PLAN, copy_plan, plan_steps
 from sibillo_server.questions import interrupts
 from sibillo_server.sandbox import SandboxDriver, withdraw_network, workspace_request
 from sibillo_server.settings import new_conversation
-from sibillo_server.tool_policy import denies_internet_access, has_untrusted_content
+from sibillo_server.tool_policy import denies_internet_access, duration_of, has_untrusted_content
 
 router = APIRouter()
 
@@ -687,6 +687,17 @@ def message_id(run_id: uuid.UUID, position: int) -> uuid.UUID:
     return uuid.uuid5(run_id, f"message-{position}")
 
 
+def _durations(model_messages: Sequence[ModelMessage]) -> dict[str, int]:
+    """How long each measured call took, by its call's ID."""
+    found: dict[str, int] = {}
+    for message in model_messages:
+        if isinstance(message, ModelRequest):
+            for part in message.parts:
+                if isinstance(part, ToolReturnPart) and (duration := duration_of(part)) is not None:
+                    found[part.tool_call_id] = duration
+    return found
+
+
 @router.get("/conversations/{conversation_id}/messages", response_model=schemas.MessagePage)
 async def list_messages(
     conversation_id: uuid.UUID,
@@ -713,8 +724,12 @@ async def list_messages(
     for run in path:
         model_messages = ModelMessagesTypeAdapter.validate_python(stored[run.id])
         attached = _attached(stored[run.id])
+        durations = _durations(model_messages)
         for position, message in enumerate(AGUIAdapter.dump_messages(model_messages)):
             dumped = message.model_dump(mode="json", by_alias=True, exclude_none=True)
+            if dumped.get("role") == "tool" and (duration := durations.get(str(dumped.get("toolCallId")))) is not None:
+                # How long the call took, as the worker measured it (UX-043, ADR-0140).
+                dumped["duration_ms"] = duration
             if attached is not None and dumped.get("role") == "user":
                 # What the user wrote, and the files attached to it, apart (CNV-017).
                 dumped["content"], dumped["attachments"] = attached

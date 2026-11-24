@@ -201,7 +201,10 @@
     "newText": "Nuovo testo",
     "reasoning": "Ragionamento",
     "startedByTask": "Avviata dall'attività {{name}}",
-    "startedByDeletedTask": "Avviata dall'attività {{name}}, poi eliminata"
+    "startedByDeletedTask": "Avviata dall'attività {{name}}, poi eliminata",
+    "toolName": "Strumento",
+    "toolDuration": "Durata",
+    "toolDecision": "Approvazione"
   },
   "activity": {
     "thinking": "Sto pensando…",
@@ -233,7 +236,13 @@
       "deletedChat": "In una chat eliminata",
       "untitled": "Chat senza titolo"
     },
-    "usedOf": "Ha usato {{name}} di {{server}}"
+    "usedOf": "Ha usato {{name}} di {{server}}",
+    "browserOpened": "Ha aperto il browser",
+    "browserPage": "Ha aperto una pagina",
+    "browserRead": "Ha letto la pagina",
+    "browserClicked": "Ha cliccato",
+    "browserTyped": "Ha scritto",
+    "browserUsed": "Ha usato il browser"
   },
   "rewind": {
     "title": "Inviare il messaggio modificato?",
@@ -1174,5 +1183,13 @@
   "internet": {
     "switch": "Accesso a internet",
     "switchHint": "Consente all'assistente di cercare sul web, leggere pagine e usare internet"
+  },
+  "steps": {
+    "count_one": "{{count}} passaggio",
+    "count_many": "{{count}} passaggi",
+    "count_other": "{{count}} passaggi",
+    "earlier_one": "{{count}} passaggio precedente",
+    "earlier_many": "{{count}} passaggi precedenti",
+    "earlier_other": "{{count}} passaggi precedenti"
   }
 }

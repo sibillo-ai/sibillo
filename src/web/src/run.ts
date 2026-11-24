@@ -11,7 +11,8 @@ export type LivePart =
   | { kind: "text"; id: string; text: string }
   // What the model worked out before answering (CNV-013).
   | { kind: "reasoning"; id: string; text: string }
-  | { kind: "tool"; id: string; name: string; args: string; result?: string };
+  // How long a call took, in milliseconds, when the history says (UX-043, ADR-0140).
+  | { kind: "tool"; id: string; name: string; args: string; result?: string; durationMs?: number };
 
 export interface LiveRun {
   runId: string;
@@ -32,6 +33,8 @@ export interface LiveRun {
   plan?: PlanStep[];
   // Whether the history was fetched after the run ended, so that it holds all of it (UX-003).
   inHistory?: boolean;
+  // When each call started, and how long it took once its result came, as this client timed it (ADR-0140).
+  timings?: Record<string, { start: number; ms?: number }>;
 }
 
 export interface RunUsage {
@@ -42,6 +45,17 @@ export interface RunUsage {
 
 /** Fold one event into the run's parts. */
 export function apply(run: LiveRun, event: RunEvent): LiveRun {
+  const timed = applyEvent(run, event);
+  const id = String(event["toolCallId"] ?? "");
+  if (event.type === "TOOL_CALL_START") return { ...timed, timings: { ...run.timings, [id]: { start: Date.now() } } };
+  const started = run.timings?.[id];
+  if (event.type === "TOOL_CALL_RESULT" && started !== undefined) {
+    return { ...timed, timings: { ...run.timings, [id]: { ...started, ms: Date.now() - started.start } } };
+  }
+  return timed;
+}
+
+function applyEvent(run: LiveRun, event: RunEvent): LiveRun {
   const parts = [...run.parts];
   const text = (key: string) => String(event[key] ?? "");
   switch (event.type) {

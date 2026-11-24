@@ -1165,8 +1165,12 @@ class _LoadProvenance(AbstractCapability[RunDeps]):
         if call.tool_name != "load_capability":
             return result
         name = str(cast(Mapping[str, Any], args).get("id", "")) if isinstance(args, Mapping) else ""
-        mark = {SKILL_ORIGIN: {"name": name, "untrusted": name in self.untrusted}}
+        mark: dict[str, Any] = {SKILL_ORIGIN: {"name": name, "untrusted": name in self.untrusted}}
         if isinstance(result, ToolReturn):
+            # Beside what the result's metadata says already, such as how long the call took (ADR-0140).
+            before: Any = result.metadata
+            if isinstance(before, dict):
+                mark = {**cast(dict[str, Any], before), **mark}
             return ToolReturn(return_value=result.return_value, content=result.content, metadata=mark)
         return ToolReturn(return_value=result, metadata=mark)
 

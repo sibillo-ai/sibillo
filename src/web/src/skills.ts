@@ -46,9 +46,14 @@ export function fileAddress(skill: Skill, path: string): string {
 /** A call that loaded a skill, by the skill it named; null for any other call, or one refused (UX-028). */
 export function loadedSkillOf(name: string, args: Record<string, unknown>, result: string | undefined): string | null {
   if (name !== "load_capability" || result === undefined || typeof args.id !== "string") return null;
+  // The browser is loaded the same way, and is no skill (ADR-0138, ADR-0140).
+  if (args.id === BROWSER) return null;
   // Only a load that happened: a repeated call is refused, and says so.
   return result.includes(`'${args.id}' loaded.`) ? args.id : null;
 }
+
+/** The deferred capability of the browser (AGT-039). */
+export const BROWSER = "browser";
 
 /** A call that saved a skill, by its name; null for any other call, or one that failed (AGT-026). */
 export function savedSkillOf(name: string, result: string | undefined): string | null {

@@ -200,7 +200,10 @@
     "newText": "New text",
     "reasoning": "Reasoning",
     "startedByTask": "Started by the task {{name}}",
-    "startedByDeletedTask": "Started by the task {{name}}, since deleted"
+    "startedByDeletedTask": "Started by the task {{name}}, since deleted",
+    "toolName": "Tool",
+    "toolDuration": "Duration",
+    "toolDecision": "Approval"
   },
   "activity": {
     "thinking": "Thinking…",
@@ -232,7 +235,13 @@
       "deletedChat": "In a deleted chat",
       "untitled": "Untitled chat"
     },
-    "usedOf": "Used {{name}} of {{server}}"
+    "usedOf": "Used {{name}} of {{server}}",
+    "browserOpened": "Opened the browser",
+    "browserPage": "Opened a page",
+    "browserRead": "Read the page",
+    "browserClicked": "Clicked",
+    "browserTyped": "Typed",
+    "browserUsed": "Used the browser"
   },
   "rewind": {
     "title": "Send the edited message?",
@@ -1152,5 +1161,11 @@
   "internet": {
     "switch": "Internet access",
     "switchHint": "Lets the assistant search the web, read pages and use the internet"
+  },
+  "steps": {
+    "count_one": "{{count}} step",
+    "count_other": "{{count}} steps",
+    "earlier_one": "{{count}} earlier step",
+    "earlier_other": "{{count}} earlier steps"
   }
 }

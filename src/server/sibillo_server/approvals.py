@@ -14,6 +14,7 @@ tools again, and records the attempt again (ADR-0034).
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import Any, cast
 
@@ -42,6 +43,7 @@ from sibillo_server.tool_policy import (
     denied,
     has_external_effects,
     has_untrusted_content,
+    with_duration,
 )
 
 # The memory tools that change or delete an item (ADR-0127).
@@ -304,4 +306,7 @@ class Approvals(AbstractCapability[RunDeps]):
                 reason=reason,
                 attempt=has_external_effects(call.tool_name),
             )
-        return await handler(args)
+        # How long the call took, kept with its result for the history (UX-043, ADR-0140).
+        started = time.monotonic()
+        result = await handler(args)
+        return with_duration(result, round((time.monotonic() - started) * 1000))

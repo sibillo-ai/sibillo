@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
-from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart, UserPromptPart
+from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturn, ToolReturnPart, UserPromptPart
 
 type CapabilityClass = Literal[
     "reads_private_data", "ingests_untrusted", "external_communication", "irreversible", "physical"
@@ -89,6 +89,8 @@ TASK_PROPOSALS = frozenset({PROPOSE_TASK, UPDATE_TASK})
 PROVENANCE_ORIGIN = "sibillo.provenance"
 # Labels the result of loading a skill with the skill's name and whether it is untrusted (AGT-025, ADR-0096).
 SKILL_ORIGIN = "sibillo.skill"
+# Labels a tool result with how long its call took, in milliseconds, as the worker measured it (UX-043, ADR-0140).
+DURATION_ORIGIN = "sibillo.duration_ms"
 # What the model is told of a call the user did not approve.
 DENIED = "The user denied this call, so it did not run. Do not try it again unless the user asks."
 EXPIRED = "Nobody approved this call within a day, so it was denied and did not run."
@@ -194,6 +196,27 @@ COMMANDS = frozenset({"run_command", "start_command"})
 def has_external_effects(tool: str) -> bool:
     declaration = DECLARATIONS.get(tool)
     return declaration is None or tool in COMMANDS or bool(EXTERNAL_EFFECTS & declaration.classes)
+
+
+def with_duration(result: Any, milliseconds: int) -> Any:
+    """The result of a call, labelled with how long it took, beside what else its metadata says (ADR-0140)."""
+    if isinstance(result, ToolReturn):
+        returned = cast(ToolReturn[Any], result)
+        metadata: Any = returned.metadata
+        if metadata is not None and not isinstance(metadata, dict):
+            return returned
+        labelled = {**cast(dict[str, Any], metadata or {}), DURATION_ORIGIN: milliseconds}
+        return ToolReturn[Any](return_value=returned.return_value, content=returned.content, metadata=labelled)
+    return ToolReturn[Any](return_value=result, metadata={DURATION_ORIGIN: milliseconds})
+
+
+def duration_of(part: ToolReturnPart) -> int | None:
+    """How long the call of a tool result took, in milliseconds, when it was measured."""
+    metadata: Any = part.metadata
+    if not isinstance(metadata, dict):
+        return None
+    value: Any = cast(dict[str, Any], metadata).get(DURATION_ORIGIN)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _untrusted_skill(part: ToolReturnPart) -> bool:

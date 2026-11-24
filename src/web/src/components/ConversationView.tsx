@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Brain, CalendarClock, Check, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
+import { ArrowDown, Brain, CalendarClock, Check, ChevronRight, ListChecks, ShieldCheck, ShieldX, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -12,11 +12,12 @@ import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
 import { useServerTool } from "../mcp";
 import { useBusy } from "../busy";
 import { useNotify } from "../notices";
-import { loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
+import { BROWSER, loadedSkillOf, savedSkillOf, SKILLS_SECTION } from "../skills";
+import { durationText, folded, previewOf, tally } from "../steps";
 import { ASK_USER, isPlanning, type LivePart, type LiveRun, poseOf, type RunUsage, toolActivity, useLiveRun } from "../run";
 import { openTemporary } from "../temporary";
 import { outcomeLabel, toolLabel } from "../tools";
-import { Badge, Button, cx, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
+import { Button, cx, Dialog, IconButton, Loading, Notice, TextArea, TopBar } from "../ui";
 import { ModelSelect } from "./ModelPicker";
 import { MenuButton } from "./Shell";
 import { AnswerBody, AttachmentChip, AttachmentImage, Attachments, Bubble, ErrorCard, FileCard, MessageActions, SpriteLine, Step, StepDetail, Steps, ThreadCard, Turn as TurnItem, UserMessage } from "../ui/Message";
@@ -37,6 +38,7 @@ type AgUiMessage = MessagePage["items"][number] & {
   toolCalls?: { id: string; function: { name: string; arguments: string } }[];
   toolCallId?: string;
   attachments?: AttachedFile[];
+  duration_ms?: number;
 };
 
 /** How near its end, in pixels, the thread still counts as at its end (UX-030). */
@@ -55,6 +57,10 @@ function turnsOf(page: MessagePage): Turn[] {
   // Results by call, across runs: an approved call's result comes in the run that continues it (ADR-0090).
   const results = new Map(
     page.items.filter((m) => m.role === "tool").map((m) => [(m as AgUiMessage).toolCallId, textOf((m as AgUiMessage).content)]),
+  );
+  // How long each call took, when the worker measured it (UX-043, ADR-0140).
+  const durations = new Map(
+    page.items.flatMap((m) => (m.role === "tool" && typeof (m as AgUiMessage).duration_ms === "number" ? [[(m as AgUiMessage).toolCallId, (m as AgUiMessage).duration_ms as number] as const] : [])),
   );
   return page.runs.map((run) => {
     const messages = run.message_ids.flatMap((id) => byId.get(id) ?? []);
@@ -75,7 +81,15 @@ function turnsOf(page: MessagePage): Turn[] {
         if (text) parts.push({ kind: "text", id: message.id, text });
         for (const call of message.toolCalls ?? []) {
           const result = results.get(call.id);
-          parts.push({ kind: "tool", id: call.id, name: call.function.name, args: call.function.arguments, ...(result === undefined ? {} : { result }) });
+          const durationMs = durations.get(call.id);
+          parts.push({
+            kind: "tool",
+            id: call.id,
+            name: call.function.name,
+            args: call.function.arguments,
+            ...(result === undefined ? {} : { result }),
+            ...(durationMs === undefined ? {} : { durationMs }),
+          });
         }
       }
     }
@@ -511,7 +525,7 @@ export function ConversationView() {
           {live && !settled && (
             <TurnItem>
               {live.userText !== null && <UserBubble text={live.userText} attachments={live.attachments ?? []} onShow={show} conversationId={conversationId} />}
-              <Answer parts={live.parts} conversationId={conversationId} onShow={show} running={live.status === "running"} />
+              <Answer parts={live.parts} conversationId={conversationId} onShow={show} running={live.status === "running"} timings={live.timings} />
               {live.status === "failed" && live.errorCode !== "run.cancelled" ? (
                 <RunErrorView code={live.errorCode ?? "internal.error"} reason={live.reason ?? null} />
               ) : (
@@ -841,34 +855,39 @@ function Answer({
   onShow,
   running = false,
   decided,
+  timings,
 }: {
   parts: LivePart[];
   conversationId: string;
   onShow: (path: string) => void;
   running?: boolean;
   decided?: Map<string, PathRun["approvals"][number]>;
+  timings?: LiveRun["timings"];
 }) {
   const offers = parts.flatMap((part) => (part.kind === "tool" ? (offerOf(part) ?? []) : []));
-  // Text, reasoning and tool calls in the order they came: consecutive calls form one group, and
-  // consecutive reasoning one fold (UX-003, CNV-013, ADR-0085).
-  type Reasoning = Extract<LivePart, { kind: "reasoning" }>;
+  // Text and steps in the order they came: consecutive calls and reasoning form one block of steps (UX-003, UX-043,
+  // CNV-013, ADR-0140).
+  type StepPart = Extract<LivePart, { kind: "reasoning" | "tool" }>;
   type Tool = Extract<LivePart, { kind: "tool" }>;
   const blocks: (
     | { kind: "text"; part: Extract<LivePart, { kind: "text" }> }
-    | { kind: "reasoning"; parts: Reasoning[] }
-    | { kind: "tools"; parts: Tool[] }
+    | { kind: "steps"; parts: StepPart[] }
     | { kind: "memory"; part: Tool; change: MemoryChange }
     | { kind: "skill"; part: Tool; name: string; saved: boolean }
   )[] = [];
   let change: MemoryChange | null;
   let skill: string | null;
-  for (const part of parts) {
+  const step = (part: StepPart) => {
     const last = blocks.at(-1);
-    if (part.kind === "text") blocks.push({ kind: "text", part });
-    else if (part.kind === "reasoning") {
-      if (last?.kind === "reasoning") last.parts.push(part);
-      else blocks.push({ kind: "reasoning", parts: [part] });
-    } else if ((change = memoryChangeOf(part.name, part.result)) !== null) {
+    if (last?.kind === "steps") last.parts.push(part);
+    else blocks.push({ kind: "steps", parts: [part] });
+  };
+  for (const part of parts) {
+    // A text with nothing in it yet, as a model opens before its calls, does not part the steps around it.
+    if (part.kind === "text") {
+      if (part.text.trim() !== "") blocks.push({ kind: "text", part });
+    } else if (part.kind === "reasoning") step(part);
+    else if ((change = memoryChangeOf(part.name, part.result)) !== null) {
       // What the assistant remembered, changed or forgot, where it happened (UX-027).
       blocks.push({ kind: "memory", part, change });
     } else if ((skill = loadedSkillOf(part.name, argumentsOf(part.args), part.result)) !== null) {
@@ -876,28 +895,19 @@ function Answer({
       blocks.push({ kind: "skill", part, name: skill, saved: false });
     } else if ((skill = savedSkillOf(part.name, part.result)) !== null) {
       blocks.push({ kind: "skill", part, name: skill, saved: true });
-    } else if (offerOf(part) === null) {
-      if (last?.kind === "tools") last.parts.push(part);
-      else blocks.push({ kind: "tools", parts: [part] });
-    }
+    } else if (offerOf(part) === null) step(part);
   }
   return (
     <AnswerBody>
       {blocks.map((block) =>
         block.kind === "text" ? (
           <Markdown key={block.part.id} text={block.part.text} />
-        ) : block.kind === "reasoning" ? (
-          <ReasoningView key={block.parts[0]?.id} text={block.parts.map((part) => part.text).join("\n\n")} />
         ) : block.kind === "memory" ? (
           <MemoryCard key={block.part.id} part={block.part} change={block.change} />
         ) : block.kind === "skill" ? (
           <SkillCard key={block.part.id} name={block.name} saved={block.saved} />
         ) : (
-          <Steps key={block.parts[0]?.id}>
-            {block.parts.map((part) => (
-              <ToolCall key={part.id} part={part} running={running} decision={decided?.get(part.id)} />
-            ))}
-          </Steps>
+          <StepsBlock key={block.parts[0]?.id} parts={block.parts} running={running} decided={decided} timings={timings} />
         ),
       )}
       {offers.length > 0 && (
@@ -911,26 +921,69 @@ function Answer({
   );
 }
 
-/** A piece of the model's reasoning, folded where it happened (CNV-013, ADR-0085). */
-function ReasoningView({ text }: { text: string }) {
+/** One block of steps, folded once the answer has ended when it is long, its last steps shown while it runs (UX-043). */
+function StepsBlock({
+  parts,
+  running,
+  decided,
+  timings,
+}: {
+  parts: Extract<LivePart, { kind: "reasoning" | "tool" }>[];
+  running: boolean;
+  decided?: Map<string, PathRun["approvals"][number]> | undefined;
+  timings?: LiveRun["timings"] | undefined;
+}) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const labelOf = useStepLabel();
+  const lines = parts.map((part) =>
+    part.kind === "reasoning" ? (
+      <ReasoningView key={part.id} text={part.text} />
+    ) : (
+      <ToolCall
+        key={part.id}
+        part={part}
+        running={running}
+        decision={decided?.get(part.id)}
+        durationMs={part.durationMs ?? timings?.[part.id]?.ms}
+      />
+    ),
+  );
+  const { hidden, shown } = folded(lines, { running, open: false });
+  if (hidden === 0) return <Steps>{lines}</Steps>;
+  const tallied = tally(parts.map((part) => (part.kind === "reasoning" ? t("message.reasoning") : labelOf(part))));
+  const what = tallied.map(({ label, count }) => (count > 1 ? `${label} ×${count}` : label)).join(" · ");
   return (
     <Steps>
-      <Step icon={<Brain aria-hidden="true" />} verb={t("message.reasoning")}>
-        <p className="whitespace-pre-wrap">{text}</p>
-      </Step>
+      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group/fold min-w-0">
+        <FoldLine label={running ? t("steps.earlier", { count: hidden }) : t("steps.count", { count: parts.length })} what={running ? "" : what} />
+        <div className="divide-y divide-line border-t border-line">{lines.slice(0, hidden)}</div>
+      </details>
+      {shown}
     </Steps>
   );
 }
 
-function argumentPreview(args: string): string {
-  try {
-    const parsed = JSON.parse(args) as Record<string, unknown>;
-    const first = Object.values(parsed).find((value) => typeof value === "string");
-    return typeof first === "string" ? first : "";
-  } catch {
-    return "";
-  }
+/** The line of a folded block: how many steps, and what they were. */
+function FoldLine({ label, what }: { label: string; what: string }) {
+  return (
+    <summary className="flex min-h-8 w-full cursor-pointer list-none items-center gap-2 px-3 py-1 text-small text-ink-2 transition-colors duration-120 hover:bg-hover focus-visible:-outline-offset-2 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden [&>svg]:size-4 [&>svg]:flex-none">
+      <ListChecks aria-hidden="true" />
+      <b className="flex-none font-medium text-ink">{label}</b>
+      {what && <span className="min-w-0 flex-1 basis-0 truncate text-caption">{what}</span>}
+      <ChevronRight className="ms-auto text-ink-3 transition-transform duration-120 rtl:-scale-x-100 group-open/fold:rotate-90 rtl:group-open/fold:-rotate-90" aria-hidden="true" />
+    </summary>
+  );
+}
+
+/** A piece of the model's reasoning, a step of its block, folded where it happened (CNV-013, ADR-0085, ADR-0140). */
+function ReasoningView({ text }: { text: string }) {
+  const { t } = useTranslation();
+  return (
+    <Step icon={<Brain aria-hidden="true" />} verb={t("message.reasoning")} caption={text.replace(/\s+/g, " ").trim()} plain>
+      <p className="whitespace-pre-wrap">{text}</p>
+    </Step>
+  );
 }
 
 /** The arguments of a call, as far as they have streamed. */
@@ -963,48 +1016,91 @@ function CallState({ done, running }: { done: boolean; running: boolean }) {
   );
 }
 
-/** Tool activity as a compact summary that expands to its full details, running or done (UX-003, ADR-0085). */
-function ToolCall({ part, running, decision }: { part: Extract<LivePart, { kind: "tool" }>; running: boolean; decision?: PathRun["approvals"][number] | undefined }) {
+/** The browser's tools by what they did in it (AGT-039, ADR-0140). */
+const BROWSER_LABELS: Record<string, string> = {
+  browser_goto: "activity.browserPage",
+  browser_markdown: "activity.browserRead",
+  browser_click: "activity.browserClicked",
+  browser_fill: "activity.browserTyped",
+};
+
+/** What a call did, in words: its step's label (UX-003, ADR-0085, ADR-0140). */
+function useStepLabel(): (part: Extract<LivePart, { kind: "tool" }>) => string {
+  const { t } = useTranslation();
+  return (part) => {
+    const activity = toolActivity(part.name);
+    const args = argumentsOf(part.args);
+    const purpose = typeof args.description === "string" && args.description.trim() !== "" ? args.description.trim() : null;
+    if (part.name === "load_capability" && args.id === BROWSER) return t("activity.browserOpened");
+    if (part.name.startsWith("browser_")) return t(BROWSER_LABELS[part.name] ?? "activity.browserUsed");
+    if (part.name === ASK_USER) return t("activity.asked");
+    if (isPlanning(part.name)) return t("activity.planned");
+    if (activity === "running") return purpose ? t("activity.commandFor", { purpose }) : t("activity.ran");
+    if (activity === "writing") return t("activity.wrote");
+    if (activity === "reading") return t("activity.read");
+    if (activity === "searching") return t("activity.searched");
+    return t("activity.used", { name: part.name });
+  };
+}
+
+/** Tool activity as one compact line that opens to its full details, running or done (UX-003, UX-043, ADR-0140). */
+function ToolCall({
+  part,
+  running,
+  decision,
+  durationMs,
+}: {
+  part: Extract<LivePart, { kind: "tool" }>;
+  running: boolean;
+  decision?: PathRun["approvals"][number] | undefined;
+  durationMs?: number | undefined;
+}) {
   const { t } = useTranslation();
   // A remote MCP server's tool, by its title and its server's name (UX-029).
   const serverTool = useServerTool(part.name);
-  const activity = toolActivity(part.name);
+  const labelOf = useStepLabel();
+  const label = serverTool ? t("activity.usedOf", { name: serverTool.title, server: serverTool.server }) : labelOf(part);
   const args = argumentsOf(part.args);
-  const command = activity === "running" && typeof args.command === "string" ? args.command : null;
-  const purpose = typeof args.description === "string" && args.description.trim() !== "" ? args.description.trim() : null;
-  const label =
-    part.name === ASK_USER
-      ? t("activity.asked")
-      : isPlanning(part.name)
-        ? t("activity.planned")
-        : activity === "running"
-          ? purpose
-            ? t("activity.commandFor", { purpose })
-            : t("activity.ran")
-          : activity === "writing"
-            ? t("activity.wrote")
-            : activity === "reading"
-              ? t("activity.read")
-              : activity === "searching"
-                ? t("activity.searched")
-                : serverTool
-                  ? t("activity.usedOf", { name: serverTool.title, server: serverTool.server })
-                  : t("activity.used", { name: part.name });
-  // A command's first line, under what it is for; other tools show their first argument beside the label.
-  const preview = command !== null ? (command.split("\n")[0] ?? "") : argumentPreview(part.args);
+  const preview = previewOf(part.name, args);
   // A call that never ran, denied or refused, is not done: its outcome says what became of it (UX-023).
   const refused = decision !== undefined && ["denied", "expired", "refused", "not_granted"].includes(decision.outcome);
   const done = part.result !== undefined && !refused;
+  const outcome = decision && outcomeLabel(t, decision.outcome, decision.scope);
   return (
     <Step
       icon={<CallState done={done} running={running} />}
       verb={label}
       caption={preview}
-      stacked={command !== null}
-      // How the call was decided, when it needed approval (UX-023).
-      end={decision && <Badge tone={refused ? "danger" : "ok"}>{outcomeLabel(t, decision.outcome, decision.scope)}</Badge>}
+      // How the call was decided, when it needed approval, as an icon with its words (UX-023, UX-043).
+      end={
+        outcome && (
+          <span title={outcome} className={cx("flex flex-none items-center", refused ? "text-danger" : "text-ok")}>
+            {refused ? <ShieldX className="size-4" aria-hidden="true" /> : <ShieldCheck className="size-4" aria-hidden="true" />}
+            <span className="sr-only">{outcome}</span>
+          </span>
+        )
+      }
     >
-      <StepDetail title={t("message.toolArguments")}>{command ?? part.args}</StepDetail>
+      <dl className="flex flex-col gap-1">
+        <div className="flex gap-3">
+          <dt className="w-28 flex-none font-semibold">{t("message.toolName")}</dt>{" "}
+          <dd className="min-w-0 font-mono text-caption break-all text-ink">{part.name}</dd>{" "}
+        </div>
+        {durationMs !== undefined && (
+          <div className="flex gap-3">
+            <dt className="w-28 flex-none font-semibold">{t("message.toolDuration")}</dt>{" "}
+            <dd className="tabular-nums">{durationText(durationMs)}</dd>{" "}
+          </div>
+        )}
+        {outcome && (
+          <div className="flex gap-3">
+            <dt className="w-28 flex-none font-semibold">{t("message.toolDecision")}</dt>{" "}
+            <dd>{outcome}</dd>{" "}
+          </div>
+        )}
+      </dl>
+      {/* Words apart when the details are copied or read as text; flex lays out no space for it. */}{" "}
+      <StepDetail title={t("message.toolArguments")}>{JSON.stringify(args, null, 2) === "{}" ? part.args : JSON.stringify(args, null, 2)}</StepDetail>
       {part.result !== undefined && (
         <StepDetail title={t("message.toolResult")} tall>
           {part.result}

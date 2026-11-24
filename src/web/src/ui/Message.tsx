@@ -120,20 +120,20 @@ export function SpriteLine({ sprite, children }: { sprite: ReactNode; children?:
   );
 }
 
-/** What a run did, as one block of steps (UX-003). */
+/** What a run did, as one block of steps, a line each, without space between them (UX-003, UX-043, ADR-0140). */
 export function Steps({ children }: { children: ReactNode }) {
   return <div className="max-w-full min-w-0 divide-y divide-line overflow-hidden rounded-md border border-line bg-surface">{children}</div>;
 }
 
 /**
- * One step: a line as wide as its block with an icon, a verb and a caption, that opens its details.
- * With `stacked`, the caption is a line of its own under the verb, as a command's first line is.
+ * One step: a line as wide as its block with an icon, its label in full, and in the room left a caption, cut, that
+ * opens its details. A label wider than the line wraps; the caption gives way first (ADR-0140).
  */
 export function Step({
   icon,
   verb,
   caption,
-  stacked = false,
+  plain = false,
   end,
   children,
 }: {
@@ -141,18 +141,19 @@ export function Step({
   icon?: ReactNode;
   verb: ReactNode;
   caption?: ReactNode;
-  stacked?: boolean;
+  /** A caption of words, not of code. */
+  plain?: boolean;
   /** What stands at the end of the line, such as how the step was decided. */
   end?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <details className="group/step min-w-0">
-      <summary className="flex min-h-10 w-full cursor-pointer list-none items-center gap-2 px-3 py-2 text-small text-ink-2 transition-colors duration-120 hover:bg-hover focus-visible:-outline-offset-2 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden [&>svg]:size-4 [&>svg]:flex-none">
+      <summary className="flex min-h-8 w-full cursor-pointer list-none items-center gap-2 px-3 py-1 text-small text-ink-2 transition-colors duration-120 hover:bg-hover focus-visible:-outline-offset-2 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden [&>svg]:size-4 [&>svg]:flex-none">
         {icon}
-        <span className={cx("flex min-w-0 flex-1", stacked ? "flex-col" : "items-center gap-2")}>
-          <b className="truncate font-medium text-ink">{verb}</b>
-          {caption && <span className="min-w-0 truncate font-mono text-caption">{caption}</span>}
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <b className="min-w-0 shrink font-medium break-words text-ink">{verb}</b>
+          {caption && <span className={cx("min-w-0 flex-1 basis-0 truncate text-caption", !plain && "font-mono")}>{caption}</span>}
         </span>
         {end}
         <ChevronRight className="text-ink-3 transition-transform duration-120 rtl:-scale-x-100 group-open/step:rotate-90 rtl:group-open/step:-rotate-90" aria-hidden="true" />
