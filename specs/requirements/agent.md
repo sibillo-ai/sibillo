@@ -712,7 +712,7 @@ with it (ADR-0136).
 
 ## AGT-039: Browsing the web
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security, eval
@@ -749,7 +749,7 @@ browsing or not.
 
 ## AGT-040: Reading pages that need JavaScript
 
-- **Status:** draft
+- **Status:** accepted
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration

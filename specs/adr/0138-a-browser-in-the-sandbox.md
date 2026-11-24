@@ -1,6 +1,6 @@
 # ADR-0138: A browser in the sandbox
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-24
 - **Deciders:** @tapionx
 - **Related:** AGT-003, AGT-014, AGT-021, AGT-034, AGT-039, AGT-040, SBX-001, SBX-008, SBX-018, SBX-021, SBX-024, SBX-026, ADR-0030, ADR-0072, ADR-0074, ADR-0075, ADR-0078, ADR-0080, ADR-0087, ADR-0090, ADR-0113, T-08, T-50, T-51
