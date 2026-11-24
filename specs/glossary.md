@@ -164,6 +164,9 @@ new entry here first (ADR-0005).
 | Journey | A task a persona accomplishes with Sibillo, described in the product description. |
 | ADR | Architecture decision record in `specs/adr/`. |
 | Contract | An interface that outlives the code: public API, database schema, on-disk formats. |
+| Test tier | One of the four kinds of tests by what they need: unit, database, agent and infrastructure; the first three are the fast tier (REPO-013, ADR-0139). |
+| Fast tier | The unit, database and agent tiers of the tests, run before every commit within two minutes, starting no sandbox, browser or durable worker (REPO-013, ADR-0139). |
+| Checked fake | A stand-in for a real component in the agent tier, such as the sandbox driver, whose behavior a contract suite compares with the real component's in the infrastructure tier (ADR-0139). |
 | Pending test | A test whose requirements are all `accepted` and not yet `implemented`; its failures are reported as expected (ADR-0045). |
 | Invariant | A property that must always hold, typically a security property, verified by tests. |
 | Eval | A repeatable scenario that measures agent behavior against one or more models. |
