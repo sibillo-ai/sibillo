@@ -1,8 +1,9 @@
 """A run's steps in compact lines (UX-043, ADR-0140).
 
 The model the tests serve calls the command tool with `run:<command>`, several commands in one answer with
-`runs:<command> ||| …`, reasons and calls a command with `think-run:<command>`, and calls a tool by name with
-`tool:<name> <arguments>` (tests/support/model.py).
+`runs:<command> ||| …`, reasons and calls a command with `think-run:<command>`, calls a tool by name with
+`tool:<name> <arguments>`, and tools in turn, each once, with `chain:<name> <arguments> >>> …`
+(tests/support/model.py).
 """
 
 from __future__ import annotations
@@ -106,8 +107,9 @@ def test_a_long_block_folds_once_the_answer_ends(page: Page, member: Account, de
 @pytest.mark.spec("UX-043")
 def test_loading_the_browser_is_told_as_the_browsers(page: Page, member: Account, default_model: HarnessModel) -> None:
     sign_in(page, member)
-    _send(page, f"tool:load_capability {json.dumps({'id': 'browser'})}")
+    # A chain of one call: the browser's instructions follow the load's result, and a chain still calls it once.
+    _send(page, f"chain:load_capability {json.dumps({'id': 'browser'})}")
     _answered(page)
     main = page.get_by_role("main")
-    expect(main.locator("summary", has_text="Opened the browser")).to_be_visible()
+    expect(main.locator("summary", has_text="Opened the browser")).to_have_count(1)
     expect(main).not_to_contain_text("Using a skill")
