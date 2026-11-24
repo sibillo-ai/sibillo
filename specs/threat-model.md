@@ -118,6 +118,8 @@ beyond keeping them configurable and updatable.
 | T-47 | Code in a sandbox reaches the sandbox engine's container runtime or the network guard over the network, and takes over the engine, which is privileged | X3 | SBX-005, SBX-015, SBX-025 |
 | T-48 | Injected instructions read by a delegated run reach the delegating run through its report, or travel from the delegating run into a delegated run through its brief, unseen, and lead it to send data out | X1 | AGT-003, AGT-004, AGT-037 |
 | T-49 | Injected instructions use a delegated run, which nobody watches, to make calls that the delegating run would have had to ask the user for | X1 | AGT-006, AGT-036 |
+| T-50 | Injected instructions in a page make the assistant act on a site through the browser: fill and send its forms, follow its links, or post where no sign-in is needed, with what the conversation holds | X1 | AGT-003, AGT-034, AGT-039, SBX-024, SBX-026 |
+| T-51 | A program of the sandbox image contacts its makers or a third party at run time: telemetry, or a model or service its tools call with a key | X5 | SBX-008, SBX-026, AGT-039 |
 | T-34 | A file operation on a workspace reaches outside it, through a crafted path or a link the agent planted, and reads or overwrites a file of the sandbox image, the host or another workspace | X1, X2 | SBX-014, TEN-008 |
 | T-27 | A tenant admin who is not the instance admin configures a connection that leads the control plane to the household's network or the host, through a private address, DNS rebinding or a redirect | X2 | MOD-009 |
 | T-28 | Injected instructions, such as a crafted log line, make the agent run commands or change files on a user's connected device | X1 | AGT-003, AGT-018, DEV-007 |
@@ -191,6 +193,11 @@ Prompts are never relied upon as a security boundary.
   the conversations whose user gave them internet access, to that
   conversation's workspace and the answer it runs in, which never contain
   secrets (SBX-001, SBX-008, SBX-024, ADR-0078, ADR-0113).
+- **Acting on sites through the browser.** In a conversation with internet
+  access, injected instructions in a page can make the assistant fill and
+  send forms on sites, as they could make it send any web request. The
+  browser cannot sign in and keeps no session beyond the turn, so it acts
+  on no account of the user's (AGT-039, ADR-0138).
 - **Approval fatigue.** Users may approve requests without reading them.
   Approval prompts must show what will be sent and where, and are kept rare:
   a conversation asks for internet access at most once (ADR-0090, ADR-0113).

@@ -109,6 +109,12 @@ their reports, with provenance that follows the brief and the report
 work showed that one context fills up, and that independent parts wait for
 each other.
 
+**Also:** a browser in the sandbox, so that the assistant reads pages that
+need JavaScript and drives sites a step at a time (AGT-039, AGT-040,
+SBX-026, ADR-0138). It moved here from phase 4: `read_page` returned a few
+words for many pages, and a spike showed that a light browser costs
+nothing to the conversations that do not use it.
+
 **Goal:** the assistant helps with the household's own machines: diagnosing a
 server, installing updates, checking logs and firewall rules, editing files,
 from any device where the user is signed in.
@@ -130,11 +136,10 @@ by a fixed grant of a task, and none surprising.
 **Goal:** the features that make it an assistant rather than a chat, and the
 release engineering to let others run it.
 
-Includes: multi-step research producing reports, browser automation in the
-sandbox, connectors over open protocols (calendar, mail,
-files, home automation through mediated tools), OpenID Connect (AUTH-003),
-budgets (MOD-004), debug mode (OBS-004), signed multi-architecture images,
-upgrade guarantees, release gating by evals.
+Includes: multi-step research producing reports, connectors over open
+protocols (calendar, mail, files, home automation through mediated tools),
+OpenID Connect (AUTH-003), budgets (MOD-004), debug mode (OBS-004), signed
+multi-architecture images, upgrade guarantees, release gating by evals.
 
 **Exit criteria:** first public release `0.1.0`; installation and upgrade
 documentation verified on a clean machine; public announcement.

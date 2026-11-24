@@ -124,6 +124,8 @@ new entry here first (ADR-0005).
 | Sandbox | A per-user isolated execution environment, without network until its conversation has internet access, and never with access to local networks (ADR-0113). |
 | Workspace | The persistent folder of a conversation's sandbox, `/workspace`, which keeps what the user wants to keep; everything else in the sandbox is discarded when it stops (ADR-0076, ADR-0078). |
 | Scratch folder | The folder where a sandbox's commands start, `/scratch`, discarded with the sandbox (ADR-0076). |
+| Browser | The headless browser of a sandbox, which runs pages' JavaScript; started by the first browser tool called in the sandbox, and gone with it (SBX-026, ADR-0138). |
+| Browser tools | The tools that drive a sandbox's browser one action at a time, such as `browser_goto` and `browser_click`; web tools, which need internet access, offered to the model only once it loads the browser (AGT-039, ADR-0138). |
 | Workspace disk | A sparse file holding the ext4 filesystem of one workspace, of the size of the workspace quota, attached to a loop device and mounted at `/workspace`; never mounted where user content runs (SBX-016, ADR-0098). |
 | Disk helper | A short-lived privileged container of the sandbox driver that makes, grows, attaches and detaches workspace disks with fixed commands; never runs user content (ADR-0098). |
 | Workspace panel | The client's view of a conversation's workspace, as a tree of files and folders to preview, download, upload, move and delete (UX-019, ADR-0079). |

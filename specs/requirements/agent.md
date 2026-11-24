@@ -709,3 +709,57 @@ cost ledger (MOD-006) with the purpose `delegation` and the delegating run's
 ID, and its tool calls MUST be audited (AGT-008). Each delegation MUST be
 kept with its delegating run, with its brief, status and report, and deleted
 with it (ADR-0136).
+
+## AGT-039: Browsing the web
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security, eval
+
+The agent MUST be able to drive a browser in the conversation's sandbox
+(SBX-026), one action per tool call, with the browser tools of ADR-0138:
+opening an `http` or `https` address, reading the page whole or in part,
+finding its elements, clicking, typing, pressing keys, choosing options,
+scrolling, waiting, running JavaScript in the page, extracting data,
+downloading files into the sandbox, and calling the tools a page registers
+for agents. Later calls in the same sandbox MUST act on the page the earlier
+ones left. The browser tools MUST be tools of the system, whose names,
+descriptions and parameters do not change with the browser's release, and
+MUST NOT include tools that sign in, or that send the page to a model or a
+service of a third party. They MUST need internet access as `read_page`
+does (AGT-034), and their results MUST be untrusted content (AGT-003),
+bounded like other tool output (AGT-014). A call that finds the browser
+started afresh MUST say so in its result. When an action or a page fails,
+the tool MUST tell the model why, and the run MUST go on.
+
+The browser tools, and the instructions about them, MUST NOT be offered to
+the model until it loads the browser: before that, it MUST see only a
+description of one sentence and a tool to load it, and once loaded the
+browser tools MUST be offered for the rest of the conversation. Loading the
+browser MUST NOT start it or need internet access. With every browser tool
+switched off, the browser MUST NOT be offered at all. Evals MUST show that
+models load the browser when a task needs a site, and not when reading a
+page is enough (ADR-0138).
+
+Rationale: many sites show what they hold only after a search, a choice or
+a click, and the model must see the page between its steps; the definitions
+of the browser tools would otherwise fill the context of every request,
+browsing or not.
+
+## AGT-040: Reading pages that need JavaScript
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration
+
+When `read_page` cannot read a page, or keeps less than 1,000 characters of
+its main text, it MUST load the page in the sandbox's browser, running its
+scripts, and return the rendered page as Markdown, saying that it was
+rendered. Rendering MUST NOT take more than 10 seconds before the page is
+read as it is, and MUST NOT use or change the state of the browser tools
+(AGT-039). Everything else of AGT-021 applies (ADR-0138).
+
+Rationale: pages built by JavaScript hold a frame and a script, and
+`read_page` returned a few words for them.

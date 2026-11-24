@@ -382,3 +382,26 @@ its container runtime are unreachable (ADR-0114).
 Rationale: an instance that needs gVisor installed on its host, and writes
 into the host's firewall, is harder to install, to keep the same on every
 host and to remove (T-47).
+
+## SBX-026: A browser in the sandbox
+
+- **Status:** draft
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+The sandbox image MUST include a headless browser that runs JavaScript,
+pinned and verified by checksum when the image is built. A sandbox MUST NOT
+start the browser until a browser tool is called in it (AGT-039), and MUST
+run at most one; it MUST live no longer than its sandbox, and nothing of it,
+such as cookies or a profile, MUST be kept in the workspace. It MUST be
+reachable only from inside its sandbox, on the loopback address, and the
+browser tools MUST reach it through the sandbox driver, as other commands
+are run. The browser MUST NOT send telemetry, and MUST NOT be given keys or
+credentials of any service (SBX-008). Security tests MUST verify from
+inside a running sandbox that no browser runs before a browser tool is
+called, and that the browser listens on loopback only (ADR-0138).
+
+Rationale: a browser in every sandbox would cost memory to every
+conversation, and one shared by conversations would let a page of one reach
+the others (T-05, T-51).
