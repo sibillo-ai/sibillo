@@ -19,6 +19,11 @@ from tests.support.database import Database, uuid7
 from tests.support.server import Server
 
 _HASHER = PasswordHasher()
+# The password of every account a test arranges, hashed once: hashing costs 60 ms (AUTH-001), which a
+# test that needs an account, and often a second one for the household's admin, would pay again.
+# A test that needs a password of its own passes one to `create_account`.
+_SHARED_PASSWORD = "test-password-" + secrets.token_urlsafe(16)
+_SHARED_HASH = _HASHER.hash(_SHARED_PASSWORD)
 
 
 @dataclass(frozen=True)
@@ -41,15 +46,22 @@ def create_tenant(database: Database) -> uuid.UUID:
 
 
 def create_account(
-    database: Database, tenant_id: uuid.UUID, role: str = "member", *, instance_admin: bool = False
+    database: Database,
+    tenant_id: uuid.UUID,
+    role: str = "member",
+    *,
+    instance_admin: bool = False,
+    password: str | None = None,
 ) -> Account:
-    user_id, password = uuid7(), secrets.token_urlsafe(16)
+    user_id = uuid7()
+    password_hash = _SHARED_HASH if password is None else _HASHER.hash(password)
+    password = _SHARED_PASSWORD if password is None else password
     username = f"user-{user_id}"
     with database.superuser() as conn:
         conn.execute(
             "INSERT INTO users (id, tenant_id, username, display_name, password_hash, role, instance_admin,"
             " created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
-            (user_id, tenant_id, username, "Test user", _HASHER.hash(password), role, instance_admin),
+            (user_id, tenant_id, username, "Test user", password_hash, role, instance_admin),
         )
     return Account(user_id, tenant_id, username, password, role, instance_admin)
 
