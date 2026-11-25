@@ -51,6 +51,29 @@ def _endpoint_host(model: HarnessModel | HouseholdModel) -> str:
     return urllib.parse.urlsplit(model.endpoint.url).netloc
 
 
+@pytest.mark.spec("API-004")
+def test_events_reach_the_client_as_the_model_writes_them(server: Server, token: str) -> None:
+    """The model streams eight pieces, a tenth of a second apart: none waits long for the next one."""
+    conversation = create_conversation(server, token)
+    pieces: list[float] = []
+    with (
+        server.client(token) as client,
+        client.stream(
+            "POST",
+            f"/conversations/{conversation['id']}/runs",
+            json=run_input(conversation["id"], "drop:8"),
+            timeout=60,
+        ) as response,
+    ):
+        for line in response.iter_lines():
+            if line == "event: TEXT_MESSAGE_CONTENT":
+                pieces.append(time.monotonic())
+            if line == "event: RUN_FINISHED":
+                break
+    assert len(pieces) == 8
+    assert max(later - earlier for earlier, later in zip(pieces, pieces[1:], strict=False)) < 0.5
+
+
 @pytest.mark.spec("API-004", "AGT-009")
 def test_a_run_streams_ag_ui_events_with_sequence_numbers(server: Server, token: str) -> None:
     conversation = create_conversation(server, token)

@@ -236,7 +236,13 @@ def start_server(
                 "SIBILLO_PUBLIC_ORIGIN": f"http://localhost:{port}",
             }
         )
-        api = Process("api", api_environment, command="api")
+        inprocess = os.environ.get("TEST_INPROCESS") == "1"
+        if inprocess:
+            from tests.support.inprocess import InProcessApi
+
+            api: Any = InProcessApi(api_environment)
+        else:
+            api = Process("api", api_environment, command="api")
         config.add_cleanup(api.close)
         # Temporary conversations are swept every second, so that their tests need not wait (ADR-0082).
         # So are expired approval requests, so that their tests need not wait either (ADR-0090).
@@ -258,7 +264,12 @@ def start_server(
         if push is not None:
             push_address, authority = push
             worker_environment |= {"TEST_PUSH_ADDRESS": push_address, "SSL_CERT_FILE": str(authority)}
-        worker = Process("worker", base | shared | worker_environment, command="worker")
+        if inprocess:
+            from tests.support.inprocess import InProcessWorker
+
+            worker: Any = InProcessWorker(base | shared | worker_environment)
+        else:
+            worker = Process("worker", base | shared | worker_environment, command="worker")
         config.add_cleanup(worker.close)
         server = Server(
             base_url=f"http://127.0.0.1:{port}/v1",
