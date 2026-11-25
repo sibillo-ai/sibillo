@@ -69,10 +69,18 @@ Tests reference requirements with a marker, e.g.
 
 ### Running the checks before a push
 
-While working, run only the tests a change touches, such as
-`uv run --locked pytest tests/integration/test_delegations.py`. Most tests
-start real sandboxes, servers and a database, so the whole suite in one
-pytest session takes about an hour.
+While working, run the agent tier, which is most of the tests (ADR-0139,
+ADR-0141): the API and the worker run in the test process, on a fake sandbox
+driver, in eight workers at once, with no sandbox engine, image or browser:
+
+```bash
+python3 tools/run_ci_parts.py --parts agent --no-checks
+```
+
+It is the command CI runs for its `agent` part. The tests that need a real
+sandbox, process or browser are in `tests/integration`, `tests/security`,
+`tests/evals` and `tests/web`, and take the rest of the time: the whole
+suite in one pytest session takes an hour.
 
 Before pushing, run every check of CI with its test parts in parallel, as CI
 runs them (ADR-0137):
