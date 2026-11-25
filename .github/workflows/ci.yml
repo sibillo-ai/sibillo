@@ -99,7 +99,6 @@ jobs:
           - part: sandbox
             paths: >-
               tests/security tests/integration/test_sandbox_driver.py tests/integration/test_workspace_disks.py
-              --ignore=tests/security/test_task_grants.py --ignore=tests/security/test_task_triggers.py
               --ignore=tests/security/test_sandbox_isolation.py
             budget: 300
           # The sandboxes' isolation (SBX-001 to SBX-025): its tests restart the engine
@@ -113,10 +112,8 @@ jobs:
           # with running and changing tasks, reading conversations and the stream of changes
           # (AGT-032, AGT-033, API-008), about 95 seconds.
           - part: tasks
-            paths: >-
-              tests/integration/test_tasks.py tests/security/test_task_grants.py
-              tests/security/test_task_triggers.py
-            budget: 300
+            paths: tests/integration/test_tasks.py
+            budget: 120
           # The server image now builds the web app as well (ADR-0067).
           - part: end-to-end
             paths: tests/e2e/test_deployment.py
