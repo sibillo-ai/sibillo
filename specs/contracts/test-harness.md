@@ -86,6 +86,20 @@ To check an instance that cannot use passkeys (ADR-0094), a test starts a
 second API with the same environment, its own port, and no
 `SIBILLO_PUBLIC_ORIGIN`, and stops it when it ends.
 
+### The agent tier (ADR-0141)
+
+Tests of the agent tier use the same procedure, with the API and the worker
+started in the test process instead of as processes: the API served by
+`uvicorn` in a thread, on the port and with the configuration above; the
+worker configured with the worker's configuration, the durable execution
+engine launched in a thread with an event loop of its own, and the sweeps of
+the worker running as in the process. Both are stopped, and the engine
+destroyed, at the end of the session. `SIBILLO_SANDBOXD_URL` and
+`SIBILLO_SANDBOXD_TOKEN` name the fake sandbox driver of the session, not the
+real one. The harness's HTTP client, its checks against the API contract and
+the model server are the same. Tests that need the outbound log, a crash of
+the worker or the processes' output are infrastructure tests.
+
 ## Passkeys
 
 Tests answer WebAuthn ceremonies (AUTH-010) with a software authenticator of
