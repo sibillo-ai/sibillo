@@ -82,62 +82,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The agent tier (ADR-0139, ADR-0141): the API and the worker in the test process, on a fake
+          # sandbox driver, eight workers at once. It starts no engine, no browser and no image, and runs
+          # the same way on a developer's machine. The first measure on a runner sets its budget.
+          - part: agent
+            paths: tests/agent -n 8
+            budget: 420
+          # What needs a real sandbox, a real process or a real browser, of the integration tests (ADR-0139);
+          # the rest of them are in the agent part.
           - part: core
             paths: >-
               tests/design tests/integration tests/tooling
-              --ignore=tests/integration/test_sandbox_driver.py --ignore=tests/integration/test_runs_api.py
-              --ignore=tests/integration/test_agent_tools.py --ignore=tests/integration/test_remote_provider.py
-              --ignore=tests/integration/test_rewinding.py --ignore=tests/integration/test_models_api.py
-              --ignore=tests/integration/test_titles_and_compaction.py --ignore=tests/integration/test_usage.py
-              --ignore=tests/integration/test_forks.py --ignore=tests/integration/test_conversation_list.py
-              --ignore=tests/integration/test_workspace_files.py --ignore=tests/integration/test_conversation_files.py
-              --ignore=tests/integration/test_ollama.py --ignore=tests/integration/test_skills.py
-              --ignore=tests/integration/test_tasks.py --ignore=tests/integration/test_task_use.py
-              --ignore=tests/integration/test_conversation_tools.py --ignore=tests/integration/test_change_stream.py
-              --ignore=tests/integration/test_workspaces.py --ignore=tests/integration/test_workspace_disks.py
-              --ignore=tests/integration/test_backups.py --ignore=tests/integration/test_operator_commands.py
-              --ignore=tests/integration/test_delegations.py
-            # Raised from 240 with the memory tests (MEM-001 to MEM-008), which add about 55 seconds,
-            # and from 300 with the remote MCP servers' (AGT-018, AGT-019, AGT-028 to AGT-031), about 50.
-            # Raised from 360 with the sandbox engine (ADR-0114), whose start adds 20 to 30 seconds to
-            # the session, on runners whose time for the same tests varies by up to 80 seconds.
+              --ignore=tests/integration/test_sandbox_driver.py --ignore=tests/integration/test_workspace_disks.py
+              --ignore=tests/integration/test_tasks.py
             budget: 420
-          # Workspaces, their disks, backups and the operator's commands, out of the core part, which
-          # took 437 seconds on a fast machine with them, over its budget; about 115 seconds, and the
-          # session's start.
-          - part: workspaces
-            paths: >-
-              tests/integration/test_workspaces.py tests/integration/test_workspace_disks.py
-              tests/integration/test_backups.py tests/integration/test_operator_commands.py
-            budget: 240
-          - part: runs
-            paths: tests/integration/test_runs_api.py tests/integration/test_agent_tools.py
-            budget: 240
-          - part: conversations
-            paths: >-
-              tests/integration/test_rewinding.py tests/integration/test_models_api.py
-              tests/integration/test_remote_provider.py tests/integration/test_ollama.py
-            budget: 240
-          # Titles, compaction, costs, forks, folders and search (ADR-0073), and delegated runs
-          # (AGT-035 to AGT-038, ADR-0136), about 60 seconds, out of the core part, near its budget.
-          - part: library
-            paths: >-
-              tests/integration/test_titles_and_compaction.py tests/integration/test_usage.py
-              tests/integration/test_forks.py tests/integration/test_conversation_list.py
-              tests/integration/test_delegations.py
-            budget: 240
-          # Files in a conversation (ADR-0079): every file operation starts a container.
-          - part: files
-            paths: tests/integration/test_workspace_files.py tests/integration/test_conversation_files.py
-            budget: 180
-          # Skills (AGT-017, AGT-024 to AGT-026, ADR-0096): imports download from
-          # GitHub in a sandbox, and saving a skill starts one.
-          - part: skills
-            paths: tests/integration/test_skills.py
-            budget: 180
           - part: sandbox
             paths: >-
-              tests/security tests/integration/test_sandbox_driver.py
+              tests/security tests/integration/test_sandbox_driver.py tests/integration/test_workspace_disks.py
               --ignore=tests/security/test_task_grants.py --ignore=tests/security/test_task_triggers.py
               --ignore=tests/security/test_sandbox_isolation.py
             budget: 300
@@ -154,8 +115,7 @@ jobs:
           - part: tasks
             paths: >-
               tests/integration/test_tasks.py tests/security/test_task_grants.py
-              tests/security/test_task_triggers.py tests/integration/test_task_use.py
-              tests/integration/test_conversation_tools.py tests/integration/test_change_stream.py
+              tests/security/test_task_triggers.py
             budget: 300
           # The server image now builds the web app as well (ADR-0067).
           - part: end-to-end
@@ -232,7 +192,9 @@ jobs:
       # The images are built with Docker's build cache, kept between runs, and
       # handed to the tests, which then do not build them again (ADR-0059).
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: matrix.part != 'agent'
       - name: Build the sandbox image
+        if: matrix.part != 'agent'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -242,6 +204,7 @@ jobs:
           cache-from: type=gha,scope=sandbox
           cache-to: type=gha,mode=max,scope=sandbox
       - name: Build the network guard image
+        if: matrix.part != 'agent'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -254,6 +217,7 @@ jobs:
       # only Docker's own builder sees among the images it loaded; built
       # here, it is not built again inside the tests' time (ADR-0059, ADR-0114).
       - name: Build the sandbox engine image
+        if: matrix.part != 'agent'
         run: >-
           docker build --builder default --file deploy/images/engine/Dockerfile
           --build-context sandbox-image=docker-image://sibillo-test/sandbox:ci
