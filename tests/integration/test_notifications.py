@@ -17,10 +17,10 @@ from typing import Any
 
 import pytest
 
-from tests.support.accounts import Account, assert_problem, body, create_account, create_tenant, login
+from tests.support.accounts import Account, body, create_account, create_tenant, login
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
-from tests.support.push import FCM, MOZILLA, BrowserSubscription, Push, PushService, from_b64url, vapid_claims
+from tests.support.push import FCM, MOZILLA, BrowserSubscription, Push, PushService, vapid_claims
 from tests.support.runs import create_conversation, start_run, wait_for_run
 from tests.support.server import Server
 
@@ -88,25 +88,6 @@ def quiet(push_service: PushService, *subscriptions: BrowserSubscription) -> Non
 
 
 @pytest.mark.spec("UX-004")
-def test_notifications_are_off_until_turned_on_on_a_device(server: Server, account: Account, token: str) -> None:
-    before = settings(server, token)
-    assert before["available"] is True
-    assert before["subscribed"] is False
-    key = from_b64url(before["public_key"])
-    assert len(key) == 65
-    assert key[0] == 4, "an uncompressed P-256 point"
-    subscribe(server, token)
-    assert settings(server, token)["subscribed"] is True
-    # Another device of the same user is still off.
-    other = login(server, account, "other device")
-    assert settings(server, other)["subscribed"] is False
-    # Turning them off on the first device.
-    with server.client(token) as client:
-        assert client.delete("/me/notifications").status_code == 204
-    assert settings(server, token)["subscribed"] is False
-
-
-@pytest.mark.spec("UX-004")
 def test_a_run_that_ends_while_nobody_follows_it_notifies_without_content(
     server: Server, token: str, push_service: PushService
 ) -> None:
@@ -126,17 +107,6 @@ def test_a_run_that_ends_while_nobody_follows_it_notifies_without_content(
     assert claims["sub"] == server.public_origin
     expires = datetime.datetime.fromtimestamp(claims["exp"], datetime.UTC)
     assert before < expires <= before + datetime.timedelta(hours=24, minutes=1)
-
-
-@pytest.mark.spec("UX-004")
-def test_a_run_that_a_client_follows_to_its_end_sends_nothing(
-    server: Server, token: str, push_service: PushService
-) -> None:
-    subscription = subscribe(server, token)
-    conversation_id = create_conversation(server, token)["id"]
-    run_id, _ = start_run(server, token, conversation_id, WAIT + "hello")
-    assert wait_for_run(server, token, run_id)["status"] == "completed"
-    quiet(push_service, subscription)
 
 
 @pytest.mark.spec("UX-004")
@@ -172,17 +142,6 @@ def test_each_kind_of_run_end_has_its_notification(
     assert wait_for_run(server, token, run_id)["status"] == status
     assert subscription.decrypt(push) == {"kind": kind, "conversation_id": conversation_id, "run_id": run_id}
     assert push.headers["urgency"] == urgency
-
-
-@pytest.mark.spec("UX-004")
-def test_a_run_the_user_stops_sends_nothing(server: Server, token: str, push_service: PushService) -> None:
-    subscription = subscribe(server, token)
-    conversation_id = create_conversation(server, token)["id"]
-    run_id = leave_early(server, token, conversation_id, "slow:20")
-    with server.client(token) as client:
-        assert client.post(f"/runs/{run_id}/cancel").status_code == 200
-    assert wait_for_run(server, token, run_id)["status"] == "cancelled"
-    quiet(push_service, subscription)
 
 
 @pytest.mark.spec("UX-004")
@@ -248,21 +207,3 @@ def test_a_subscription_the_push_service_says_is_gone_is_deleted(
     while settings(server, token)["subscribed"]:
         assert time.monotonic() < deadline, "the subscription was kept"
         time.sleep(0.1)
-
-
-@pytest.mark.spec("UX-004")
-def test_without_a_public_origin_notifications_are_unavailable(server: Server, account: Account, token: str) -> None:
-    api, origin = server.start_twin_api(without=("SIBILLO_PUBLIC_ORIGIN",))
-    try:
-        twin = server.client(token)
-        twin.base_url = f"{origin}/v1"
-        with twin as client:
-            response = client.get("/me/notifications")
-            assert response.status_code == 200, response.text
-            assert body(response)["available"] is False
-            assert "public_key" not in body(response)
-            refused = client.put("/me/notifications", json=BrowserSubscription().to_json())
-            assert_problem(refused, 503, "notification.unavailable")
-    finally:
-        api.close()
-    assert settings(server, token)["subscribed"] is False

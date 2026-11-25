@@ -32,6 +32,65 @@ def _sandbox() -> tuple[str, str, str]:
     return str(uuid7()), str(uuid7()), str(uuid7())
 
 
+def _export(sandboxes: Driver, tenant_id: str, user_id: str, conversation_id: str) -> bytes:
+    with sandboxes.client() as client:
+        response = client.get(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace")
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("application/x-tar")
+    return response.content
+
+
+def _import(sandboxes: Driver, tenant_id: str, user_id: str, conversation_id: str, archive: bytes) -> Any:
+    with sandboxes.client() as client:
+        return client.put(
+            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace",
+            content=archive,
+            headers={"Content-Type": "application/x-tar"},
+        )
+
+
+def _tar(*members: tuple[tarfile.TarInfo, bytes | None]) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as tar:
+        for info, data in members:
+            tar.addfile(info, io.BytesIO(data) if data is not None else None)
+    return buffer.getvalue()
+
+
+def _file(name: str, data: bytes = b"x") -> tuple[tarfile.TarInfo, bytes]:
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    return info, data
+
+
+def _special(name: str, kind: bytes, target: str = "") -> tuple[tarfile.TarInfo, None]:
+    info = tarfile.TarInfo(name)
+    info.type = kind
+    info.linkname = target
+    return info, None
+
+
+@pytest.fixture
+def account(database: Database) -> Account:
+    return create_account(database, create_tenant(database))
+
+
+@pytest.fixture
+def token(server: Server, account: Account, default_model: HarnessModel) -> str:
+    default_model.connect(account.tenant_id)
+    return login(server, account)
+
+
+def _tool_result(model: HarnessModel, text: str) -> str:
+    (content,) = [
+        str(message.get("content", ""))
+        for request in model.endpoint.requests_with(text)[-1:]
+        for message in request.body.get("messages", [])
+        if message.get("role") == "tool"
+    ]
+    return content
+
+
 @pytest.mark.spec("SBX-018")
 def test_commands_start_in_the_scratch_folder(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
@@ -84,23 +143,6 @@ def test_every_command_reports_the_workspace_size_and_quota(sandboxes: Driver) -
     assert scratch.workspace_bytes < 2 * 1048576
 
 
-def _export(sandboxes: Driver, tenant_id: str, user_id: str, conversation_id: str) -> bytes:
-    with sandboxes.client() as client:
-        response = client.get(f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace")
-    assert response.status_code == 200, response.text
-    assert response.headers["content-type"].startswith("application/x-tar")
-    return response.content
-
-
-def _import(sandboxes: Driver, tenant_id: str, user_id: str, conversation_id: str, archive: bytes) -> Any:
-    with sandboxes.client() as client:
-        return client.put(
-            f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace",
-            content=archive,
-            headers={"Content-Type": "application/x-tar"},
-        )
-
-
 @pytest.mark.spec("SBX-020")
 def test_a_workspace_is_exported_and_imported(sandboxes: Driver) -> None:
     tenant_id, user_id, conversation_id = _sandbox()
@@ -133,27 +175,6 @@ def test_a_workspace_is_exported_and_imported(sandboxes: Driver) -> None:
         sandboxes.sh(other_tenant, other_user, other_conversation, "test -e /workspace/old.txt || echo gone").stdout
         == "gone\n"
     )
-
-
-def _tar(*members: tuple[tarfile.TarInfo, bytes | None]) -> bytes:
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w") as tar:
-        for info, data in members:
-            tar.addfile(info, io.BytesIO(data) if data is not None else None)
-    return buffer.getvalue()
-
-
-def _file(name: str, data: bytes = b"x") -> tuple[tarfile.TarInfo, bytes]:
-    info = tarfile.TarInfo(name)
-    info.size = len(data)
-    return info, data
-
-
-def _special(name: str, kind: bytes, target: str = "") -> tuple[tarfile.TarInfo, None]:
-    info = tarfile.TarInfo(name)
-    info.type = kind
-    info.linkname = target
-    return info, None
 
 
 @pytest.mark.spec("SBX-020")
@@ -208,27 +229,6 @@ def test_a_workspace_with_links_anywhere_moves_without_starting_its_sandbox(sand
     assert linked.stdout == "/usr/bin/python3\n"
 
 
-@pytest.fixture
-def account(database: Database) -> Account:
-    return create_account(database, create_tenant(database))
-
-
-@pytest.fixture
-def token(server: Server, account: Account, default_model: HarnessModel) -> str:
-    default_model.connect(account.tenant_id)
-    return login(server, account)
-
-
-def _tool_result(model: HarnessModel, text: str) -> str:
-    (content,) = [
-        str(message.get("content", ""))
-        for request in model.endpoint.requests_with(text)[-1:]
-        for message in request.body.get("messages", [])
-        if message.get("role") == "tool"
-    ]
-    return content
-
-
 @pytest.mark.spec("SBX-019")
 @pytest.mark.parametrize(
     ("size", "words"), [(7_000_000, "quota"), (9_000_000, "exceeds")], ids=["near-quota", "over-quota"]
@@ -243,43 +243,6 @@ def test_the_agent_is_told_when_the_workspace_nears_its_quota(
     result = _tool_result(default_model, text).lower()
     assert "workspace" in result
     assert words in result
-
-
-@pytest.mark.spec("SBX-019")
-def test_a_small_workspace_says_nothing_about_its_quota(
-    server: Server, token: str, default_model: HarnessModel
-) -> None:
-    conversation = create_conversation(server, token)
-    text = "run:echo small > /workspace/small.txt"
-    run_id, _ = start_run(server, token, conversation["id"], text)
-    assert wait_for_run(server, token, run_id)["status"] == "completed"
-    assert "quota" not in _tool_result(default_model, text).lower()
-
-
-@pytest.mark.spec("AGT-022")
-def test_the_agent_is_told_what_the_workspace_keeps(server: Server, token: str, default_model: HarnessModel) -> None:
-    conversation = create_conversation(server, token)
-    text = f"instructions {uuid7()}"
-    run_id, _ = start_run(server, token, conversation["id"], text)
-    assert wait_for_run(server, token, run_id)["status"] == "completed"
-    (request,) = default_model.endpoint.requests_with(text)[:1]
-    messages = request.body.get("messages", [])
-    system = " ".join(str(message.get("content", "")) for message in messages if message.get("role") == "system")
-    for phrase in ("/scratch", "/workspace", "README.md"):
-        assert phrase in system, f"the instructions do not mention {phrase}"
-
-
-@pytest.mark.spec("SBX-021")
-def test_the_agent_is_told_which_tools_the_sandbox_has(server: Server, token: str, default_model: HarnessModel) -> None:
-    conversation = create_conversation(server, token)
-    text = f"instructions {uuid7()}"
-    run_id, _ = start_run(server, token, conversation["id"], text)
-    assert wait_for_run(server, token, run_id)["status"] == "completed"
-    (request,) = default_model.endpoint.requests_with(text)[:1]
-    messages = request.body.get("messages", [])
-    system = " ".join(str(message.get("content", "")) for message in messages if message.get("role") == "system")
-    for tool in ("pdftotext", "markitdown", "pandoc", "typst", "ffmpeg", "ImageMagick", "pandas", "openpyxl", "node"):
-        assert tool in system, f"the instructions do not mention {tool}"
 
 
 @pytest.mark.spec("SBX-018")

@@ -109,7 +109,11 @@ class Server:
         if token is not None:
             headers["Authorization"] = f"Bearer {token}"
         return httpx.Client(
-            base_url=self.base_url, headers=headers, timeout=30, event_hooks={"response": [response_hook]}
+            base_url=self.base_url,
+            headers=headers,
+            timeout=30,
+            verify=False,  # noqa: S501 - plain HTTP on the loopback; building a TLS context costs 20 ms a client
+            event_hooks={"response": [response_hook]},
         )
 
     def start_twin_api(

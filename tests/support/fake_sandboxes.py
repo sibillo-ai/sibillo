@@ -31,6 +31,7 @@ import uvicorn
 from sibillo_sandboxd.app import create_app
 from sibillo_sandboxd.config import load_configuration
 from sibillo_sandboxd.files import FileOperationError, relative
+from sibillo_sandboxd.isolation import Check, IsolationState
 from sibillo_sandboxd.policy import SandboxId
 from sibillo_sandboxd.sandboxes import Exit, Output
 from tests.support.server import free_port
@@ -359,6 +360,8 @@ async def _command(box: _Box, words: list[str], seconds: int | None) -> tuple[st
             "",
             0,
         )
+    if name == "cd":
+        return "", "", 0
     if name == "true":
         return "", "", 0
     if name == "false":
@@ -401,19 +404,17 @@ async def _command(box: _Box, words: list[str], seconds: int | None) -> tuple[st
     return "", f"sh: {name}: not found\n", 127
 
 
+def _verified() -> IsolationState:
+    """The state of an isolation whose every check passed, as the real driver reports it once they do."""
+    state = IsolationState(runtime_version="fake")
+    for name in ("platform", "isolation_runtime", "release", "egress_table", "canary", "disks"):
+        setattr(state, name, Check(ok=True, detail="fake"))
+    return state
+
+
 class _Isolation:
-    """Isolation that is always verified, as the real driver's is once its checks pass."""
-
-    class state:  # noqa: N801 - mirrors the attribute of the real class
-        ready = True
-
-        @staticmethod
-        def health() -> dict[str, Any]:
-            return {"ready": True}
-
-        @staticmethod
-        def refusal_code() -> str:
-            return "driver.isolation_unverified"
+    def __init__(self) -> None:
+        self.state = _verified()
 
 
 @dataclass(frozen=True)

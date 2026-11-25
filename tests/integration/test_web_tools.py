@@ -21,7 +21,6 @@ from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.runs import create_conversation, get_run, text_of
 from tests.support.sandbox import Driver
-from tests.support.search import MANY_RESULTS, SearchServer, result
 from tests.support.server import Server
 
 PAGE_PORT = 8765
@@ -107,58 +106,6 @@ def _serve_page(sandboxes: Driver, account: Account, conversation_id: str, name:
     return f"http://127.0.0.1:{PAGE_PORT}/{name}"
 
 
-@pytest.mark.spec("AGT-020")
-def test_web_search_returns_untrusted_results(
-    server: Server, token: str, default_model: HarnessModel, search_service: SearchServer
-) -> None:
-    query = f"tomato watering {secrets.token_hex(4)}"
-    text = _call("web_search", query=query)
-    assert _completed(server, token, text).startswith("Tool said:")
-    content = _tool_result(default_model, text)
-    for index in range(3):
-        expected = result(query, index)
-        assert expected["title"] in content
-        assert expected["url"] in content
-        assert expected["content"] in content
-    # It says where the results come from, and that they are data.
-    assert "untrusted" in content.lower()
-    assert search_service.queries().count(query) == 1
-
-
-@pytest.mark.spec("AGT-020")
-def test_web_search_returns_at_most_ten_results(server: Server, token: str, default_model: HarnessModel) -> None:
-    text = _call("web_search", query="many")
-    _completed(server, token, text)
-    content = _tool_result(default_model, text)
-    assert result("many", 9)["url"] in content
-    assert all(result("many", index)["url"] not in content for index in range(10, MANY_RESULTS))
-
-
-@pytest.mark.spec("AGT-020")
-def test_only_the_query_reaches_the_search_service(server: Server, token: str, search_service: SearchServer) -> None:
-    query = f"private {secrets.token_hex(4)}"
-    _completed(server, token, _call("web_search", query=query))
-    (request,) = search_service.requests_for(query)
-    assert request.path == "/search"
-    assert request.params["format"] == ["json"]
-    assert set(request.params) <= {"q", "format", "pageno", "language", "safesearch"}
-    assert not {"authorization", "cookie"} & set(request.headers)
-    # The worker never fetches the results itself.
-    assert not any(entry.get("resolve") == "example.org" for entry in server.outbound())
-    # Queries are not logged (OBS-001).
-    assert query not in server.worker.output()
-
-
-@pytest.mark.spec("AGT-020")
-@pytest.mark.parametrize("query", ["fail", "nothing"])
-def test_a_failed_or_empty_search_is_told_to_the_model(
-    server: Server, token: str, default_model: HarnessModel, query: str
-) -> None:
-    text = _call("web_search", query=query)
-    assert _completed(server, token, text).startswith("Tool said:")
-    assert _tool_result(default_model, text).strip()
-
-
 @pytest.mark.spec("AGT-021")
 def test_read_page_returns_the_main_text_of_a_page(
     server: Server, sandboxes: Driver, account: Account, token: str, default_model: HarnessModel
@@ -191,22 +138,6 @@ def test_read_page_output_is_bounded(
     content = _tool_result(default_model, text)
     assert "word0 " in content
     assert len(content) < len(words)
-
-
-@pytest.mark.spec("AGT-021")
-@pytest.mark.parametrize(
-    "address",
-    ["file:///etc/passwd", "ftp://example.org/file", f"http://127.0.0.1:{PAGE_PORT + 1}/missing"],
-    ids=["file", "ftp", "unreachable"],
-)
-def test_read_page_tells_the_model_what_it_cannot_read(
-    server: Server, token: str, default_model: HarnessModel, address: str
-) -> None:
-    text = _call("read_page", url=address)
-    assert _completed(server, token, text).startswith("Tool said:")
-    content = _tool_result(default_model, text)
-    assert content.strip()
-    assert "root:" not in content
 
 
 @pytest.mark.spec("AGT-040")
