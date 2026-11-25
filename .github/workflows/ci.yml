@@ -96,8 +96,7 @@ jobs:
               --ignore=tests/integration/test_sandbox_driver.py --ignore=tests/integration/test_workspace_disks.py
               --ignore=tests/integration/test_tasks.py --ignore=tests/integration/test_runs_durability.py
             budget: 420
-          # The worker's crashes, in a part of their own: a run cancelled in a session after them does not
-          # end within 30 seconds (test_rewinding), a question for the durable execution engine's maintainers.
+          # The worker's crashes, in a part of their own: they kill the worker the other tests share.
           - part: durability
             paths: tests/integration/test_runs_durability.py
             budget: 180
