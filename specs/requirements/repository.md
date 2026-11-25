@@ -178,13 +178,13 @@ tomorrow.
 
 The tests SHOULD be in tiers: unit, database, agent and infrastructure. The
 unit, database and agent tiers, the fast tier, SHOULD run within two minutes
-on one CI runner, without starting a sandbox, a browser or a durable worker;
+on CI, without starting a sandbox, a browser or a container;
 the agent tier SHOULD replace real components only with fakes that a
 contract suite checks against the real ones, in the infrastructure tier.
 Each security invariant that crosses a process or a container boundary MUST
 keep at least one test in the infrastructure tier. CI and a developer SHOULD
-run the tests the same way, through one entrypoint that holds the parts and
-their budgets (ADR-0139).
+run the tests the same way, through one entrypoint, `tools/run_ci_parts.py`, which reads the parts and
+their budgets from CI's workflow (ADR-0139).
 
 Rationale: in November 2026 most of the suite's hour was spent starting
 infrastructure that the tests did not check, and every feature waited for

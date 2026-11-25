@@ -113,11 +113,11 @@ must catch what it caught.
    forged through the API, one journey per persona in the browser. Those are
    the infrastructure tier, a few dozen tests in place of hundreds.
 
-8. **One entrypoint, the same everywhere.** `tools/test.py` runs the tiers
-   (`fast`, `infra`, `all`) and is the only way that CI and a developer run
-   tests: CI's jobs call it, and its parts, budgets and environment are
-   written once, in the script, not in the workflow, so that the two never
-   drift (ADR-0137's `tools/run_ci_parts.py` becomes part of it). The fast
+8. **One entrypoint, the same everywhere.** `tools/run_ci_parts.py` (ADR-0137)
+   runs the parts and is the only way that CI and a developer run tests;
+   its parts and budgets are written once, in CI's workflow, which it reads,
+   so that the two never drift. The agent tier is one of its parts,
+   `agent`. The fast
    tier gives the same result on any machine with the same Postgres image; the
    infrastructure tier gives the same result and, run beside its other
    parts, a longer time, which is reported, not enforced. A tooling test
@@ -132,6 +132,13 @@ must catch what it caught.
 10. **Budgets after measuring.** The fast tier's two minutes are measured on
     CI's runner, not on a developer's machine, with a first area moved,
     before the other areas follow.
+11. **What the first migration measured.** The agent tier (ADR-0141) holds
+    about 1,200 tests and runs in 200 seconds on a 32-core machine, 8 workers
+    at once, about 1,400 CPU seconds in all; on a runner of 4 vCPUs it is
+    expected to take five or six minutes, not two. The two minutes stay the
+    goal. The lever left is to shard the tier across CI jobs, each with its
+    own workers, which the first measure on CI sets. The rest of the suite
+    went from 56 to about 29 minutes run one part after another.
 
 ## Consequences
 
