@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
 import uvicorn
 
 from sibillo_sandboxd.app import create_app
@@ -426,6 +427,11 @@ class FakeDriver:
     sandboxes: FakeSandboxes
     _server: uvicorn.Server = field(repr=False)
     _thread: threading.Thread = field(repr=False)
+
+    def client(self, token: str | None = None) -> httpx.Client:
+        """An HTTP client of the driver, authenticated unless `token` says otherwise."""
+        headers = {"Authorization": f"Bearer {token or self.token}"}
+        return httpx.Client(base_url=self.url, headers=headers, timeout=30, verify=False)  # noqa: S501 - loopback
 
     def close(self) -> None:
         self._server.should_exit = True
