@@ -447,8 +447,8 @@ async def cancel_run(
         run = await find_run(connection, run_id)
     if run.status in FINAL_STATUSES:
         return run_response(run)
-    # A queued run never starts; a running one starts no further model or tool calls (CNV-003).
-    await durable.cancel_workflow_async(str(run_id))
+    # Marked cancelled before its workflow is, so that a workflow which ends at once finds the mark when its worker
+    # records that it ended: the other way round, that record found nothing and the rewind waited for ever (ADR-0132).
     async with transaction(engine, identity) as connection:
         stopped = await connection.execute(
             text(
@@ -465,6 +465,8 @@ async def cancel_run(
             await announce(
                 connection, identity, event("run_finished", conversation_id=cancelled.conversation_id, run_id=run_id)
             )
+    # A queued run never starts; a running one starts no further model or tool calls (CNV-003).
+    await durable.cancel_workflow_async(str(run_id))
     # What the run started in its sandbox stops with it (SBX-018, ADR-0078).
     configuration = request.app.state.configuration
     driver = SandboxDriver(configuration.sandboxd_url, configuration.sandboxd_token)
