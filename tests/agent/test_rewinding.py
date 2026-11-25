@@ -57,6 +57,23 @@ def _conversation(server: Server, token: str, conversation_id: str) -> dict[str,
     return body(response)
 
 
+@pytest.mark.spec("CNV-004", "CNV-003")
+def test_a_rewind_waits_for_a_cancelled_run_whose_workflow_has_not_ended(
+    database: Database, server: Server, token: str
+) -> None:
+    conversation_id = create_conversation(server, token)["id"]
+    first, _ = start_run(server, token, conversation_id, "kept")
+    second, _ = start_run(server, token, conversation_id, "after")
+    assert wait_for_run(server, token, second)["status"] == "completed"
+    # A cancelled run is finished once its worker records that its workflow ended (ADR-0132): until then, no finish.
+    with database.superuser() as connection:
+        connection.execute("UPDATE runs SET status = 'cancelled', finished_at = NULL WHERE id = %s", (second,))
+    assert_problem(_rewind(server, token, conversation_id, first), 409, "run.in_progress")
+    with database.superuser() as connection:
+        connection.execute("UPDATE runs SET finished_at = now() WHERE id = %s", (second,))
+    assert _rewind(server, token, conversation_id, first).status_code == 200
+
+
 @pytest.mark.spec("CNV-004")
 def test_rewinding_deletes_what_followed(database: Database, server: Server, token: str) -> None:
     conversation = create_conversation(server, token)

@@ -12,7 +12,7 @@ import time
 import httpx
 import pytest
 
-from tests.support.accounts import Account, assert_problem, create_account, create_tenant, login
+from tests.support.accounts import Account, create_account, create_tenant, login
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.runs import create_conversation, start_run, wait_for_run
@@ -43,9 +43,10 @@ def test_a_rewind_waits_for_a_cancelled_run_to_stop(server: Server, token: str) 
     slow, _ = start_run(server, token, conversation_id, "slow:6", stop_after=1)
     with server.client(token) as client:
         assert client.post(f"/runs/{slow}/cancel").status_code == 200
-    # Cancelled, but its workflow is still ending: what it does now must not outlive the rewind (ADR-0132).
-    assert_problem(_rewind(server, token, conversation_id, first), 409, "run.in_progress")
+    # Whether its workflow is still ending when this asks depends on the worker's pace, which the agent tier's
+    # test of a run that has not ended checks; what holds either way is that the rewind goes through once it did.
     deadline = time.monotonic() + 30
-    while _rewind(server, token, conversation_id, first).status_code == 409:
+    while (response := _rewind(server, token, conversation_id, first)).status_code == 409:
         assert time.monotonic() < deadline, "the cancelled run never stopped"
         time.sleep(0.5)
+    assert response.status_code == 200, response.text
