@@ -182,6 +182,8 @@ def test_a_call_that_may_have_run_twice_after_a_crash_says_so(
     # The worker dies while the command runs; the run is replayed, and the command runs again.
     run_id, events = start_run(server, token, conversation["id"], f"run:sleep 3; echo {marker}", stop_after=4)
     assert any(event.type == "TOOL_CALL_START" for event in events), [event.type for event in events]
+    # The event reaches the client within a twentieth of a second, before the worker has recorded the call.
+    time.sleep(1)
     server.crash_and_restart_worker()
     assert wait_for_run(server, token, run_id, timeout=120)["status"] in {"completed", "failed"}
     with server.client(token) as client:
