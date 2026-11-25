@@ -44,8 +44,6 @@ RUN_COLUMNS = (
 )
 FINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
 TERMINAL_EVENTS = frozenset({"RUN_FINISHED", "RUN_ERROR"})
-# How often the API reads a run's stream for a new event; a client sees it within this time (API-004, ADR-0142).
-STREAM_POLL_SECONDS = 0.05
 SSE_MEDIA_TYPE = "text/event-stream"
 
 
@@ -113,7 +111,7 @@ async def stream_events(
     """The run's events after sequence number `after`, following the run until it ends."""
     seq = 0
     last_type = None
-    async for value in durable.read_stream_async(str(run_id), EVENTS_STREAM, polling_interval_sec=STREAM_POLL_SECONDS):
+    async for value in durable.read_stream_async(str(run_id), EVENTS_STREAM):
         seq += 1
         event: dict[str, Any] = value
         last_type = event.get("type")

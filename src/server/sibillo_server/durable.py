@@ -17,4 +17,4 @@ DELEGATION_WORKFLOW = "sibillo.delegation"
 
 def create_client(database_url: str) -> DBOSClient:
     """A client of the durable execution engine, connected like the rest of the process (TEN-004)."""
-    return DBOSClient(system_database_url=database_url, application_name=APPLICATION_NAME)
+    return DBOSClient(system_database_url=database_url, application_name=APPLICATION_NAME, use_listen_notify=True)
