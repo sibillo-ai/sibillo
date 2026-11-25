@@ -193,13 +193,16 @@ def start_server(
     sandbox_driver: tuple[str, str],
     search_url: str,
     push: tuple[str, Path] | None = None,
+    *,
+    inprocess: bool = False,
 ) -> Server:
     """Start the API and the worker once per test session; later calls return the same server.
 
     `sandbox_driver` is the URL and the secret of the session's sandbox driver,
     `search_url` the address of the search service the tests serve, and `push`
     the address of the push service the tests serve and its certificate
-    authority's file (ADR-0101).
+    authority's file (ADR-0101). With `inprocess`, the API and the worker run in
+    threads of this process (ADR-0141).
     """
     cached = config.stash.get(_SERVER, None)
     if isinstance(cached, BaseException):
@@ -236,7 +239,6 @@ def start_server(
                 "SIBILLO_PUBLIC_ORIGIN": f"http://localhost:{port}",
             }
         )
-        inprocess = os.environ.get("TEST_INPROCESS") == "1"
         if inprocess:
             from tests.support.inprocess import InProcessApi
 

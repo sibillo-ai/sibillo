@@ -12,6 +12,7 @@ import threading
 from collections.abc import Mapping
 
 import uvicorn
+
 from sibillo_server.app import create_app
 from sibillo_server.config import load_api_configuration, load_worker_configuration
 
@@ -56,7 +57,7 @@ class InProcessWorker:
 
     def __init__(self, environment: Mapping[str, str]) -> None:
         # Imported here: only the worker registers workflows with DBOS.
-        from sibillo_server.worker import _serve, configure_worker
+        from sibillo_server.worker import configure_worker, serve
 
         configuration = load_worker_configuration(environment)
         self._error: BaseException | None = None
@@ -69,7 +70,7 @@ class InProcessWorker:
                 self._loop = asyncio.get_running_loop()
                 self._stop = asyncio.Event()
                 started.set()
-                await _serve(configuration, self._stop)
+                await serve(configuration, self._stop)
 
             try:
                 configure_worker(configuration)
