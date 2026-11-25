@@ -1417,7 +1417,7 @@ async def _retention_loop(days: int) -> None:
         await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
 
 
-async def _serve(configuration: WorkerConfiguration, stop: asyncio.Event | None = None) -> None:
+async def serve(configuration: WorkerConfiguration, stop: asyncio.Event | None = None) -> None:
     DBOS.launch()
     await DBOS.register_queue_async(RUN_QUEUE, partition_concurrency=1, polling_interval_sec=QUEUE_POLLING_SECONDS)
     # At most four delegated runs of one run at once (AGT-035, ADR-0136).
@@ -1471,6 +1471,6 @@ def run_worker(configuration: WorkerConfiguration) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     configure_worker(configuration)
     try:
-        asyncio.run(_serve(configuration))
+        asyncio.run(serve(configuration))
     finally:
         DBOS.destroy()
