@@ -1417,17 +1417,18 @@ async def _retention_loop(days: int) -> None:
         await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
 
 
-async def _serve(configuration: WorkerConfiguration) -> None:
+async def _serve(configuration: WorkerConfiguration, stop: asyncio.Event | None = None) -> None:
     DBOS.launch()
     await DBOS.register_queue_async(RUN_QUEUE, partition_concurrency=1, polling_interval_sec=QUEUE_POLLING_SECONDS)
     # At most four delegated runs of one run at once (AGT-035, ADR-0136).
     await DBOS.register_queue_async(
         DELEGATION_QUEUE, partition_concurrency=DELEGATIONS_AT_ONCE, polling_interval_sec=QUEUE_POLLING_SECONDS
     )
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for signum in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(signum, stop.set)
+    if stop is None:
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, stop.set)
     retention = asyncio.create_task(_retention_loop(configuration.run_retention_days))
     temporary = asyncio.create_task(_temporary_loop(configuration.temporary_sweep_seconds))
     approvals = asyncio.create_task(_approval_loop(configuration.approval_sweep_seconds))
@@ -1439,10 +1440,8 @@ async def _serve(configuration: WorkerConfiguration) -> None:
     approvals.cancel()
 
 
-def run_worker(configuration: WorkerConfiguration) -> None:
-    logging.basicConfig(level=logging.INFO)
-    # Its requests name search queries and sandbox paths: never logged (OBS-001).
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+def configure_worker(configuration: WorkerConfiguration) -> None:
+    """Set what the workflows share, and create the durable execution engine, before it launches."""
     _WORKER.engine = create_engine(configuration.database_url)
     _WORKER.secret_key = configuration.secret_key
     _WORKER.sandboxd_url = configuration.sandboxd_url
@@ -1464,6 +1463,13 @@ def run_worker(configuration: WorkerConfiguration) -> None:
             notification_listener_polling_interval_sec=0.2,
         )
     )
+
+
+def run_worker(configuration: WorkerConfiguration) -> None:
+    logging.basicConfig(level=logging.INFO)
+    # Its requests name search queries and sandbox paths: never logged (OBS-001).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    configure_worker(configuration)
     try:
         asyncio.run(_serve(configuration))
     finally:

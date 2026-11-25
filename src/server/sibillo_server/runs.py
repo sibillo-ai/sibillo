@@ -111,7 +111,7 @@ async def stream_events(
     """The run's events after sequence number `after`, following the run until it ends."""
     seq = 0
     last_type = None
-    async for value in durable.read_stream_async(str(run_id), EVENTS_STREAM):
+    async for value in durable.read_stream_async(str(run_id), EVENTS_STREAM, polling_interval_sec=0.02):
         seq += 1
         event: dict[str, Any] = value
         last_type = event.get("type")
