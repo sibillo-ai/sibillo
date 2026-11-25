@@ -1,6 +1,6 @@
 # ADR-0142: A run's events are read every fifty milliseconds
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0143
 - **Date:** 2026-11-25
 - **Deciders:** @tapionx
 - **Related:** API-004, AGT-009, ADR-0141
