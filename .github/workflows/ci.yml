@@ -83,10 +83,11 @@ jobs:
       matrix:
         include:
           # The agent tier (ADR-0139, ADR-0141): the API and the worker in the test process, on a fake
-          # sandbox driver, eight workers at once. It starts no engine, no browser and no image, and runs
-          # the same way on a developer's machine. The first measure on a runner sets its budget.
+          # sandbox driver, four workers at once. It starts no engine, no browser and no image, and runs
+          # the same way on a developer's machine. Four workers, as many as a runner has vCPUs: with
+          # eight, the tests that start a process took more than 30 seconds. Measured on a runner: 341 seconds.
           - part: agent
-            paths: tests/agent -n 8
+            paths: tests/agent -n 4
             budget: 420
           # What needs a real sandbox, a real process or a real browser, of the integration tests (ADR-0139);
           # the rest of them are in the agent part.
