@@ -55,9 +55,10 @@ We will:
 4. **Relax the `users` guard by exactly that much.** The trigger that
    refuses a change of `password_hash` or `password_change_required` by
    anyone but the user (ADR-0105) allows it from a tenant admin when the
-   new row is marked `password_change_required`, and, for an instance
-   admin's row, only from an instance admin. Setting the mark again stays
-   refused to the user themself.
+   change sets a new hash and marks the row `password_change_required`,
+   and, for an instance admin's row, only from an instance admin. Setting
+   the mark alone, without a new hash, stays refused to everyone, and the
+   user themself never sets it.
 5. **Delete only a disabled account.** `DELETE /tenant/users/{user_id}`
    answers `409 resource.conflict` for an account that is not disabled, and
    `409 run.in_progress` while one of its runs is queued or running. The

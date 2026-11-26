@@ -222,10 +222,11 @@ users cannot promote themselves or re-enable their account, and of an
 instance admin's row also `app_is_instance_admin()` (AUTH-008). Changing
 `password_hash` or `password_change_required` requires `id = app_user_id()`,
 so that only the user chooses their password, or `app_is_tenant_admin()`
-with the new row's `password_change_required` true, so that a tenant admin
-gives only a new initial password, and of an instance admin's row also
-`app_is_instance_admin()` (AUTH-011, AUTH-013). The user themself never sets
-`password_change_required` from false to true (AUTH-012, ADR-0105,
+with a new `password_hash` and the new row's `password_change_required`
+true, so that a tenant admin gives only a new initial password, and of an
+instance admin's row also `app_is_instance_admin()` (AUTH-011, AUTH-013).
+Nobody sets `password_change_required` from false to true without a new
+`password_hash`, and the user themself never does (AUTH-012, ADR-0105,
 ADR-0144). Row-level security cannot compare a row's old and new values, so
 a `BEFORE UPDATE` trigger on `users` enforces these rules.
 
