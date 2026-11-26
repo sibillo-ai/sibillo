@@ -100,58 +100,6 @@
     "anotherQuote": "Lua eile",
     "placeholder": "Cad is féidir liom cabhrú leis?"
   },
-  "quotes": [
-    {
-      "text": "Tús maith, leath na hoibre.",
-      "author": "Arastotail",
-      "work": "Polaitíocht"
-    },
-    {
-      "text": "Tosaíonn turas na míle míle le céim amháin.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "Is é ‘Dóchas’ an rud le cleití a sheasann san anam.",
-      "author": "Emily Dickinson",
-      "work": "Dánta"
-    },
-    {
-      "text": "Is den ábhar céanna sinn is a ndéantar aislingí de.",
-      "author": "William Shakespeare",
-      "work": "An Stoirm"
-    },
-    {
-      "text": "Tá teaghlaigh shona uile cosúil lena chéile; tá gach teaghlach míshona míshona ar a bhealach féin.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Ní chun maireachtáil mar bheithígh a cruthaíodh sibh, ach chun buanna agus eolas a leanúint.",
-      "author": "Dante Alighieri",
-      "work": "Ifreann"
-    },
-    {
-      "text": "Nach álainn an óige, a imíonn uainn mar sin féin.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Ní fiú an saol gan scrúdú a mhaireachtáil.",
-      "author": "Sócraitéas",
-      "work": "Leithscéal Phlató"
-    },
-    {
-      "text": "Sílim, mar sin táim.",
-      "author": "René Descartes",
-      "work": "Dioscúrsa ar an Modh"
-    },
-    {
-      "text": "Bíonn an t-ádh ar na daoine dána.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Teachtaireacht",
     "placeholder": "Freagair…",

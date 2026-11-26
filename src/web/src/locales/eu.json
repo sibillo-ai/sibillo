@@ -100,58 +100,6 @@
     "anotherQuote": "Beste aipu bat",
     "placeholder": "Zertan lagun zaitzaket?"
   },
-  "quotes": [
-    {
-      "text": "Ongi hasia, erdia egina.",
-      "author": "Aristoteles",
-      "work": "Politika"
-    },
-    {
-      "text": "Mila miliako bidea urrats batekin hasten da.",
-      "author": "Laozi",
-      "work": "Tao Te King"
-    },
-    {
-      "text": "«Itxaropena» luma duen gauza da, ariman pausatzen dena.",
-      "author": "Emily Dickinson",
-      "work": "Poemak"
-    },
-    {
-      "text": "Ametsak egiteko materia bera gara.",
-      "author": "William Shakespeare",
-      "work": "Ekaitza"
-    },
-    {
-      "text": "Familia zoriontsuak denak antzekoak dira; familia zorigaiztoko bakoitza bere erara da zorigaiztokoa.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Ez zarete piztiak bezala bizitzeko jaio, bertutea eta ezagutza jarraitzeko baizik.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Zein ederra den gaztaroa, hala ere ihes egiten duena.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Aztertu gabeko bizitza ez da bizitzeko merezi.",
-      "author": "Sokrates",
-      "work": "Platonen Apologia"
-    },
-    {
-      "text": "Pentsatzen dut, beraz, banaiz.",
-      "author": "René Descartes",
-      "work": "Metodoaren diskurtsoa"
-    },
-    {
-      "text": "Zortea ausartari laguntzen dio.",
-      "author": "Terentzio",
-      "work": "Formion"
-    }
-  ],
   "composer": {
     "label": "Mezua",
     "placeholder": "Erantzun…",

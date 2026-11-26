@@ -100,58 +100,6 @@
     "anotherQuote": "Une autre citation",
     "placeholder": "Que puis-je faire pour vous ?"
   },
-  "quotes": [
-    {
-      "text": "Bien commencer, c'est à moitié fait.",
-      "author": "Aristote",
-      "work": "Politique"
-    },
-    {
-      "text": "Un voyage de mille lieues commence toujours par un premier pas.",
-      "author": "Lao Tseu",
-      "work": "Tao Te King"
-    },
-    {
-      "text": "« L'espoir » est cette chose avec des plumes qui se perche dans l'âme.",
-      "author": "Emily Dickinson",
-      "work": "Poèmes"
-    },
-    {
-      "text": "Nous sommes faits de l'étoffe dont sont faits les rêves.",
-      "author": "William Shakespeare",
-      "work": "La Tempête"
-    },
-    {
-      "text": "Toutes les familles heureuses se ressemblent ; chaque famille malheureuse est malheureuse à sa façon.",
-      "author": "Léon Tolstoï",
-      "work": "Anna Karénine"
-    },
-    {
-      "text": "Vous n'avez pas été faits pour vivre comme des brutes, mais pour suivre la vertu et la connaissance.",
-      "author": "Dante Alighieri",
-      "work": "L'Enfer"
-    },
-    {
-      "text": "Combien est belle la jeunesse, qui pourtant s'enfuit !",
-      "author": "Laurent de Médicis",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Une vie sans examen ne vaut pas la peine d'être vécue.",
-      "author": "Socrate",
-      "work": "Apologie de Socrate"
-    },
-    {
-      "text": "Je pense, donc je suis.",
-      "author": "René Descartes",
-      "work": "Discours de la méthode"
-    },
-    {
-      "text": "La fortune sourit aux audacieux.",
-      "author": "Térence",
-      "work": "Phormion"
-    }
-  ],
   "composer": {
     "label": "Message",
     "placeholder": "Répondre…",

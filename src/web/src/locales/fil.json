@@ -100,58 +100,6 @@
     "anotherQuote": "Isa pang quote",
     "placeholder": "Ano ang maitutulong ko?"
   },
-  "quotes": [
-    {
-      "text": "Ang mahusay na simula ay kalahati na ng gawain.",
-      "author": "Aristotle",
-      "work": "Politika"
-    },
-    {
-      "text": "Ang paglalakbay ng isang libong milya ay nagsisimula sa isang hakbang.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "Ang ‘pag-asa’ ay ang bagay na may mga balahibo na dumadapo sa kaluluwa.",
-      "author": "Emily Dickinson",
-      "work": "Mga Tula"
-    },
-    {
-      "text": "Tayo ay gawa sa materyal ng mga pangarap.",
-      "author": "William Shakespeare",
-      "work": "Ang Bagyo"
-    },
-    {
-      "text": "Ang masasayang pamilya ay magkakatulad; ang bawat malungkot na pamilya ay malungkot sa sarili nitong paraan.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Hindi ka ginawa upang mamuhay na parang mga hayop, kundi upang sundin ang kabutihan at kaalaman.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Napakaganda ng kabataan, na lumilipas pa rin.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Ang buhay na hindi sinusuri ay hindi karapat-dapat na mabuhay.",
-      "author": "Socrates",
-      "work": "Ang Apolohiya ni Plato"
-    },
-    {
-      "text": "Nagiisip ako, kaya ako ay umiiral.",
-      "author": "René Descartes",
-      "work": "Diskurso sa Paraan"
-    },
-    {
-      "text": "Ang kapalaran ay pumapabor sa mga matatapang.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Mensahe",
     "placeholder": "Sagot…",

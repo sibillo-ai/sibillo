@@ -100,58 +100,6 @@
     "anotherQuote": "Alt citat",
     "placeholder": "Cu ce te pot ajuta?"
   },
-  "quotes": [
-    {
-      "text": "Bine început este pe jumătate făcut.",
-      "author": "Aristotel",
-      "work": "Politica"
-    },
-    {
-      "text": "Călătoria de o mie de mile începe cu un singur pas.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "„Speranța” este lucrul cu pene care se așază în suflet.",
-      "author": "Emily Dickinson",
-      "work": "Poeme"
-    },
-    {
-      "text": "Suntem din aceeași stofă din care se țes visele.",
-      "author": "William Shakespeare",
-      "work": "Furtuna"
-    },
-    {
-      "text": "Toate familiile fericite seamănă între ele; fiecare familie nefericită este nefericită în felul ei.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Nu ați fost făcuți să trăiți ca fiarele, ci să urmați virtutea și cunoașterea.",
-      "author": "Dante Alighieri",
-      "work": "Infernul"
-    },
-    {
-      "text": "Cât de frumoasă este tinerețea, care fuge totuși!",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Viața neexaminată nu merită trăită.",
-      "author": "Socrate",
-      "work": "Apologia lui Platon"
-    },
-    {
-      "text": "Gândesc, deci exist.",
-      "author": "René Descartes",
-      "work": "Discurs asupra metodei"
-    },
-    {
-      "text": "Norocul îi ajută pe cei îndrăzneți.",
-      "author": "Terentiu",
-      "work": "Formion"
-    }
-  ],
   "composer": {
     "label": "Mesaj",
     "placeholder": "Răspunde…",

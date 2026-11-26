@@ -100,58 +100,6 @@
     "anotherQuote": "Másik idézet",
     "placeholder": "Miben segíthetek?"
   },
-  "quotes": [
-    {
-      "text": "A jó kezdet fél siker.",
-      "author": "Arisztotelész",
-      "work": "Politika"
-    },
-    {
-      "text": "Az ezer mérföldes út is az első lépéssel kezdődik.",
-      "author": "Lao-ce",
-      "work": "Tao te king"
-    },
-    {
-      "text": "A „remény” tollas valami, amely a lélekben ül.",
-      "author": "Emily Dickinson",
-      "work": "Versek"
-    },
-    {
-      "text": "Ilyen anyagból van szőve álmaink.",
-      "author": "William Shakespeare",
-      "work": "A vihar"
-    },
-    {
-      "text": "A boldog családok mind hasonlók egymáshoz, minden boldogtalan család a maga módján boldogtalan.",
-      "author": "Lev Tolsztoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Nem arra születtetek, hogy mint a barmok éljetek, hanem hogy erényt és tudást kövessetek.",
-      "author": "Dante Alighieri",
-      "work": "Pokol"
-    },
-    {
-      "text": "Milyen szép az ifjúság, amely mégis elillan.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "A vizsgálatlan élet nem érdemes arra, hogy éljük.",
-      "author": "Szókratész",
-      "work": "Platón Apológiája"
-    },
-    {
-      "text": "Gondolkodom, tehát vagyok.",
-      "author": "René Descartes",
-      "work": "Értekezés a módszerről"
-    },
-    {
-      "text": "A szerencse a bátrakat segíti.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Üzenet",
     "placeholder": "Válasz…",

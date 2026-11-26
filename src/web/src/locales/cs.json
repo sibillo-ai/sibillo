@@ -100,58 +100,6 @@
     "anotherQuote": "Další citát",
     "placeholder": "S čím ti můžu pomoct?"
   },
-  "quotes": [
-    {
-      "text": "Dobře začato, půl díla.",
-      "author": "Aristotelés",
-      "work": "Politika"
-    },
-    {
-      "text": "Cesta dlouhá tisíc mil začíná prvním krokem.",
-      "author": "Laozi",
-      "work": "Tao-te-ťing"
-    },
-    {
-      "text": "„Naděje“ je ta věc s peřím, co v duši hřaduje.",
-      "author": "Emily Dickinsonová",
-      "work": "Básně"
-    },
-    {
-      "text": "Jsme ze stejné látky jako sny.",
-      "author": "William Shakespeare",
-      "work": "Bouře"
-    },
-    {
-      "text": "Všechny šťastné rodiny jsou si podobné, každá nešťastná rodina je nešťastná po svém.",
-      "author": "Lev Nikolajevič Tolstoj",
-      "work": "Anna Kareninová"
-    },
-    {
-      "text": "Nebyli jste stvořeni, abyste žili jako zvířata, ale abyste šli za ctností a poznáním.",
-      "author": "Dante Alighieri",
-      "work": "Peklo"
-    },
-    {
-      "text": "Jak krásné je mládí, jež přece jen prchá.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Nezkoumaný život není hoden žití.",
-      "author": "Sókratés",
-      "work": "Platónova Obrana Sókrata"
-    },
-    {
-      "text": "Myslím, tedy jsem.",
-      "author": "René Descartes",
-      "work": "Rozprava o metodě"
-    },
-    {
-      "text": "Odvážným přeje štěstí.",
-      "author": "Terentius",
-      "work": "Formio"
-    }
-  ],
   "composer": {
     "label": "Zpráva",
     "placeholder": "Napiš odpověď…",

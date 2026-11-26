@@ -100,58 +100,6 @@
     "anotherQuote": "Toinen sitaatti",
     "placeholder": "Miten voin auttaa?"
   },
-  "quotes": [
-    {
-      "text": "Hyvin aloitettu on puoliksi tehty.",
-      "author": "Aristoteles",
-      "work": "Politiikka"
-    },
-    {
-      "text": "Tuhannen mailin matka alkaa yhdestä askeleesta.",
-      "author": "Laozi",
-      "work": "Tao te ching"
-    },
-    {
-      "text": "Toivo on höyheninen olento, joka asettuu sieluun.",
-      "author": "Emily Dickinson",
-      "work": "Runot"
-    },
-    {
-      "text": "Me olemme samaa ainetta kuin unet.",
-      "author": "William Shakespeare",
-      "work": "Myrsky"
-    },
-    {
-      "text": "Kaikki onnelliset perheet ovat toistensa kaltaisia, mutta jokainen onneton perhe on onneton omalla tavallaan.",
-      "author": "Leo Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Teitä ei ole luotu elämään kuin pedot, vaan seuraamaan hyvettä ja tietoa.",
-      "author": "Dante Alighieri",
-      "work": "Helvetti"
-    },
-    {
-      "text": "Kuinka kaunis on nuoruus, joka kuitenkin pakenee!",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Tutkimaton elämä ei ole elämisen arvoinen.",
-      "author": "Sokrates",
-      "work": "Platonin Apologia"
-    },
-    {
-      "text": "Ajattelen, siis olen.",
-      "author": "René Descartes",
-      "work": "Keskustelu menetelmästä"
-    },
-    {
-      "text": "Onni suosii rohkeaa.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Viesti",
     "placeholder": "Vastaa…",

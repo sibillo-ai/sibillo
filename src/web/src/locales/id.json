@@ -100,58 +100,6 @@
     "anotherQuote": "Kutipan lain",
     "placeholder": "Ada yang bisa saya bantu?"
   },
-  "quotes": [
-    {
-      "text": "Yang dimulai dengan baik sudah setengah selesai.",
-      "author": "Aristoteles",
-      "work": "Politik"
-    },
-    {
-      "text": "Perjalanan seribu mil dimulai dengan satu langkah.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "“Harapan” adalah makhluk berbulu yang hinggap di dalam jiwa.",
-      "author": "Emily Dickinson",
-      "work": "Puisi-puisi"
-    },
-    {
-      "text": "Kita terbuat dari bahan yang sama seperti mimpi.",
-      "author": "William Shakespeare",
-      "work": "The Tempest"
-    },
-    {
-      "text": "Keluarga yang bahagia semuanya serupa; setiap keluarga yang tidak bahagia tidak bahagia dengan caranya sendiri.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Kamu tidak diciptakan untuk hidup seperti binatang, melainkan untuk mengejar kebajikan dan pengetahuan.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Betapa indahnya masa muda, yang tetap berlalu pergi.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Hidup yang tidak diuji tidak layak dijalani.",
-      "author": "Sokrates",
-      "work": "Apologia Plato"
-    },
-    {
-      "text": "Aku berpikir, maka aku ada.",
-      "author": "René Descartes",
-      "work": "Diskursus tentang Metode"
-    },
-    {
-      "text": "Keberuntungan berpihak pada yang berani.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Pesan",
     "placeholder": "Balas…",

@@ -100,58 +100,6 @@
     "anotherQuote": "Nog een citaat",
     "placeholder": "Waarmee kan ik helpen?"
   },
-  "quotes": [
-    {
-      "text": "Een goed begin is het halve werk.",
-      "author": "Aristoteles",
-      "work": "Politica"
-    },
-    {
-      "text": "De reis van duizend mijlen begint met één stap.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "Hoop is het ding met veren dat in de ziel neerstrijkt.",
-      "author": "Emily Dickinson",
-      "work": "Gedichten"
-    },
-    {
-      "text": "Wij zijn van de stof waaruit dromen zijn gemaakt.",
-      "author": "William Shakespeare",
-      "work": "De storm"
-    },
-    {
-      "text": "Gelukkige gezinnen lijken allemaal op elkaar; elk ongelukkig gezin is ongelukkig op zijn eigen manier.",
-      "author": "Leo Tolstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Jullie zijn niet gemaakt om als beesten te leven, maar om deugd en kennis na te streven.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Hoe mooi is de jeugd, die toch voorbijgaat.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Het ononderzochte leven is het niet waard geleefd te worden.",
-      "author": "Socrates",
-      "work": "Plato's Apologie"
-    },
-    {
-      "text": "Ik denk, dus ik ben.",
-      "author": "René Descartes",
-      "work": "Verhandeling over de methode"
-    },
-    {
-      "text": "Het geluk is met de dapperen.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Bericht",
     "placeholder": "Antwoord…",

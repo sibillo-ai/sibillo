@@ -100,58 +100,6 @@
     "anotherQuote": "Önnur tilvitnun",
     "placeholder": "Við hverju get ég hjálpað?"
   },
-  "quotes": [
-    {
-      "text": "Vel byrjað er hálfnað.",
-      "author": "Aristóteles",
-      "work": "Stjórnmál"
-    },
-    {
-      "text": "Ferðalag þúsund mílna hefst á einu skrefi.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "Vonin er fiðraða skepnan sem hreiðrar um sig í sálinni.",
-      "author": "Emily Dickinson",
-      "work": "Ljóð"
-    },
-    {
-      "text": "Við erum úr sama efni og draumar eru gerðir af.",
-      "author": "William Shakespeare",
-      "work": "Óveðrið"
-    },
-    {
-      "text": "Allar hamingjusamar fjölskyldur eru eins; hver óhamingjusöm fjölskylda er óhamingjusöm á sinn hátt.",
-      "author": "Lev Tolstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Þið eruð ekki sköpuð til að lifa eins og dýr, heldur til að fylgja dyggð og þekkingu.",
-      "author": "Dante Alighieri",
-      "work": "Helvíti"
-    },
-    {
-      "text": "Hversu fögur er æskan, sem flýr samt.",
-      "author": "Lorenzo de' Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Órannsakað líf er ekki þess virði að lifa.",
-      "author": "Sókrates",
-      "work": "Málsvörn Sókratesar"
-    },
-    {
-      "text": "Ég hugsa, þess vegna er ég.",
-      "author": "René Descartes",
-      "work": "Orðræða um aðferð"
-    },
-    {
-      "text": "Gæfan hjálpar þeim djarfu.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Skilaboð",
     "placeholder": "Svara…",

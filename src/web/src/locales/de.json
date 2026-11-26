@@ -100,58 +100,6 @@
     "anotherQuote": "Noch ein Zitat",
     "placeholder": "Womit kann ich helfen?"
   },
-  "quotes": [
-    {
-      "text": "Der Anfang ist die Hälfte des Ganzen.",
-      "author": "Aristoteles",
-      "work": "Politik"
-    },
-    {
-      "text": "Der Weg von tausend Meilen beginnt mit einem einzigen Schritt.",
-      "author": "Laotse",
-      "work": "Tao Te King"
-    },
-    {
-      "text": "Die Hoffnung ist das Wesen mit Federn, das in der Seele nistet.",
-      "author": "Emily Dickinson",
-      "work": "Gedichte"
-    },
-    {
-      "text": "Wir sind aus solchem Stoff wie Träume.",
-      "author": "William Shakespeare",
-      "work": "Der Sturm"
-    },
-    {
-      "text": "Alle glücklichen Familien gleichen einander, jede unglückliche Familie ist auf ihre eigene Weise unglücklich.",
-      "author": "Leo Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Ihr seid nicht dazu da, wie das Vieh zu leben, sondern um Tugend und Erkenntnis zu erstreben.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Wie schön ist die Jugend, die doch entflieht.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Das ungeprüfte Leben ist nicht lebenswert.",
-      "author": "Sokrates",
-      "work": "Platons Apologie"
-    },
-    {
-      "text": "Ich denke, also bin ich.",
-      "author": "René Descartes",
-      "work": "Abhandlung über die Methode"
-    },
-    {
-      "text": "Den Mutigen hilft das Glück.",
-      "author": "Terenz",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Nachricht",
     "placeholder": "Antworten…",

@@ -100,58 +100,6 @@
     "anotherQuote": "Câu trích dẫn khác",
     "placeholder": "Tôi có thể giúp gì?"
   },
-  "quotes": [
-    {
-      "text": "Khởi đầu tốt là đã xong một nửa.",
-      "author": "Arixtốt",
-      "work": "Chính trị"
-    },
-    {
-      "text": "Hành trình ngàn dặm bắt đầu từ một bước chân.",
-      "author": "Lão Tử",
-      "work": "Đạo Đức Kinh"
-    },
-    {
-      "text": "‘Hy vọng’ là thứ có lông, đậu lại trong tâm hồn.",
-      "author": "Emily Dickinson",
-      "work": "Thơ"
-    },
-    {
-      "text": "Chúng ta là chất liệu làm nên những giấc mơ.",
-      "author": "William Shakespeare",
-      "work": "Giông tố"
-    },
-    {
-      "text": "Các gia đình hạnh phúc đều giống nhau; mỗi gia đình bất hạnh lại bất hạnh theo cách riêng của mình.",
-      "author": "Lev Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Con người không sinh ra để sống như loài thú, mà để theo đuổi đức hạnh và tri thức.",
-      "author": "Dante Alighieri",
-      "work": "Địa ngục"
-    },
-    {
-      "text": "Tuổi trẻ đẹp biết bao, mà vẫn cứ vụt qua.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Cuộc đời không được xem xét thì không đáng sống.",
-      "author": "Socrates",
-      "work": "Biện hộ của Plato"
-    },
-    {
-      "text": "Tôi tư duy, vậy tôi tồn tại.",
-      "author": "René Descartes",
-      "work": "Bàn về phương pháp"
-    },
-    {
-      "text": "Vận may mỉm cười với người dũng cảm.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Tin nhắn",
     "placeholder": "Trả lời…",

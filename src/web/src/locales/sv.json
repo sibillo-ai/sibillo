@@ -100,58 +100,6 @@
     "anotherQuote": "Ett annat citat",
     "placeholder": "Vad kan jag hjälpa till med?"
   },
-  "quotes": [
-    {
-      "text": "Väl börjat är halvt gjort.",
-      "author": "Aristoteles",
-      "work": "Politiken"
-    },
-    {
-      "text": "En resa på tusen mil börjar med ett enda steg.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "”Hoppet” är den fjäderklädda tingesten som sätter sig i själen.",
-      "author": "Emily Dickinson",
-      "work": "Dikter"
-    },
-    {
-      "text": "Vi är av samma ämne som drömmar göras av.",
-      "author": "William Shakespeare",
-      "work": "Stormen"
-    },
-    {
-      "text": "Alla lyckliga familjer liknar varandra, varje olycklig familj är olycklig på sitt eget sätt.",
-      "author": "Leo Tolstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Ni är inte skapade att leva som djur, utan att följa dygd och kunskap.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Hur skön är ungdomen, som ändå flyr sin kos.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Ett oprövat liv är inte värt att leva.",
-      "author": "Sokrates",
-      "work": "Platons Apologin"
-    },
-    {
-      "text": "Jag tänker, alltså är jag.",
-      "author": "René Descartes",
-      "work": "Avhandling om metoden"
-    },
-    {
-      "text": "Lykkan står den djärve bi.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Meddelande",
     "placeholder": "Svara…",

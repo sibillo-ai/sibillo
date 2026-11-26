@@ -100,58 +100,6 @@
     "anotherQuote": "Një citim tjetër",
     "placeholder": "Me çfarë mund të ndihmoj?"
   },
-  "quotes": [
-    {
-      "text": "Fillimi i mirë është gjysma e punës.",
-      "author": "Aristoteli",
-      "work": "Politika"
-    },
-    {
-      "text": "Udhëtimi prej një mijë miljesh nis me një hap të vetëm.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "«Shpresa» është gjëja me pupla që rri e ulur në shpirt.",
-      "author": "Emily Dickinson",
-      "work": "Poezi"
-    },
-    {
-      "text": "Ne jemi prej të njëjtit stof prej të cilit bëhen ëndrrat.",
-      "author": "William Shakespeare",
-      "work": "Stuhia"
-    },
-    {
-      "text": "Të gjitha familjet e lumtura ngjajnë me njëra-tjetrën; çdo familje e palumtur është e palumtur në mënyrën e vet.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Nuk jeni krijuar për të jetuar si bishat, por për të ndjekur virtytin dhe dijen.",
-      "author": "Dante Alighieri",
-      "work": "Ferri"
-    },
-    {
-      "text": "Sa e bukur është rinia, që ikën gjithsesi.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Jeta e paekzaminuar nuk ia vlen të jetohet.",
-      "author": "Sokrati",
-      "work": "Apologjia e Platonit"
-    },
-    {
-      "text": "Mendoj, pra ekzistoj.",
-      "author": "René Descartes",
-      "work": "Diskursi mbi metodën"
-    },
-    {
-      "text": "Fati i ndihmon të guximshmit.",
-      "author": "Terenci",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Mesazh",
     "placeholder": "Përgjigju…",

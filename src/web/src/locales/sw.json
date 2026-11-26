@@ -100,58 +100,6 @@
     "anotherQuote": "Nukuu nyingine",
     "placeholder": "Ninaweza kukusaidia na nini?"
   },
-  "quotes": [
-    {
-      "text": "Kuanza vizuri ni nusu ya kumaliza.",
-      "author": "Aristotle",
-      "work": "Politics"
-    },
-    {
-      "text": "Safari ya maili elfu moja huanza kwa hatua moja.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "‘Tumaini’ ni kile kilicho na manyoya kinachokaa rohoni.",
-      "author": "Emily Dickinson",
-      "work": "Poems"
-    },
-    {
-      "text": "Sisi ni vitu ambavyo ndoto zimetengenezwa navyo.",
-      "author": "William Shakespeare",
-      "work": "The Tempest"
-    },
-    {
-      "text": "Familia zenye furaha zote zinafanana; kila familia isiyo na furaha haina furaha kwa namna yake yenyewe.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Hamkuumbwa kuishi kama wanyama, bali kufuata wema na maarifa.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Jinsi ujana ulivyo mzuri, lakini wote hupita vivyo hivyo.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Maisha yasiyochunguzwa hayastahili kuishiwa.",
-      "author": "Socrates",
-      "work": "Plato’s Apology"
-    },
-    {
-      "text": "Nafikiri, kwa hiyo nipo.",
-      "author": "René Descartes",
-      "work": "Discourse on the Method"
-    },
-    {
-      "text": "Bahati huwapendelea wajasiri.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Ujumbe",
     "placeholder": "Jibu…",

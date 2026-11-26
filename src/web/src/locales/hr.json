@@ -100,58 +100,6 @@
     "anotherQuote": "Još jedna izreka",
     "placeholder": "Kako ti mogu pomoći?"
   },
-  "quotes": [
-    {
-      "text": "Dobro započeto je pola posla.",
-      "author": "Aristotel",
-      "work": "Politika"
-    },
-    {
-      "text": "Put od tisuću milja počinje jednim korakom.",
-      "author": "Lao Ce",
-      "work": "Tao-te-čing"
-    },
-    {
-      "text": "‘Nada’ je stvar s perjem koja se gnijezdi u duši.",
-      "author": "Emily Dickinson",
-      "work": "Pjesme"
-    },
-    {
-      "text": "Mi smo od takve tvari od koje su snovi sazdani.",
-      "author": "William Shakespeare",
-      "work": "Oluja"
-    },
-    {
-      "text": "Sve sretne obitelji sliče jedna drugoj, a svaka nesretna obitelj nesretna je na svoj način.",
-      "author": "Lav Tolstoj",
-      "work": "Ana Karenjina"
-    },
-    {
-      "text": "Niste stvoreni da živite kao zvijeri, nego da slijedite vrlinu i znanje.",
-      "author": "Dante Alighieri",
-      "work": "Pakao"
-    },
-    {
-      "text": "Kako je lijepa mladost, koja ipak prolazi!",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Neispitan život nije vrijedan življenja.",
-      "author": "Sokrat",
-      "work": "Platonova Apologija"
-    },
-    {
-      "text": "Mislim, dakle jesam.",
-      "author": "René Descartes",
-      "work": "Rasprava o metodi"
-    },
-    {
-      "text": "Sreća pomaže hrabrima.",
-      "author": "Terencije",
-      "work": "Formion"
-    }
-  ],
   "composer": {
     "label": "Poruka",
     "placeholder": "Napiši odgovor…",

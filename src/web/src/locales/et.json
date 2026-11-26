@@ -100,58 +100,6 @@
     "anotherQuote": "Veel üks tsitaat",
     "placeholder": "Millega saan aidata?"
   },
-  "quotes": [
-    {
-      "text": "Hästi alustatud on poolenisti tehtud.",
-      "author": "Aristoteles",
-      "work": "Politika"
-    },
-    {
-      "text": "Tuhande miili pikkune teekond algab ühest sammust.",
-      "author": "Laozi",
-      "work": "Daodejing"
-    },
-    {
-      "text": "„Lootus” on suline asi, mis pesitseb hinges.",
-      "author": "Emily Dickinson",
-      "work": "Luuletused"
-    },
-    {
-      "text": "Me oleme tehtud samast ainest kui unenäod.",
-      "author": "William Shakespeare",
-      "work": "Torm"
-    },
-    {
-      "text": "Kõik õnnelikud perekonnad on üksteise sarnased, iga õnnetu perekond on aga õnnetu omal moel.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Teid ei ole loodud elama nagu loomad, vaid järgima voorust ja teadmisi.",
-      "author": "Dante Alighieri",
-      "work": "Põrgu"
-    },
-    {
-      "text": "Kui ilus on noorus, mis ikkagi põgeneb.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Uurimata elu ei ole elamist väärt.",
-      "author": "Sokrates",
-      "work": "Platoni Apoloogia"
-    },
-    {
-      "text": "Mõtlen, järelikult olen olemas.",
-      "author": "René Descartes",
-      "work": "Arutlus meetodist"
-    },
-    {
-      "text": "Õnn soosib julgeid.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Sõnum",
     "placeholder": "Vasta…",

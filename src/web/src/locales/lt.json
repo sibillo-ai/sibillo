@@ -100,58 +100,6 @@
     "anotherQuote": "Kita citata",
     "placeholder": "Kuo galiu padėti?"
   },
-  "quotes": [
-    {
-      "text": "Gerai pradėta – pusė darbo.",
-      "author": "Aristotelis",
-      "work": "Politika"
-    },
-    {
-      "text": "Tūkstančio mylių kelionė prasideda nuo vieno žingsnio.",
-      "author": "Laozi",
-      "work": "Dao De Dzingas"
-    },
-    {
-      "text": "„Viltis“ – tai daiktas su plunksnomis, kuris tupi sieloje.",
-      "author": "Emily Dickinson",
-      "work": "Eilėraščiai"
-    },
-    {
-      "text": "Mes esame iš tos medžiagos, iš kurios daromi sapnai.",
-      "author": "Viljamas Šekspyras",
-      "work": "Audra"
-    },
-    {
-      "text": "Visos laimingos šeimos panašios viena į kitą, o kiekviena nelaiminga šeima nelaiminga savaip.",
-      "author": "Levas Tolstojus",
-      "work": "Ana Karenina"
-    },
-    {
-      "text": "Ne tam esate gimę, kad gyventumėte kaip žvėrys, o kad siektumėte dorybės ir pažinimo.",
-      "author": "Dantė Aligjeris",
-      "work": "Pragaras"
-    },
-    {
-      "text": "Kokia graži jaunystė, kuri vis tiek prabėga!",
-      "author": "Lorencas de Medičis",
-      "work": "Bako daina"
-    },
-    {
-      "text": "Netyrinėtas gyvenimas nevertas gyventi.",
-      "author": "Sokratas",
-      "work": "Platono „Apologija“"
-    },
-    {
-      "text": "Mąstau, vadinasi, esu.",
-      "author": "Rene Descartes",
-      "work": "Metodo apmąstymai"
-    },
-    {
-      "text": "Fortūna padeda drąsiems.",
-      "author": "Terentijus",
-      "work": "Formionas"
-    }
-  ],
   "composer": {
     "label": "Žinutė",
     "placeholder": "Atsakyk…",

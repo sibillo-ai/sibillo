@@ -100,58 +100,6 @@
     "anotherQuote": "Outra citação",
     "placeholder": "Em que posso ajudar?"
   },
-  "quotes": [
-    {
-      "text": "Bem começado é meio caminho andado.",
-      "author": "Aristóteles",
-      "work": "Política"
-    },
-    {
-      "text": "Uma jornada de mil milhas começa com um único passo.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "A 'esperança' é a coisa com penas que pousa na alma.",
-      "author": "Emily Dickinson",
-      "work": "Poemas"
-    },
-    {
-      "text": "Somos feitos da mesma matéria que os sonhos.",
-      "author": "William Shakespeare",
-      "work": "A Tempestade"
-    },
-    {
-      "text": "Todas as famílias felizes se parecem; cada família infeliz é infeliz à sua maneira.",
-      "author": "Liev Tolstói",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Não fostes feitos para viver como brutos, mas para seguir a virtude e o conhecimento.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Como é bela a juventude, que foge mesmo assim.",
-      "author": "Lorenzo de' Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "A vida não examinada não vale a pena ser vivida.",
-      "author": "Sócrates",
-      "work": "Apologia de Platão"
-    },
-    {
-      "text": "Penso, logo existo.",
-      "author": "René Descartes",
-      "work": "Discurso sobre o Método"
-    },
-    {
-      "text": "A fortuna favorece os audazes.",
-      "author": "Terêncio",
-      "work": "Fórmio"
-    }
-  ],
   "composer": {
     "label": "Mensagem",
     "placeholder": "Responder…",

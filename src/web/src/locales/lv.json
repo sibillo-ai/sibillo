@@ -100,58 +100,6 @@
     "anotherQuote": "Vēl viens citāts",
     "placeholder": "Ar ko varu palīdzēt?"
   },
-  "quotes": [
-    {
-      "text": "Labi iesākts ir pusdarīts.",
-      "author": "Aristotelis",
-      "work": "Politika"
-    },
-    {
-      "text": "Tūkstoš jūdžu ceļš sākas ar vienu soli.",
-      "author": "Laozi",
-      "work": "Tao Te Čing"
-    },
-    {
-      "text": "“Cerība” ir tā lieta ar spalvām, kas apmetas dvēselē.",
-      "author": "Emilija Dikinsone",
-      "work": "Dzejoļi"
-    },
-    {
-      "text": "Mēs esam tāds pats materiāls, no kā veidoti sapņi.",
-      "author": "Viljams Šekspīrs",
-      "work": "Vētra"
-    },
-    {
-      "text": "Visas laimīgās ģimenes ir līdzīgas; katra nelaimīgā ģimene ir nelaimīga savā veidā.",
-      "author": "Ļevs Tolstojs",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Jūs neesat radīti, lai dzīvotu kā zvēri, bet lai sekotu tikumam un zināšanām.",
-      "author": "Dante Aligjēri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Cik skaista ir jaunība, kas aizbēg tik un tā!",
-      "author": "Lorenco de’ Mediči",
-      "work": "Bakha dziesma"
-    },
-    {
-      "text": "Nepārbaudīta dzīve nav dzīvošanas vērta.",
-      "author": "Sokrats",
-      "work": "Platona “Apoloģija”"
-    },
-    {
-      "text": "Es domāju, tātad esmu.",
-      "author": "Renē Dekarts",
-      "work": "Metodes apcerējums"
-    },
-    {
-      "text": "Drosmīgajiem palīdz liktenis.",
-      "author": "Terentijs",
-      "work": "Formions"
-    }
-  ],
   "composer": {
     "label": "Ziņojums",
     "placeholder": "Atbildi…",

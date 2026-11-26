@@ -100,58 +100,6 @@
     "anotherQuote": "Ďalší citát",
     "placeholder": "S čím ti môžem pomôcť?"
   },
-  "quotes": [
-    {
-      "text": "Dobrý začiatok je polovica úspechu.",
-      "author": "Aristoteles",
-      "work": "Politika"
-    },
-    {
-      "text": "Cesta tisíc míľ sa začína prvým krokom.",
-      "author": "Lao-c'",
-      "work": "Tao-te-ťing"
-    },
-    {
-      "text": "„Nádej“ je to s perím, čo prebýva v duši.",
-      "author": "Emily Dickinsonová",
-      "work": "Básne"
-    },
-    {
-      "text": "Sme z takej látky, z akej sú utkané sny.",
-      "author": "William Shakespeare",
-      "work": "Búrka"
-    },
-    {
-      "text": "Všetky šťastné rodiny sú si podobné, každá nešťastná rodina je nešťastná po svojom.",
-      "author": "Lev Nikolajevič Tolstoj",
-      "work": "Anna Kareninová"
-    },
-    {
-      "text": "Neboli ste stvorení na to, aby ste žili ako zvieratá, ale aby ste nasledovali cnosť a poznanie.",
-      "author": "Dante Alighieri",
-      "work": "Peklo"
-    },
-    {
-      "text": "Aká krásna je mladosť, ktorá predsa uteká.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Nepreskúmaný život nestojí za to, aby sme ho žili.",
-      "author": "Sokrates",
-      "work": "Platónova Obrana Sokrata"
-    },
-    {
-      "text": "Myslím, teda som.",
-      "author": "René Descartes",
-      "work": "Rozprava o metóde"
-    },
-    {
-      "text": "Šťastie praje odvážnym.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Správa",
     "placeholder": "Odpovedz…",

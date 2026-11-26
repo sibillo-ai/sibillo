@@ -100,58 +100,6 @@
     "anotherQuote": "Et annet sitat",
     "placeholder": "Hva kan jeg hjelpe deg med?"
   },
-  "quotes": [
-    {
-      "text": "Godt begynt er halvt fullendt.",
-      "author": "Aristoteles",
-      "work": "Politikken"
-    },
-    {
-      "text": "En reise på tusen mil begynner med ett skritt.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "«Håpet» er den tingen med fjær som setter seg i sjelen.",
-      "author": "Emily Dickinson",
-      "work": "Dikt"
-    },
-    {
-      "text": "Vi er av det stoff som drømmer lages av.",
-      "author": "William Shakespeare",
-      "work": "Stormen"
-    },
-    {
-      "text": "Alle lykkelige familier ligner hverandre; hver ulykkelige familie er ulykkelig på sin egen måte.",
-      "author": "Leo Tolstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Dere ble ikke skapt til å leve som dyr, men til å følge dyd og kunnskap.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Hvor skjønn er ungdommen, som flykter bort likevel.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Det uundersøkte livet er ikke verdt å leve.",
-      "author": "Sokrates",
-      "work": "Platons forsvarstale"
-    },
-    {
-      "text": "Jeg tenker, derfor er jeg.",
-      "author": "René Descartes",
-      "work": "Avhandling om metoden"
-    },
-    {
-      "text": "Lykken står den modige bi.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Melding",
     "placeholder": "Svar…",

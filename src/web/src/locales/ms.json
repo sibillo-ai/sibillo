@@ -100,58 +100,6 @@
     "anotherQuote": "Petikan lain",
     "placeholder": "Apa yang boleh saya bantu?"
   },
-  "quotes": [
-    {
-      "text": "Permulaan yang baik ialah separuh selesai.",
-      "author": "Aristotle",
-      "work": "Politik"
-    },
-    {
-      "text": "Perjalanan seribu batu bermula dengan satu langkah.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "‘Harapan’ ialah sesuatu yang berbulu yang bertenggek di dalam jiwa.",
-      "author": "Emily Dickinson",
-      "work": "Puisi"
-    },
-    {
-      "text": "Kita ini diperbuat daripada bahan yang sama seperti mimpi.",
-      "author": "William Shakespeare",
-      "work": "The Tempest"
-    },
-    {
-      "text": "Keluarga yang bahagia semuanya serupa; setiap keluarga yang tidak bahagia tidak bahagia dengan caranya sendiri.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Anda tidak dicipta untuk hidup seperti binatang, tetapi untuk mengikuti kebajikan dan pengetahuan.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Betapa indahnya masa muda, yang tetap berlalu pergi.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Hidup yang tidak diteliti tidak layak dijalani.",
-      "author": "Socrates",
-      "work": "Apologi Plato"
-    },
-    {
-      "text": "Saya berfikir, maka saya wujud.",
-      "author": "René Descartes",
-      "work": "Wacana tentang Kaedah"
-    },
-    {
-      "text": "Nasib menyebelahi yang berani.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Mesej",
     "placeholder": "Balas…",

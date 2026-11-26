@@ -100,58 +100,6 @@
     "anotherQuote": "Outra cita",
     "placeholder": "En que che podo axudar?"
   },
-  "quotes": [
-    {
-      "text": "Ben comezado está medio feito.",
-      "author": "Aristóteles",
-      "work": "Política"
-    },
-    {
-      "text": "A viaxe de mil millas comeza cun só paso.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "«A esperanza» é a cousa con plumas que pousa na alma.",
-      "author": "Emily Dickinson",
-      "work": "Poemas"
-    },
-    {
-      "text": "Estamos feitos da mesma materia coa que se fan os soños.",
-      "author": "William Shakespeare",
-      "work": "A tempestade"
-    },
-    {
-      "text": "Todas as familias felices parécense; cada familia infeliz é infeliz á súa maneira.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Non fostes feitos para vivir como bestas, senón para seguir a virtude e o coñecemento.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Que fermosa é a mocidade, que foxe de todos os xeitos.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Unha vida sen examinar non paga a pena vivela.",
-      "author": "Sócrates",
-      "work": "A apoloxía de Platón"
-    },
-    {
-      "text": "Penso, logo existo.",
-      "author": "René Descartes",
-      "work": "Discurso do método"
-    },
-    {
-      "text": "A fortuna axuda aos ousados.",
-      "author": "Terencio",
-      "work": "Formión"
-    }
-  ],
   "composer": {
     "label": "Mensaxe",
     "placeholder": "Responder…",

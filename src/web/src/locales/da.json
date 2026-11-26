@@ -100,58 +100,6 @@
     "anotherQuote": "Et andet citat",
     "placeholder": "Hvad kan jeg hjælpe med?"
   },
-  "quotes": [
-    {
-      "text": "Godt begyndt er halvt fuldendt.",
-      "author": "Aristoteles",
-      "work": "Politik"
-    },
-    {
-      "text": "En rejse på tusind mil begynder med et enkelt skridt.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "»Håbet« er den ting med fjer, der sætter sig i sjælen.",
-      "author": "Emily Dickinson",
-      "work": "Digte"
-    },
-    {
-      "text": "Vi er af det stof, som drømme er gjort af.",
-      "author": "William Shakespeare",
-      "work": "Stormen"
-    },
-    {
-      "text": "Alle lykkelige familier ligner hinanden; enhver ulykkelig familie er ulykkelig på sin egen måde.",
-      "author": "Leo Tolstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "I er ikke skabt til at leve som dyr, men til at følge dyd og viden.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Hvor er ungdommen dog skøn, men den flygter alligevel.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Det uundersøgte liv er ikke værd at leve.",
-      "author": "Sokrates",
-      "work": "Platons Apologi"
-    },
-    {
-      "text": "Jeg tænker, altså er jeg.",
-      "author": "René Descartes",
-      "work": "Om metoden"
-    },
-    {
-      "text": "Lykken står den kække bi.",
-      "author": "Terents",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Besked",
     "placeholder": "Svar…",

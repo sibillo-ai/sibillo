@@ -100,58 +100,6 @@
     "anotherQuote": "Dyfyniad arall",
     "placeholder": "Gyda beth alla i helpu?"
   },
-  "quotes": [
-    {
-      "text": "Dechrau da yw hanner gwaith.",
-      "author": "Aristoteles",
-      "work": "Gwleidyddiaeth"
-    },
-    {
-      "text": "Mae taith o fil o filltiroedd yn dechrau gydag un cam.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "‘Gobaith’ yw'r peth â phlu sy'n clwydo yn yr enaid.",
-      "author": "Emily Dickinson",
-      "work": "Cerddi"
-    },
-    {
-      "text": "Ni yw'r fath ddefnydd ag y gwneir breuddwydion ohono.",
-      "author": "William Shakespeare",
-      "work": "Y Dymestl"
-    },
-    {
-      "text": "Mae teuluoedd hapus i gyd yn debyg; mae pob teulu anhapus yn anhapus yn ei ffordd ei hun.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Ni chawsoch eich gwneud i fyw fel bwystfilod, ond i ddilyn rhinwedd a gwybodaeth.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Mor hardd yw ieuenctid, sy'n ffoi i ffwrdd yr un fath.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Nid yw bywyd heb ei archwilio yn werth ei fyw.",
-      "author": "Socrates",
-      "work": "Amddiffyniad Plato"
-    },
-    {
-      "text": "Rwy'n meddwl, felly rwyf.",
-      "author": "René Descartes",
-      "work": "Disgwrs ar y Dull"
-    },
-    {
-      "text": "Mae ffawd yn ffafrio'r beiddgar.",
-      "author": "Terence",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Neges",
     "placeholder": "Ateb…",

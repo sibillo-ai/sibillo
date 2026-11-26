@@ -100,58 +100,6 @@
     "anotherQuote": "Drug citat",
     "placeholder": "S čim lahko pomagam?"
   },
-  "quotes": [
-    {
-      "text": "Dobro začeto je na pol dokončano.",
-      "author": "Aristotel",
-      "work": "Politika"
-    },
-    {
-      "text": "Potovanje tisoč milj se začne z enim samim korakom.",
-      "author": "Laozi",
-      "work": "Tao Te Čing"
-    },
-    {
-      "text": "»Upanje« je stvar s perjem, ki se useda v dušo.",
-      "author": "Emily Dickinson",
-      "work": "Pesmi"
-    },
-    {
-      "text": "Smo taka snov, iz katere so sanje.",
-      "author": "William Shakespeare",
-      "work": "Vihar"
-    },
-    {
-      "text": "Vse srečne družine so si podobne, vsaka nesrečna družina pa je nesrečna na svoj način.",
-      "author": "Lev Tolstoj",
-      "work": "Ana Karenina"
-    },
-    {
-      "text": "Niste bili ustvarjeni, da živite kot zveri, ampak da sledite kreposti in znanju.",
-      "author": "Dante Alighieri",
-      "work": "Pekel"
-    },
-    {
-      "text": "Kako lepa je mladost, ki vendar beži.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Nepreizprašano življenje ni vredno življenja.",
-      "author": "Sokrat",
-      "work": "Platonova Apologija"
-    },
-    {
-      "text": "Mislim, torej sem.",
-      "author": "René Descartes",
-      "work": "Razprava o metodi"
-    },
-    {
-      "text": "Sreča spremlja pogumne.",
-      "author": "Terenc",
-      "work": "Formion"
-    }
-  ],
   "composer": {
     "label": "Sporočilo",
     "placeholder": "Odgovori …",

@@ -100,58 +100,6 @@
     "anotherQuote": "Kwotazzjoni oħra",
     "placeholder": "B'xiex nista' ngħinek?"
   },
-  "quotes": [
-    {
-      "text": "Bidu tajjeb, nofsu lest.",
-      "author": "Aristotele",
-      "work": "Politika"
-    },
-    {
-      "text": "Il-vjaġġ ta' elf mil jibda bi pass wieħed.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "‘It-tama’ hija l-ħaġa bir-rix li tistrieħ fir-ruħ.",
-      "author": "Emily Dickinson",
-      "work": "Poeżiji"
-    },
-    {
-      "text": "Aħna magħmulin minn dak l-istess materjal li minnu jsiru l-ħolm.",
-      "author": "William Shakespeare",
-      "work": "It-Tempesta"
-    },
-    {
-      "text": "Il-familji henjin kollha jixxiebhu; kull familja mhux henja hija mhux henja b'mod tagħha.",
-      "author": "Leo Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "M'intomx maħluqin biex tgħixu bħall-bhejjem, imma biex tsegwu l-virtù u l-għarfien.",
-      "author": "Dante Alighieri",
-      "work": "Inferno"
-    },
-    {
-      "text": "Kemm hi sabiħa ż-żgħożija, li xorta waħda tgħaddi.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Il-ħajja mhux eżaminata mhix denja li tingħix.",
-      "author": "Sokrate",
-      "work": "L-Apologija ta' Platone"
-    },
-    {
-      "text": "Jiena naħseb, għalhekk jien.",
-      "author": "René Descartes",
-      "work": "Diskors dwar il-Metodu"
-    },
-    {
-      "text": "Il-fortuna tiffavorixxi l-kuraġġużi.",
-      "author": "Terenzju",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Messaġġ",
     "placeholder": "Ikteb tweġiba…",

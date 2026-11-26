@@ -100,58 +100,6 @@
     "anotherQuote": "Başka bir alıntı",
     "placeholder": "Nasıl yardımcı olabilirim?"
   },
-  "quotes": [
-    {
-      "text": "İyi başlayan iş, yarı bitmiş sayılır.",
-      "author": "Aristoteles",
-      "work": "Politika"
-    },
-    {
-      "text": "Bin millik yolculuk tek bir adımla başlar.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "“Umut” tüylü bir şeydir; ruhun içine tüner.",
-      "author": "Emily Dickinson",
-      "work": "Şiirler"
-    },
-    {
-      "text": "Biz, rüyaların yapıldığı o hamuruz.",
-      "author": "William Shakespeare",
-      "work": "Fırtına"
-    },
-    {
-      "text": "Mutlu aileler birbirine benzer; her mutsuz aile kendine göre mutsuzdur.",
-      "author": "Lev Tolstoy",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Siz hayvanlar gibi yaşamak için değil, erdem ve bilgi peşinden gitmek için yaratıldınız.",
-      "author": "Dante Alighieri",
-      "work": "Cehennem"
-    },
-    {
-      "text": "Gençlik ne güzel, yine de kaçıp gidiyor.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Sorgulanmamış hayat yaşamaya değmez.",
-      "author": "Sokrates",
-      "work": "Sokrates'in Savunması"
-    },
-    {
-      "text": "Düşünüyorum, öyleyse varım.",
-      "author": "René Descartes",
-      "work": "Yöntem Üzerine Konuşma"
-    },
-    {
-      "text": "Talih cesurdan yanadır.",
-      "author": "Terentius",
-      "work": "Phormio"
-    }
-  ],
   "composer": {
     "label": "Mesaj",
     "placeholder": "Yanıt yaz…",

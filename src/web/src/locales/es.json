@@ -100,58 +100,6 @@
     "anotherQuote": "Otra cita",
     "placeholder": "¿En qué te puedo ayudar?"
   },
-  "quotes": [
-    {
-      "text": "Bien empezado, medio acabado.",
-      "author": "Aristóteles",
-      "work": "Política"
-    },
-    {
-      "text": "Un viaje de mil millas comienza con un solo paso.",
-      "author": "Lao-Tsé",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "La «esperanza» es esa cosa con plumas que se posa en el alma.",
-      "author": "Emily Dickinson",
-      "work": "Poemas"
-    },
-    {
-      "text": "Estamos hechos de la misma materia que los sueños.",
-      "author": "William Shakespeare",
-      "work": "La tempestad"
-    },
-    {
-      "text": "Todas las familias felices se parecen entre sí; cada familia infeliz lo es a su manera.",
-      "author": "León Tolstói",
-      "work": "Anna Karénina"
-    },
-    {
-      "text": "No fuisteis hechos para vivir como brutos, sino para seguir virtud y conocimiento.",
-      "author": "Dante Alighieri",
-      "work": "Infierno"
-    },
-    {
-      "text": "¡Qué bella es la juventud, que huye sin embargo!",
-      "author": "Lorenzo de Médici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Una vida sin examen no merece ser vivida.",
-      "author": "Sócrates",
-      "work": "Apología de Platón"
-    },
-    {
-      "text": "Pienso, luego existo.",
-      "author": "René Descartes",
-      "work": "Discurso del método"
-    },
-    {
-      "text": "La fortuna favorece a los audaces.",
-      "author": "Terencio",
-      "work": "Formión"
-    }
-  ],
   "composer": {
     "label": "Mensaje",
     "placeholder": "Responde…",

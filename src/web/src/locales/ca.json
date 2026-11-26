@@ -100,58 +100,6 @@
     "anotherQuote": "Una altra citació",
     "placeholder": "En què et puc ajudar?"
   },
-  "quotes": [
-    {
-      "text": "Qui bé comença, la meitat té feta.",
-      "author": "Aristòtil",
-      "work": "Política"
-    },
-    {
-      "text": "El viatge de mil milles comença amb un sol pas.",
-      "author": "Laozi",
-      "work": "Tao Te Ching"
-    },
-    {
-      "text": "L'«esperança» és la cosa amb plomes que s'ajoca a l'ànima.",
-      "author": "Emily Dickinson",
-      "work": "Poemes"
-    },
-    {
-      "text": "Estem fets de la mateixa matèria que els somnis.",
-      "author": "William Shakespeare",
-      "work": "La tempesta"
-    },
-    {
-      "text": "Totes les famílies felices s'assemblen; cada família infeliç ho és a la seva manera.",
-      "author": "Lev Tolstoi",
-      "work": "Anna Karènina"
-    },
-    {
-      "text": "No vau ser fets per viure com bèsties, sinó per seguir la virtut i el coneixement.",
-      "author": "Dante Alighieri",
-      "work": "Infern"
-    },
-    {
-      "text": "Que bella és la joventut, que fuig malgrat tot!",
-      "author": "Llorenç de Mèdici",
-      "work": "Cançó de Bacus"
-    },
-    {
-      "text": "La vida sense examen no val la pena de viure.",
-      "author": "Sòcrates",
-      "work": "Apologia de Plató"
-    },
-    {
-      "text": "Penso, per tant existeixo.",
-      "author": "René Descartes",
-      "work": "Discurs del mètode"
-    },
-    {
-      "text": "La fortuna afavoreix els valents.",
-      "author": "Terenci",
-      "work": "Formió"
-    }
-  ],
   "composer": {
     "label": "Missatge",
     "placeholder": "Respon…",

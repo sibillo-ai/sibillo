@@ -100,58 +100,6 @@
     "anotherQuote": "Inny cytat",
     "placeholder": "W czym mogę pomóc?"
   },
-  "quotes": [
-    {
-      "text": "Dobry początek to połowa sukcesu.",
-      "author": "Arystoteles",
-      "work": "Polityka"
-    },
-    {
-      "text": "Podróż tysiąca mil zaczyna się od jednego kroku.",
-      "author": "Laozi",
-      "work": "Tao Te Cing"
-    },
-    {
-      "text": "„Nadzieja” to rzecz o piórach, co w duszy się gnieździ.",
-      "author": "Emily Dickinson",
-      "work": "Wiersze"
-    },
-    {
-      "text": "Jesteśmy z tej samej materii co sny.",
-      "author": "William Szekspir",
-      "work": "Burza"
-    },
-    {
-      "text": "Wszystkie szczęśliwe rodziny są do siebie podobne, każda nieszczęśliwa rodzina jest nieszczęśliwa na swój sposób.",
-      "author": "Lew Tołstoj",
-      "work": "Anna Karenina"
-    },
-    {
-      "text": "Nie po to jesteście stworzeni, by żyć jak zwierzęta, ale by iść za cnotą i wiedzą.",
-      "author": "Dante Alighieri",
-      "work": "Piekło"
-    },
-    {
-      "text": "Jak piękna jest młodość, choć przecież ucieka.",
-      "author": "Lorenzo de’ Medici",
-      "work": "Canzona di Bacco"
-    },
-    {
-      "text": "Życie niepoddane badaniu nie jest warte przeżycia.",
-      "author": "Sokrates",
-      "work": "Obrona Sokratesa"
-    },
-    {
-      "text": "Myślę, więc jestem.",
-      "author": "Kartezjusz",
-      "work": "Rozprawa o metodzie"
-    },
-    {
-      "text": "Fortuna sprzyja odważnym.",
-      "author": "Terencjusz",
-      "work": "Formion"
-    }
-  ],
   "composer": {
     "label": "Wiadomość",
     "placeholder": "Odpowiedz…",
