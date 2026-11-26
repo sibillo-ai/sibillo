@@ -171,7 +171,7 @@ tomorrow.
 
 ## REPO-013: A fast tier of tests
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 3
 - **Verification:** unit
