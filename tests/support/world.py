@@ -192,6 +192,12 @@ def create_user(conn: psycopg.Connection, tenant_id: uuid.UUID, role: str) -> Us
         " VALUES (%s, %s, 'tool', 'web_search', 'ask', now())",
         (tenant_id, user_id),
     )
+    # A token limit; world tenants have no connections, so it limits nothing they do (MOD-004).
+    conn.execute(
+        "INSERT INTO budgets (tenant_id, user_id, kind, amount, currency, period, time_zone, updated_at)"
+        " VALUES (%s, %s, 'tokens', 1000, NULL, 'day', 'UTC', now())",
+        (tenant_id, user_id),
+    )
     # World tenants have no connections, so the policy changes nothing they do.
     conn.execute(
         "INSERT INTO egress_policies (tenant_id, user_id, set_by, policy, updated_at)"
