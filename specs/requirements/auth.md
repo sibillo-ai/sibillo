@@ -154,7 +154,7 @@ changing their password and signing out (ADR-0105).
 
 ## AUTH-013: A new initial password from an administrator
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security
@@ -172,7 +172,7 @@ good, since only they can change it (AUTH-011).
 
 ## AUTH-014: Deleting an account
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security

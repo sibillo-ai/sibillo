@@ -823,7 +823,7 @@ the answer, with labels cut by their arguments and no word of what ran.
 
 ## UX-044: Members in the settings
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** e2e
@@ -844,7 +844,7 @@ passkeys, so an admin needed a terminal to add a member.
 
 ## UX-045: Budgets and usage in the app
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** e2e, unit

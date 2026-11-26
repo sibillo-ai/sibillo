@@ -49,7 +49,7 @@ another model instead (MOD-012) (ADR-0017, ADR-0091).
 
 ## MOD-004: Budgets per user
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration
@@ -328,7 +328,7 @@ chosen (UX-015) (ADR-0110).
 
 ## MOD-021: Usage over time
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** MUST
 - **Phase:** 3
 - **Verification:** integration, security
