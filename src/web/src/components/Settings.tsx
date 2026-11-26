@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, ChevronLeft, Cloud, House, KeyRound, Minus, Palette, Plug, Plus, ShieldCheck, Sparkles, TriangleAlert, UserRound, Users, X } from "lucide-react";
+import { Activity, Bell, Blocks, Bot, Brain, Cable, CalendarClock, Check, ChevronLeft, Cloud, Gauge, House, KeyRound, Minus, Palette, Plug, Plus, ShieldCheck, Sparkles, TriangleAlert, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, Fragment, type ReactNode, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -17,10 +17,12 @@ import { McpServersSection, ServicesSection } from "./McpSettings";
 import { MemorySection } from "./MemorySettings";
 import { NotificationsSection } from "./NotificationSettings";
 import { PasswordSection } from "./Password";
-import { MembersSection, PasskeysSection } from "./SecuritySettings";
+import { MembersSection } from "./MembersSettings";
+import { PasskeysSection } from "./SecuritySettings";
 import { SkillsSection } from "./SkillsSettings";
 import { TasksSection } from "./TaskSettings";
 import { ActivitySection, ToolPermissionsSection } from "./ToolSettings";
+import { UsageSection } from "./UsageSettings";
 import { useOpenMenu } from "./Shell";
 
 type SpeechSettings = Schemas["SpeechSettings"];
@@ -29,7 +31,7 @@ const CONNECTIONS = ["connections"] as const;
 // The window of a connection to your own server unless set (ADR-0073).
 const DEFAULT_CONTEXT_WINDOW = 8192;
 
-type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "tasks" | "memory" | "skills" | "services" | "activity" | "notifications" | "security" | "appearance";
+type Tab = "models" | "mcp-servers" | "permissions" | "members" | "assistant" | "tasks" | "memory" | "skills" | "services" | "activity" | "usage" | "notifications" | "security" | "appearance";
 
 // Where the sections sit beside the open one: Tailwind's `md`.
 const WIDE = window.matchMedia("(min-width: 48rem)");
@@ -60,6 +62,7 @@ export function Settings({ me }: { me: User }) {
     { id: "skills", label: t("settings.skills"), icon: <Sparkles aria-hidden="true" /> },
     { id: "services", label: t("mcp.services.title"), icon: <Cable aria-hidden="true" /> },
     { id: "activity", label: t("activity.page.title"), icon: <Activity aria-hidden="true" /> },
+    { id: "usage", label: t("usage.page"), icon: <Gauge aria-hidden="true" /> },
     { id: "notifications", label: t("notifications.title"), icon: <Bell aria-hidden="true" /> },
     { id: "security", label: t("settings.security"), icon: <KeyRound aria-hidden="true" /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette aria-hidden="true" /> },
@@ -126,7 +129,7 @@ export function Settings({ me }: { me: User }) {
               ) : tab === "permissions" && admin ? (
                 <ToolPermissionsSection />
               ) : tab === "members" && admin ? (
-                <MembersSection />
+                <MembersSection me={me} />
               ) : tab === "security" ? (
                 <>
                   <PasswordSection />
@@ -146,6 +149,8 @@ export function Settings({ me }: { me: User }) {
                 <ServicesSection />
               ) : tab === "activity" ? (
                 <ActivitySection />
+              ) : tab === "usage" ? (
+                <UsageSection />
               ) : (
                 <AppearanceSection />
               )}

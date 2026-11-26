@@ -8,6 +8,7 @@ import { ApiError, api, unwrap, type ModelChoice, type MessagePage, type PathRun
 import type { ResumeEntry } from "../api/stream";
 import { forkConversation, rewindConversation, updateConversation, useRefreshConversations } from "../conversations";
 import { formatMoney, isPaid, USAGE } from "../costs";
+import { BudgetUntil } from "./UsageSettings";
 import { MEMORY_SECTION, type MemoryChange, memoryChangeOf } from "../memory";
 import { useServerTool } from "../mcp";
 import { useBusy } from "../busy";
@@ -602,7 +603,7 @@ export function ConversationView() {
 
 function codeKey(error: unknown): string {
   const code = error instanceof ApiError ? error.code : "internal.error";
-  return ["model.unavailable", "model.request_failed", "model.refused", "model.egress_refused", "model.tool_misuse", "model.context_exceeded", "sandbox.unavailable", "run.worker_lost", "run.timeout", "run.step_limit"].includes(code) ? code.replace(".", "_") : "internal_error";
+  return ["model.unavailable", "model.request_failed", "model.refused", "model.egress_refused", "budget.exhausted", "model.tool_misuse", "model.context_exceeded", "sandbox.unavailable", "run.worker_lost", "run.timeout", "run.step_limit"].includes(code) ? code.replace(".", "_") : "internal_error";
 }
 
 /** Why a run failed, where its answer would be, with what the model said (UX-014, MOD-015). */
@@ -611,6 +612,7 @@ function RunErrorView({ code, reason }: { code: string; reason: string | null })
   return (
     <ErrorCard sprite={<Sprite pose="error" className="h-14 w-12 flex-none" />} title={t("errors.title")} reason={reason}>
       {t(`errors.${codeKey(new ApiError(0, code))}`)}
+      {code === "budget.exhausted" && <BudgetUntil />}
     </ErrorCard>
   );
 }

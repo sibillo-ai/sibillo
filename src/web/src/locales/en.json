@@ -384,7 +384,8 @@
     "model_egress_refused": "This chat's model runs remotely, and only local models are allowed, so nothing was sent. Choose a local model in the message box.",
     "model_tool_misuse": "The model kept using one of its tools the wrong way, so it couldn't go on. Try again, or choose another model in the message box.",
     "model_context_exceeded": "The model ran out of room before it could answer: the conversation no longer fits in its context window. Start a new conversation, choose another model, or ask a household admin to give the model's server a larger context window (for Ollama, num_ctx).",
-    "run_step_limit": "The assistant stopped after many steps, before it was done. Ask it to continue, and it goes on from where it stopped."
+    "run_step_limit": "The assistant stopped after many steps, before it was done. Ask it to continue, and it goes on from where it stopped.",
+    "budget_exhausted": "The budget your household's admin set for you is used up, so nothing was sent. Ask them to raise it, or wait for the next period."
   },
   "update": {
     "ready": "A new version of Sibillo is ready",
@@ -396,7 +397,26 @@
     "day": "Last 24 hours",
     "month": "Last 30 days",
     "context": "Context used",
-    "contextValue": "Context {{used}} of {{size}} tokens · {{percent}}%"
+    "contextValue": "Context {{used}} of {{size}} tokens · {{percent}}%",
+    "page": "Usage",
+    "hint": "What your requests to the models used, and what is left of the budget a household admin set for you.",
+    "title": "Usage",
+    "noBudget": "No budget: nothing is limited.",
+    "usedOf": "{{used}} of {{limit}}",
+    "since": "Since {{date}}",
+    "nothing": "Nothing used",
+    "local": "{{tokens}} on local models",
+    "remote": "{{tokens}} on remote models",
+    "tokens_one": "{{formatted}} token",
+    "tokens_other": "{{formatted}} tokens",
+    "requests_one": "{{formatted}} request",
+    "requests_other": "{{formatted}} requests",
+    "unpriced_one": "{{formatted}} request of a remote model without a known price, which no cost limit counts",
+    "unpriced_other": "{{formatted}} requests of remote models without a known price, which no cost limit counts",
+    "lastDays": "Last 30 days",
+    "byMonth": "By month",
+    "byModel": "By model",
+    "zone": "Days and months in {{zone}}."
   },
   "files": {
     "fullView": "Full view",
@@ -792,7 +812,53 @@
     "remove": "Remove passkeys",
     "removeLabel": "Remove the passkeys of {{username}}",
     "removeTitle": "Remove the passkeys of {{name}}?",
-    "removeBody": "{{username}} will then sign in with their password alone, until they add a passkey again. Their open sessions stay signed in."
+    "removeBody": "{{username}} will then sign in with their password alone, until they add a passkey again. Their open sessions stay signed in.",
+    "list": "People",
+    "add": "Add a member",
+    "addHint": "They sign in with this username and password, and choose a password of their own at once.",
+    "addButton": "Add",
+    "added": "{{name}} added",
+    "taken": "This username is taken.",
+    "invalid": "Check the fields: a username of lowercase letters, digits, dots, dashes and underscores, and a password of at least 12 characters.",
+    "username": "Username",
+    "usernameHint": "Lowercase letters, digits, dots, dashes and underscores.",
+    "name": "Name",
+    "initialPassword": "Initial password",
+    "initialPasswordHint": "At least 12 characters. Give it to them yourself: they replace it at their next sign-in.",
+    "role": "Role",
+    "roles": {
+      "member": "Member",
+      "tenant_admin": "Household admin"
+    },
+    "manage": "Manage {{username}}",
+    "open": "Manage",
+    "back": "All members",
+    "you": "You",
+    "disabled": "Disabled",
+    "account": "Account",
+    "state": "Sign-in",
+    "stateEnabled": "Can sign in.",
+    "stateDisabled": "Disabled: cannot sign in, and their data is kept.",
+    "disable": "Disable account",
+    "enable": "Enable account",
+    "lastAdmin": "The household needs an enabled admin.",
+    "password": "Password",
+    "passwordHint": "If they forgot it: they choose a new one at their next sign-in, and every device of theirs is signed out.",
+    "reset": "Give a new initial password",
+    "resetTitle": "Give {{name}} a new initial password",
+    "resetHint": "Every device of {{name}} is signed out. Their passkeys stay: they still need one to sign in.",
+    "newPassword": "New initial password",
+    "setPassword": "Set password",
+    "passwordSet": "New initial password set",
+    "passkeysRow": "Passkeys",
+    "deleteGroup": "Deleting the account",
+    "delete": "Delete account",
+    "deleteHint": "Deletes everything of theirs, for good.",
+    "deleteNeedsDisable": "Disable the account to delete it.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteBody": "Everything of {{name}} is deleted for good: their conversations and files, memory, skills, tasks, settings and usage. This cannot be undone.",
+    "deleteBusy": "One of their answers is still running. Try again once it has ended.",
+    "deleted": "{{name}} deleted"
   },
   "memory": {
     "title": "Memory",
@@ -1167,5 +1233,40 @@
     "count_other": "{{count}} steps",
     "earlier_one": "{{count}} earlier step",
     "earlier_other": "{{count}} earlier steps"
+  },
+  "budget": {
+    "title": "Budget",
+    "hint": "Limits on what the requests of {{name}} use: remote models cost money, local ones the household's hardware, counted in tokens. A period starts at midnight in this device's time zone, {{zone}}.",
+    "cost": "Cost limit ({{currency}})",
+    "costHint": "On remote models. Empty for no limit.",
+    "costPeriod": "Cost limit period",
+    "tokens": "Token limit",
+    "tokensHint": "On local models: the tokens they read and write. Empty for no limit.",
+    "tokensPeriod": "Token limit period",
+    "none": "No limit",
+    "periods": {
+      "day": "Per day",
+      "week": "Per week, from Monday",
+      "month": "Per month"
+    },
+    "save": "Save budget",
+    "saved": "Budget saved",
+    "invalid": "Enter an amount greater than zero, with at most 4 decimals, and a whole number of tokens.",
+    "failed": "The budget could not be saved.",
+    "share": {
+      "cost": {
+        "day": "{{percent}}% of today's cost limit",
+        "week": "{{percent}}% of this week's cost limit",
+        "month": "{{percent}}% of this month's cost limit"
+      },
+      "tokens": {
+        "day": "{{percent}}% of today's token limit",
+        "week": "{{percent}}% of this week's token limit",
+        "month": "{{percent}}% of this month's token limit"
+      }
+    },
+    "until": "It starts again on {{until}}.",
+    "warning": "You have used {{share}}. It starts again on {{until}}.",
+    "exhausted": "The budget your household's admin set is used up: {{share}}. Nothing more is sent until {{until}}."
   }
 }

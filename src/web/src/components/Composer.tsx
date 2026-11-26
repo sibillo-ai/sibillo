@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { ModelChoice } from "../api/client";
 import { hasKeyboard } from "../focus";
 import { findModel, refusedBy, useModels } from "../models";
+import { BudgetWarning } from "./UsageSettings";
 import { type AttachedFile, formatSize, pastedFiles, type useAttachments } from "../workspace";
 import { Recorder, transcribe } from "../speech";
 import { VoiceLevel } from "./VoiceLevel";
@@ -123,6 +124,9 @@ export function Composer(props: {
   // A model the user's data egress policy refuses, said before anything is sent (UX-024).
   const refused = refusedBy(models.data?.egress.effective, chosen);
   return (
+    <>
+      {/* A limit nearly or wholly used, said before anything is sent (UX-045). */}
+      <BudgetWarning />
     <MessageBox
       onSubmit={send}
       dropping={dragging}
@@ -254,6 +258,7 @@ export function Composer(props: {
         }
       />
     </MessageBox>
+    </>
   );
 }
 

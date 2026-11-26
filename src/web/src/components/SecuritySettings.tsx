@@ -1,14 +1,13 @@
-// The user's passkeys, and the members of the household with theirs for its admins (UX-026, AUTH-010, ADR-0094).
+// The user's passkeys (UX-026, AUTH-010, ADR-0094); the members' are on their pages (MembersSettings).
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, api, unwrap, type Schemas, type User } from "../api/client";
-import { useBusy } from "../busy";
+import { ApiError, api, unwrap, type Schemas } from "../api/client";
 import { useNotify } from "../notices";
 import { createPasskey, passkeysSupported } from "../passkeys";
-import { Avatar, Button, Card, Dialog, EmptyState, FormField, Group, Loading, Notice, Page, Row, TextInput, Tile } from "../ui";
+import { Button, Card, Dialog, EmptyState, FormField, Group, Loading, Notice, Row, TextInput, Tile } from "../ui";
 
 type Passkey = Schemas["Passkey"];
 
@@ -195,94 +194,5 @@ function RemovePasskeyDialog({ passkey, onClose, onRemoved }: { passkey: Passkey
       <PasswordField />
       {error && <Notice tone="error">{error}</Notice>}
     </Dialog>
-  );
-}
-
-/** The household's members, with how many passkeys each has, for its admins to remove (UX-026). */
-export function MembersSection() {
-  const { t } = useTranslation();
-  const users = useQuery({
-    queryKey: ["tenant", "users"],
-    queryFn: async () => unwrap(await api.GET("/tenant/users", { params: { query: { limit: 100 } } })).items,
-  });
-  return (
-    <Page title={t("members.title")} description={t("members.hint")}>
-      {users.isPending && (
-        <Card>
-          <Loading />
-        </Card>
-      )}
-      {users.data && users.data.length > 0 && (
-        <Card>
-          <ul aria-label={t("members.title")} className="divide-y divide-line">
-            {users.data.map((user) => (
-              <Member key={user.id} user={user} />
-            ))}
-          </ul>
-        </Card>
-      )}
-    </Page>
-  );
-}
-
-function Member({ user }: { user: User }) {
-  const { t } = useTranslation();
-  const queries = useQueryClient();
-  const notify = useNotify();
-  const key = ["tenant", "users", user.id, "passkeys"];
-  const count = useQuery({
-    queryKey: key,
-    queryFn: async () => unwrap(await api.GET("/tenant/users/{user_id}/passkeys", { params: { path: { user_id: user.id } } })).count,
-  });
-  const [confirming, setConfirming] = useState(false);
-  const { busy, run } = useBusy();
-
-  async function remove() {
-    const result = await api.DELETE("/tenant/users/{user_id}/passkeys", { params: { path: { user_id: user.id } } });
-    setConfirming(false);
-    if (!result.response.ok) {
-      notify({ kind: "error", title: t("errors.title"), text: t("errors.internal_error") });
-      return;
-    }
-    await queries.invalidateQueries({ queryKey: key });
-  }
-
-  const passkeys = count.data;
-  return (
-    <li>
-      <Row
-        leading={<Avatar name={user.display_name} />}
-        title={<span className="min-w-0 break-words">{user.display_name}</span>}
-        description={
-          <>
-            {user.username}
-            {passkeys !== undefined && " · "}
-            {passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : t("members.passkeys", { count: passkeys })}
-          </>
-        }
-      >
-        {passkeys !== undefined && passkeys > 0 && (
-          <Button variant="danger" size="sm" aria-label={t("members.removeLabel", { username: user.username })} onClick={() => setConfirming(true)}>
-            {t("passkeys.remove")}
-          </Button>
-        )}
-      </Row>
-      <Dialog
-        asks
-        open={confirming}
-        onClose={() => setConfirming(false)}
-        title={t("members.removeTitle", { name: user.display_name })}
-        description={t("members.removeBody", { username: user.username })}
-        size="sm"
-        footer={
-          <>
-            <Button onClick={() => setConfirming(false)}>{t("connection.cancel")}</Button>
-            <Button variant="danger-solid" busy={busy("remove")} onClick={() => void run("remove", remove)}>
-              {t("members.remove")}
-            </Button>
-          </>
-        }
-      />
-    </li>
   );
 }

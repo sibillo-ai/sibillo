@@ -389,7 +389,8 @@
     "model_egress_refused": "Il modello di questa chat è remoto e sono consentiti solo i modelli locali, quindi non è stato inviato nulla. Scegli un modello locale nella casella del messaggio.",
     "model_tool_misuse": "Il modello ha continuato a usare uno dei suoi strumenti in modo sbagliato, quindi non è riuscito a proseguire. Riprova, oppure scegli un altro modello nella casella del messaggio.",
     "model_context_exceeded": "Il modello ha esaurito lo spazio prima di riuscire a rispondere: la conversazione non entra più nella sua finestra di contesto. Inizia una nuova conversazione, scegli un altro modello oppure chiedi a un amministratore della famiglia di assegnare al server del modello una finestra di contesto più ampia (per Ollama, num_ctx).",
-    "run_step_limit": "L'assistente si è fermato dopo molti passaggi, prima di finire. Chiedigli di continuare e riprenderà da dove si è fermato."
+    "run_step_limit": "L'assistente si è fermato dopo molti passaggi, prima di finire. Chiedigli di continuare e riprenderà da dove si è fermato.",
+    "budget_exhausted": "Il budget che l'admin della casa ti ha assegnato è esaurito, quindi non è stato inviato nulla. Chiedigli di aumentarlo, o aspetta il prossimo periodo."
   },
   "update": {
     "ready": "Una nuova versione di Sibillo è pronta",
@@ -401,7 +402,29 @@
     "day": "Ultime 24 ore",
     "month": "Ultimi 30 giorni",
     "context": "Contesto usato",
-    "contextValue": "Contesto: {{used}} di {{size}} token · {{percent}}%"
+    "contextValue": "Contesto: {{used}} di {{size}} token · {{percent}}%",
+    "page": "Consumi",
+    "hint": "Cosa hanno usato le tue richieste ai modelli, e quanto resta del budget che un admin della casa ti ha assegnato.",
+    "title": "Consumi",
+    "noBudget": "Nessun budget: nulla è limitato.",
+    "usedOf": "{{used}} di {{limit}}",
+    "since": "Dal {{date}}",
+    "nothing": "Niente di usato",
+    "local": "{{tokens}} sui modelli locali",
+    "remote": "{{tokens}} sui modelli remoti",
+    "tokens_one": "{{formatted}} token",
+    "tokens_many": "{{formatted}} token",
+    "tokens_other": "{{formatted}} token",
+    "requests_one": "{{formatted}} richiesta",
+    "requests_many": "{{formatted}} richieste",
+    "requests_other": "{{formatted}} richieste",
+    "unpriced_one": "{{formatted}} richiesta a un modello remoto senza un prezzo noto, che nessun limite di spesa conta",
+    "unpriced_many": "{{formatted}} richieste a modelli remoti senza un prezzo noto, che nessun limite di spesa conta",
+    "unpriced_other": "{{formatted}} richieste a modelli remoti senza un prezzo noto, che nessun limite di spesa conta",
+    "lastDays": "Ultimi 30 giorni",
+    "byMonth": "Per mese",
+    "byModel": "Per modello",
+    "zone": "Giorni e mesi nel fuso orario {{zone}}."
   },
   "files": {
     "fullView": "Vista completa",
@@ -801,7 +824,53 @@
     "remove": "Rimuovi passkey",
     "removeLabel": "Rimuovi le passkey di {{username}}",
     "removeTitle": "Rimuovere le passkey di {{name}}?",
-    "removeBody": "{{username}} potrà quindi accedere solo con la password, finché non aggiunge di nuovo una passkey. Le sue sessioni aperte restano connesse."
+    "removeBody": "{{username}} potrà quindi accedere solo con la password, finché non aggiunge di nuovo una passkey. Le sue sessioni aperte restano connesse.",
+    "list": "Persone",
+    "add": "Aggiungi un membro",
+    "addHint": "Accede con questo nome utente e questa password, e sceglie subito una password sua.",
+    "addButton": "Aggiungi",
+    "added": "{{name}} aggiunto",
+    "taken": "Questo nome utente è già usato.",
+    "invalid": "Controlla i campi: un nome utente di lettere minuscole, cifre, punti, trattini e trattini bassi, e una password di almeno 12 caratteri.",
+    "username": "Nome utente",
+    "usernameHint": "Lettere minuscole, cifre, punti, trattini e trattini bassi.",
+    "name": "Nome",
+    "initialPassword": "Password iniziale",
+    "initialPasswordHint": "Almeno 12 caratteri. Comunicala tu: la sostituirà al prossimo accesso.",
+    "role": "Ruolo",
+    "roles": {
+      "member": "Membro",
+      "tenant_admin": "Admin della casa"
+    },
+    "manage": "Gestisci {{username}}",
+    "open": "Gestisci",
+    "back": "Tutti i membri",
+    "you": "Tu",
+    "disabled": "Disattivato",
+    "account": "Account",
+    "state": "Accesso",
+    "stateEnabled": "Può accedere.",
+    "stateDisabled": "Disattivato: non può accedere, e i suoi dati restano.",
+    "disable": "Disattiva account",
+    "enable": "Riattiva account",
+    "lastAdmin": "La casa ha bisogno di un admin attivo.",
+    "password": "Password",
+    "passwordHint": "Se l'ha dimenticata: ne sceglie una nuova al prossimo accesso, e tutti i suoi dispositivi vengono disconnessi.",
+    "reset": "Dai una nuova password iniziale",
+    "resetTitle": "Dai a {{name}} una nuova password iniziale",
+    "resetHint": "Tutti i dispositivi di {{name}} vengono disconnessi. Le passkey restano: per accedere ne serve ancora una.",
+    "newPassword": "Nuova password iniziale",
+    "setPassword": "Imposta password",
+    "passwordSet": "Nuova password iniziale impostata",
+    "passkeysRow": "Passkey",
+    "deleteGroup": "Eliminare l'account",
+    "delete": "Elimina account",
+    "deleteHint": "Elimina per sempre tutto ciò che è suo.",
+    "deleteNeedsDisable": "Disattiva l'account per poterlo eliminare.",
+    "deleteTitle": "Eliminare {{name}}?",
+    "deleteBody": "Tutto ciò che è di {{name}} viene eliminato per sempre: conversazioni e file, memoria, skill, task, impostazioni e consumi. Non si può annullare.",
+    "deleteBusy": "Una delle sue risposte è ancora in corso. Riprova quando è finita.",
+    "deleted": "{{name}} eliminato"
   },
   "memory": {
     "title": "Memoria",
@@ -1191,5 +1260,40 @@
     "earlier_one": "{{count}} passaggio precedente",
     "earlier_many": "{{count}} passaggi precedenti",
     "earlier_other": "{{count}} passaggi precedenti"
+  },
+  "budget": {
+    "title": "Budget",
+    "hint": "Limiti a ciò che usano le richieste di {{name}}: i modelli remoti costano denaro, quelli locali l'hardware della casa, contato in token. Un periodo inizia a mezzanotte nel fuso orario di questo dispositivo, {{zone}}.",
+    "cost": "Limite di spesa ({{currency}})",
+    "costHint": "Sui modelli remoti. Vuoto per nessun limite.",
+    "costPeriod": "Periodo del limite di spesa",
+    "tokens": "Limite di token",
+    "tokensHint": "Sui modelli locali: i token che leggono e scrivono. Vuoto per nessun limite.",
+    "tokensPeriod": "Periodo del limite di token",
+    "none": "Nessun limite",
+    "periods": {
+      "day": "Al giorno",
+      "week": "Alla settimana, da lunedì",
+      "month": "Al mese"
+    },
+    "save": "Salva budget",
+    "saved": "Budget salvato",
+    "invalid": "Inserisci un importo maggiore di zero, con al massimo 4 decimali, e un numero intero di token.",
+    "failed": "Non è stato possibile salvare il budget.",
+    "share": {
+      "cost": {
+        "day": "{{percent}}% del limite di spesa di oggi",
+        "week": "{{percent}}% del limite di spesa di questa settimana",
+        "month": "{{percent}}% del limite di spesa di questo mese"
+      },
+      "tokens": {
+        "day": "{{percent}}% del limite di token di oggi",
+        "week": "{{percent}}% del limite di token di questa settimana",
+        "month": "{{percent}}% del limite di token di questo mese"
+      }
+    },
+    "until": "Riparte {{until}}.",
+    "warning": "Hai usato il {{share}}. Riparte {{until}}.",
+    "exhausted": "Il budget che l'admin della casa ha assegnato è esaurito: {{share}}. Non viene inviato altro fino a {{until}}."
   }
 }
