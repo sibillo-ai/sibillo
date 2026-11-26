@@ -23,6 +23,10 @@ PRE_AUTHENTICATION_FUNCTIONS = (
     "waiting_task_firings",
     "find_webhook_trigger",
     "find_event_subscription",
+    # The administration functions check the request context themselves (ADR-0144, ADR-0145).
+    "usage_of_user",
+    "account_storage",
+    "delete_account",
 )
 
 

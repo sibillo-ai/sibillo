@@ -66,6 +66,8 @@ TENANT_TABLES = (
     "served_context_windows",
     "tool_permissions",
     "egress_policies",
+    # A tenant admin's limits on a user's model requests (MOD-004, ADR-0145).
+    "budgets",
     "passkeys",
     # A household's remote MCP servers and their tools (AGT-019, AGT-028, ADR-0099).
     "mcp_servers",
@@ -94,7 +96,12 @@ SECURITY_DEFINER_FUNCTIONS = (
     "auth_take_sign_in",
     "bootstrap_instance",
     "remove_passkeys",
-    "revoke_sessions_of_disabled_user",
+    # Disabling an account and giving it a new initial password end its sessions (AUTH-009, AUTH-013, ADR-0144).
+    "revoke_sessions_of_user",
+    # What a tenant admin does with another user's private rows (ADR-0144, ADR-0145).
+    "usage_of_user",
+    "account_storage",
+    "delete_account",
     "retention_expired_runs",
     "expired_temporary_conversations",
     "expired_approvals",

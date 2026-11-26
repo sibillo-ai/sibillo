@@ -80,6 +80,8 @@ GRANTS: dict[str, dict[str, Columns]] = {
     "task_firings": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "tool_permissions": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "egress_policies": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
+    # A tenant admin's limits on a user's model requests (MOD-004, ADR-0145).
+    "budgets": {"SELECT": EVERY, "INSERT": EVERY, "UPDATE": EVERY, "DELETE": EVERY},
     "audit_events": {
         "SELECT": EVERY,
         "INSERT": EVERY,
@@ -107,13 +109,22 @@ EXECUTABLE_FUNCTIONS = {
     "waiting_task_firings()",
     "find_webhook_trigger(bytea)",
     "find_event_subscription(uuid)",
+    # Administration functions (ADR-0144, ADR-0145).
+    "usage_of_user(uuid, text)",
+    "account_storage(uuid)",
+    "delete_account(uuid)",
 }
 
 # Owner policies of the pre-authentication functions: table -> operations.
 OWNER_POLICIES = {
     "tenants": {"SELECT", "INSERT"},
-    "users": {"SELECT", "INSERT"},
+    # Deleting an account deletes its row, and every row of its user by cascade (AUTH-014, ADR-0144).
+    "users": {"SELECT", "INSERT", "DELETE"},
     "device_sessions": {"SELECT", "UPDATE"},
+    # A new initial password forgets the account's notification subscriptions (AUTH-013, ADR-0144).
+    "notification_subscriptions": {"DELETE"},
+    # Usage over time, as sums per day (MOD-021, ADR-0145).
+    "usage_ledger": {"SELECT"},
     "login_attempts": {"SELECT", "INSERT", "DELETE"},
     "passkey_challenges": {"SELECT", "DELETE"},
     "passkeys": {"SELECT", "DELETE"},

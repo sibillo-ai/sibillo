@@ -194,6 +194,23 @@ def test_foreign_keys_never_clear_the_tenant_or_the_owner(database: Database) ->
     assert not offenders, f"foreign keys that clear tenant or owner columns on delete: {offenders}"
 
 
+@pytest.mark.spec("AUTH-014")
+def test_every_foreign_key_to_users_deletes_on_cascade(database: Database) -> None:
+    """Deleting an account's row deletes every row of its user (ADR-0144)."""
+    with database.superuser() as conn:
+        rows = conn.execute(
+            """
+            SELECT src.relname, con.conname, con.confdeltype FROM pg_constraint con
+            JOIN pg_class src ON src.oid = con.conrelid
+            WHERE con.contype = 'f' AND con.confrelid = 'public.users'::regclass
+            """
+        ).fetchall()
+    # Sessions, settings, conversations, runs and the ledger among them.
+    assert len(rows) >= 10
+    offenders = sorted(f"{table}.{name}" for table, name, action in rows if action != "c")
+    assert not offenders, f"foreign keys to users that do not cascade: {offenders}"
+
+
 @pytest.mark.spec("TEN-003")
 def test_contract_tables_have_forced_row_level_security(tables: dict[str, Table]) -> None:
     for name in CONTRACT_TABLES:
