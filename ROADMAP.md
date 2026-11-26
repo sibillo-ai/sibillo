@@ -115,6 +115,14 @@ SBX-026, ADR-0138). It moved here from phase 4: `read_page` returned a few
 words for many pages, and a spike showed that a light browser costs
 nothing to the conversations that do not use it.
 
+**Also:** the household's members and their budgets in the app: adding
+members, disabling them, giving a new initial password and deleting an
+account (AUTH-013, AUTH-014, UX-044), and limits per member on the cost of
+remote models and the tokens of local ones, with each member's usage over
+time (MOD-004, MOD-021, UX-045, ADR-0144, ADR-0145). Budgets moved here
+from phase 4: a household that pays a provider needed them before the
+devices, and accounts could not be managed without a terminal.
+
 **Goal:** the assistant helps with the household's own machines: diagnosing a
 server, installing updates, checking logs and firewall rules, editing files,
 from any device where the user is signed in.
@@ -138,7 +146,7 @@ release engineering to let others run it.
 
 Includes: multi-step research producing reports, connectors over open
 protocols (calendar, mail, files, home automation through mediated tools),
-OpenID Connect (AUTH-003), budgets (MOD-004), debug mode (OBS-004), signed
+OpenID Connect (AUTH-003), debug mode (OBS-004), signed
 multi-architecture images, upgrade guarantees, release gating by evals.
 
 **Exit criteria:** first public release `0.1.0`; installation and upgrade

@@ -87,7 +87,9 @@ MUST NOT be able to reach it by signing in as the user with a password the
 admin chose (AUTH-011, AUTH-012). The only data that the users of a tenant
 share MUST be the tenant's configuration that its tenant admins manage
 (ADR-0069). Sharing a user's data with other users is not offered
-(ADR-0105).
+(ADR-0105). A tenant admin MAY only see the sums of a user's usage
+(MOD-021) and delete a disabled account with everything it holds
+(AUTH-014, ADR-0144, ADR-0145).
 
 ## TEN-008: Partitioned file storage
 
@@ -101,7 +103,9 @@ skills given to its sandbox — MUST be kept apart per tenant, user and
 conversation. The names of their storage MUST be built only from the
 identifiers of the tenant, the user and the conversation, which the control
 plane takes from the authenticated identity and from rows it reads under
-row-level security, and which the sandbox driver accepts only as UUIDs. A
+row-level security, or, to delete an account, from the function of the
+database contract that returns them only to a tenant admin of its tenant
+(AUTH-014, ADR-0144), and which the sandbox driver accepts only as UUIDs. A
 file operation MUST NOT reach outside the conversation's own workspace
 (SBX-014).
 
@@ -114,8 +118,11 @@ file operation MUST NOT reach outside the conversation's own workspace
 
 Data stored by the durable execution engine outside the application schema
 (ADR-0034) MUST be reached by application code only through run identifiers
-read from row-level-secured tables, MUST be deleted together with the
-conversation it belongs to, and MUST be deleted once its run has finished and
-the retention period configured by the instance admin has passed. Row-level
-security does not cover it, so a run MUST take its user's role from the
-database when it starts, never from its stored input (ADR-0132).
+read from row-level-secured tables, or, to delete an account, from the
+function of the database contract that returns them only to a tenant admin
+of its tenant (AUTH-014, ADR-0144), MUST be deleted together with the
+conversation or the account it belongs to, and MUST be deleted once its
+run has finished and the retention period configured by the instance admin
+has passed. Row-level security does not cover it, so a run MUST take its
+user's role from the database when it starts, never from its stored input
+(ADR-0132).

@@ -820,3 +820,45 @@ skill (ADR-0140).
 
 Rationale: a run of many steps was a column of cards to scroll past before
 the answer, with labels cut by their arguments and no word of what ran.
+
+## UX-044: Members in the settings
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** e2e
+
+Among the household's settings (UX-015), clients MUST let tenant admins add
+a member with a username, a name, an initial password and a role (AUTH-002,
+AUTH-012), and, for each other member, change their role, disable and
+re-enable their account (AUTH-008), give them a new initial password
+(AUTH-013), and delete their account once it is disabled (AUTH-014). Before
+deleting, clients MUST ask for a confirmation that names the member and
+says that everything of theirs is deleted for good. Clients MUST NOT offer
+for the admin's own account, or for an instance admin's to a tenant admin
+who is not one, what the API refuses, and MUST say that an account must be
+disabled before it can be deleted (ADR-0144).
+
+Rationale: the API could manage accounts, but the web app only removed
+passkeys, so an admin needed a terminal to add a member.
+
+## UX-045: Budgets and usage in the app
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** e2e, unit
+
+Among the household's settings, clients MUST let tenant admins set, change
+and remove each member's cost and token limits (MOD-004), and MUST show
+them each member's usage (MOD-021): their totals since their account was
+created, per month, per day over the last 30 days and per model, and, for
+each limit, its share used in the current period and when the period
+ends. Among their own settings, clients MUST show each user the same of
+their own. Where the user writes a message, clients MUST warn them once a
+limit's current period is 80% used or more, saying when it ends; a run or
+speech refused, or a run failed, with `budget.exhausted` MUST say that the
+budget the household's admin set is used up, and until when (ADR-0145).
+
+Rationale: a limit that is reached without warning stops a member in the
+middle of their work, with no word of why.

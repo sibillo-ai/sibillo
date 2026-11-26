@@ -125,17 +125,19 @@ these are the only policies for that role:
 | Table | Operations for `sibillo_owner` | Used by |
 |---|---|---|
 | `tenants` | `SELECT`, `INSERT` | `bootstrap_instance` |
-| `users` | `SELECT`, `INSERT` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys`, and the task functions, for the account's state |
-| `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_disabled_user` |
+| `users` | `SELECT`, `INSERT`, `DELETE` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys`, the task functions, for the account's state, and the administration functions; `DELETE` only by `delete_account` |
+| `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_user` |
+| `notification_subscriptions` | `DELETE` | `revoke_sessions_of_user`, as a password is reset (AUTH-013) |
+| `usage_ledger` | `SELECT` | `usage_of_user` |
 | `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window, and `auth_check_login_attempt`, which only reads |
 | `passkey_challenges` | `SELECT`, `DELETE` | `auth_take_sign_in` |
 | `passkeys` | `SELECT`, `DELETE` | `remove_passkeys` |
-| `runs` | `SELECT` | `retention_expired_runs`, `expired_temporary_conversations`, `expired_approvals` |
-| `conversations` | `SELECT` | `expired_temporary_conversations`, `expired_approvals` |
+| `runs` | `SELECT` | `retention_expired_runs`, `expired_temporary_conversations`, `expired_approvals`, `account_storage` |
+| `conversations` | `SELECT` | `expired_temporary_conversations`, `expired_approvals`, `account_storage` |
 | `connections` | `SELECT` | `default_model_configured` |
 | `tasks` | `SELECT` | `due_task_triggers`, `waiting_task_firings`, `find_webhook_trigger`, `find_event_subscription` |
 | `task_triggers` | `SELECT` | `due_task_triggers`, `find_webhook_trigger`, `find_event_subscription` |
-| `task_firings` | `SELECT` | `waiting_task_firings` |
+| `task_firings` | `SELECT` | `waiting_task_firings`, `account_storage` |
 
 A webhook trigger's token, and a delivery's signature with its
 subscription's secret, authenticate a request as that trigger: once
@@ -146,6 +148,21 @@ firing (or count it as skipped), and does nothing else under it (ADR-0106).
 Owner policies have no condition (`USING (true)`): `sibillo_owner` is never used
 by running services, so they open these tables only to the code of the
 `SECURITY DEFINER` functions of this contract and to migrations.
+
+## Administration functions
+
+What a tenant admin does with another user's private rows goes through
+these `SECURITY DEFINER` functions, owned by `sibillo_owner`, with a fixed
+`search_path`, which `sibillo_app` may call. Each checks the request context
+itself, and raises `insufficient_privilege` when it does not allow the
+call, or `no_data_found` when the tenant has no such user (ADR-0144,
+ADR-0145). They work through the owner policies above.
+
+| Function | Returns | Allowed when | Purpose |
+|---|---|---|---|
+| `usage_of_user(user_id uuid, time_zone text)` | `day date, provider text, model text, price_source text, currency text, cost numeric, input_tokens bigint, output_tokens bigint, requests bigint`: the user's ledger entries summed per day in `time_zone`, provider, model, price source and currency; `cost` and `currency` null for entries whose price is unknown | the caller is the user, or a tenant admin of their tenant | Usage over time (MOD-021): only sums per day, never an entry, a conversation or a run |
+| `account_storage(user_id uuid)` | `kind text, id uuid`: a row of kind `conversation` for each of the user's conversations, `run` for each of their runs and `firing` for each of their task firings | the caller is a tenant admin of the user's tenant, the account is disabled, not the caller's and not an instance admin's; raises `object_in_use` while a run of the user is `queued` or `running` | Account deletion (AUTH-014): the identifiers of the workspaces and the durable workflows to delete before the rows |
+| `delete_account(user_id uuid)` | — | as `account_storage` | Account deletion (AUTH-014): deletes the user's row; every foreign key to `users` cascades, and foreign key actions are not subject to row-level security, so every row of the user goes with it in the same statement |
 
 ## Tables
 
@@ -204,19 +221,28 @@ Changing `role` or `disabled_at` requires `app_is_tenant_admin()`, so that
 users cannot promote themselves or re-enable their account, and of an
 instance admin's row also `app_is_instance_admin()` (AUTH-008). Changing
 `password_hash` or `password_change_required` requires `id = app_user_id()`,
-so that only the user changes their password, and `password_change_required`
-never changes from false to true (AUTH-011, AUTH-012, ADR-0105). Row-level
-security cannot compare a row's old and new values, so a `BEFORE UPDATE`
-trigger on `users` enforces these rules.
+so that only the user chooses their password, or `app_is_tenant_admin()`
+with the new row's `password_change_required` true, so that a tenant admin
+gives only a new initial password, and of an instance admin's row also
+`app_is_instance_admin()` (AUTH-011, AUTH-013). The user themself never sets
+`password_change_required` from false to true (AUTH-012, ADR-0105,
+ADR-0144). Row-level security cannot compare a row's old and new values, so
+a `BEFORE UPDATE` trigger on `users` enforces these rules.
 
-Disabling an account revokes its sessions (AUTH-009, ADR-0048). When
-`disabled_at` changes from null to a value, an `AFTER UPDATE` trigger on
-`users` sets `revoked_at` to the current time on every session of that user
-that is not yet revoked, in the same transaction. Its function,
-`revoke_sessions_of_disabled_user()`, is `SECURITY DEFINER`, owned by
+Disabling an account, and giving it a new initial password, end its
+sessions (AUTH-009, AUTH-013, ADR-0048, ADR-0144). When `disabled_at`
+changes from null to a value, or `password_hash` changes in a row whose new
+`password_change_required` is true, an `AFTER UPDATE` trigger on `users`
+sets `revoked_at` to the current time on every session of that user that is
+not yet revoked, in the same transaction; for a new initial password it also
+deletes the user's notification subscriptions. Its function,
+`revoke_sessions_of_user()`, is `SECURITY DEFINER`, owned by
 `sibillo_owner`, with a fixed `search_path`, and not executable by `sibillo_app`; it
-changes `device_sessions` through the owner policies. Re-enabling an account
-leaves its sessions revoked.
+changes `device_sessions` and `notification_subscriptions` through the owner
+policies. Re-enabling an account leaves its sessions revoked.
+
+Every foreign key that references `users` deletes on cascade, so that
+`delete_account` removes every row of the user (AUTH-014, ADR-0144).
 
 ### `device_sessions` (private)
 
@@ -544,9 +570,10 @@ It never contains content.
 | `price_source` | text | `provider`, `catalog`, `free` or `unknown` |
 | `created_at` | timestamptz | not null; indexed with `owner_id` |
 
-Totals per run, conversation, the last 24 hours and the last 30 days are computed from these rows (MOD-007, ADR-0073).
-Per-user totals for tenant admins arrive in phase 1, through a function that
-returns only sums per user.
+Totals per run, conversation, the last 24 hours and the last 30 days are computed from these rows (MOD-007, ADR-0073),
+and so is the use of a budget's current period, under the user's own request
+context (MOD-004, ADR-0145). Tenant admins see only sums per day, through
+`usage_of_user` (MOD-021).
 
 ### `tool_permissions`
 
@@ -595,6 +622,30 @@ Policies:
 - `INSERT`, `UPDATE`, `DELETE` where `tenant_id = app_tenant_id()` and
   ((`set_by = 'admin'` and `app_is_tenant_admin()`) or (`set_by = 'user'`
   and `user_id = app_user_id()`)).
+
+### `budgets`
+
+A tenant admin's limits on one user's model requests (MOD-004, ADR-0145).
+No row means no limit of that kind.
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id`, `user_id` | uuid | not null; (`tenant_id`, `user_id`) references `users` on delete cascade |
+| `kind` | text | `cost`, on requests to remote models, or `tokens`, on the input and output tokens of requests to local models |
+| `amount` | numeric(20, 4) | not null, greater than 0, at most 1000000000000; an amount of `currency` for `cost`, a whole number of tokens for `tokens` |
+| `currency` | text | ISO 4217 code for `cost`; null for `tokens` |
+| `period` | text | `day`, `week` (from Monday) or `month` |
+| `time_zone` | text | not null; the IANA name of the zone the period is counted in, at most 64 characters |
+| `updated_at` | timestamptz | not null |
+
+Primary key (`tenant_id`, `user_id`, `kind`).
+
+Policies:
+- `SELECT` where `tenant_id = app_tenant_id()` and (`user_id = app_user_id()`
+  or `app_is_tenant_admin()`): users read their own, so that the model
+  gateway checks it.
+- `INSERT`, `UPDATE`, `DELETE` where `tenant_id = app_tenant_id()` and
+  `app_is_tenant_admin()`.
 
 ### `audit_events` (private)
 
@@ -937,7 +988,7 @@ keys, not by privileges of `sibillo_app`.
 | Object | Privileges |
 |---|---|
 | `tenants` | `SELECT`, `INSERT` |
-| `users` | `SELECT` on every column except `password_hash`; `INSERT`; `UPDATE` of `display_name`, `password_hash`, `role`, `disabled_at` |
+| `users` | `SELECT` on every column except `password_hash`; `INSERT`; `UPDATE` of `display_name`, `password_hash`, `password_change_required`, `role`, `disabled_at` |
 | `device_sessions` | `SELECT`, `INSERT`, `DELETE`; `UPDATE` of `revoked_at` |
 | `notification_subscriptions` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `login_attempts` | none |
@@ -958,6 +1009,7 @@ keys, not by privileges of `sibillo_app`.
 | `usage_ledger` | `SELECT`, `INSERT`: entries never change (ADR-0042) |
 | `tool_permissions` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `egress_policies` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `budgets` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `audit_events` | `SELECT`, `INSERT`; `UPDATE` of `outcome`, `scope`, `reason` and `attempts`: an event is written when the call is decided and completed as it runs |
 | `connections` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | `connection_models` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
@@ -973,6 +1025,7 @@ keys, not by privileges of `sibillo_app`.
 | `task_firings` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | Helper functions | `EXECUTE` on `app_tenant_id()`, `app_user_id()`, `app_is_tenant_admin()`, `app_is_instance_admin()` |
 | Pre-authentication functions | `EXECUTE` on every function of that section except `bootstrap_instance` and `remove_passkeys` |
+| Administration functions | `EXECUTE` on every function of that section |
 
 `EXECUTE` on functions is revoked from `PUBLIC`.
 
@@ -988,8 +1041,10 @@ run events) **without row-level security**, which DBOS cannot apply. Rules
 
 - Application code reads or writes DBOS data only for workflow IDs that are
   run IDs obtained from the row-level-secured `runs` table in the same
-  request.
-- Deleting a conversation deletes the DBOS workflows of its runs.
+  request, or, to delete an account, the IDs of its runs and task firings
+  that `account_storage` returns (AUTH-014, ADR-0144).
+- Deleting a conversation deletes the DBOS workflows of its runs; deleting an
+  account deletes those of its runs and its task firings.
 - Workflows of runs whose `finished_at` is more than `SIBILLO_RUN_RETENTION_DAYS`
   days ago (default 30) are deleted by the worker, when it starts and then
   every hour (ADR-0052).
@@ -1009,8 +1064,14 @@ cost ledger are kept, detached from the conversation and its runs, so that
 spending totals stay correct (ADR-0042), and so are its audit events
 (ADR-0090), the memory items written in it (ADR-0095) and the skills saved
 in it (ADR-0096). Deleting a task deletes its grants, triggers and firings,
-and leaves the conversations it started, with their `task_name` (ADR-0106). Deletion is physical;
-there is no soft delete for user content.
+and leaves the conversations it started, with their `task_name` (ADR-0106).
+
+Deleting an account (AUTH-014, ADR-0144) deletes the DBOS workflows of its
+runs and task firings and the workspaces of its conversations, from the
+identifiers `account_storage` returns, and then its row through
+`delete_account`, with every row of the user by cascade: its cost ledger
+entries and audit events included. Deletion is physical; there is no soft
+delete for user content.
 
 ## Migrations
 
@@ -1027,9 +1088,10 @@ are only added, and upgrade every released version (OPS-005).
   owner column (TEN-002).
 - `sibillo_app` is not a superuser, lacks `BYPASSRLS` and owns no table or
   function (TEN-004).
-- Every `SECURITY DEFINER` function is a pre-authentication function or
-  `revoke_sessions_of_disabled_user()`, is owned by `sibillo_owner` and has a fixed
-  `search_path`.
+- Every `SECURITY DEFINER` function is a pre-authentication function, an
+  administration function or `revoke_sessions_of_user()`, is owned by
+  `sibillo_owner` and has a fixed `search_path`.
+- Every foreign key that references `users` deletes on cascade (AUTH-014).
 - `sibillo_app` holds exactly the privileges listed in "Privileges of `sibillo_app`"
   (TEN-004).
 - Policies for `sibillo_owner` are exactly the owner policies listed with the

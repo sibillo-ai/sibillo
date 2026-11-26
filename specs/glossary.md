@@ -16,7 +16,8 @@ new entry here first (ADR-0005).
 | User | A person with an account in exactly one tenant. |
 | Device session | An authenticated session of one user on one device, identified by an opaque token and revocable by the user (ADR-0025). |
 | Passkey | A WebAuthn credential kept by a user's device, often unlocked with a fingerprint or a face; a second factor on top of the password (ADR-0065). |
-| Initial password | The password an administrator chose when creating an account; its user replaces it at their first sign-in (ADR-0105). |
+| Initial password | The password an administrator chose when creating an account, or gave it later; its user replaces it at their next sign-in (ADR-0105, ADR-0144). |
+| Account deletion | A tenant admin's removal, for good, of a disabled account and everything that is its user's (AUTH-014, ADR-0144). |
 | Source address | The network address a request comes from: the address of the connecting peer, or the client address reported by a trusted proxy (ADR-0050). |
 | Trusted proxy | A reverse proxy, named by the instance admin in the configuration, whose report of the client address the server believes (ADR-0050). |
 | Private data | Data owned by one user and visible only to that user. The default for all data. |
@@ -154,6 +155,11 @@ new entry here first (ADR-0005).
 | Local model | A model served from inside the instance or the household's network. |
 | Remote model | A model served by a third party over the internet. |
 | Cost ledger | The record of every model request made for a user, with tokens and cost but no content (MOD-006, ADR-0042). |
+| Budget | A tenant admin's limits on one user's model requests: a cost limit on remote models and a token limit on local models, each over a period (MOD-004, ADR-0145). |
+| Cost limit | The part of a budget that limits the cost of a user's requests to remote models, an amount in a currency per period (MOD-004). |
+| Token limit | The part of a budget that limits the input and output tokens of a user's requests to local models per period (MOD-004). |
+| Budget period | The calendar day, week from Monday or month, in a time zone, over which a limit counts; a new one starts at its first moment (ADR-0145). |
+| Usage | The sums of a user's cost ledger, per day, month and model, which the user and their tenant admins see (MOD-021, ADR-0145). |
 | Data egress policy | The rule that decides whether a user's data may be sent to remote models: any model, or local models only. Set for the household and for each user by a tenant admin, and by each user for themself; the strictest applies (MOD-003, ADR-0091). |
 | Served context window | The context window a model's server actually runs the model with, as an Ollama server reports it; it may be smaller than its connection's (MOD-019, ADR-0093). |
 

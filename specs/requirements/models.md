@@ -47,15 +47,33 @@ refused before any data leaves the instance, with the code
 `model.egress_refused`: a run fails with it, and the server MUST NOT use
 another model instead (MOD-012) (ADR-0017, ADR-0091).
 
-## MOD-004: Budgets for paid providers
+## MOD-004: Budgets per user
 
-- **Status:** draft
-- **Priority:** SHOULD
-- **Phase:** 4
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
 - **Verification:** integration
 
-The model gateway SHOULD enforce spending limits per user and per tenant for
-paid providers, checked before each request.
+A tenant admin MUST be able to give each user of their tenant a budget of
+up to two limits: a cost limit, an amount in a currency, on the user's
+requests to remote models, and a token limit, on the input and output
+tokens of their requests to local models (MOD-010). Each limit MUST count
+a calendar day, a week from Monday or a month, in a time zone the admin
+chooses. The cost counted MUST be that of the user's entries in the cost
+ledger in the limit's currency since the period started; the tokens, those
+of their entries of local models (ADR-0145).
+
+Before each model request made for the user, the model gateway MUST check
+the limit for where the model runs: once the current period's use reaches
+it, the request MUST NOT be sent. A new run on such a model MUST then be
+refused with `budget.exhausted` before it is created, and so MUST speech; a
+run in progress, a task's included, MUST fail with `budget.exhausted`
+before its next model request, never during a tool call; and a
+conversation's title MUST NOT be asked for.
+
+Rationale: a household that pays a provider learns what a member spent
+only at the end of the month, and one that runs its own models has a
+machine that one member can keep busy.
 
 ## MOD-005: Model attribution
 
@@ -307,3 +325,23 @@ accepts images: from OpenRouter's `input_modalities`, from an Ollama
 server's capabilities, and, for another OpenAI-compatible server, from what
 a tenant admin says of the model. Clients SHOULD show it where a model is
 chosen (UX-015) (ADR-0110).
+
+## MOD-021: Usage over time
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+The API MUST give a user, and the tenant admins of their tenant, the
+user's usage: their cost per currency, the tokens of their requests to
+local and to remote models, and the number of their requests, since their
+account was created, per month, per day over the last 30 days in a time
+zone the client gives, and per model; the number of their requests whose
+price is unknown; and, for each limit of their budget, its use in the
+current period, its share of the limit, and when the period started and
+ends. A tenant admin MUST receive only these sums, never an entry of the
+cost ledger nor anything per conversation or per run (TEN-007, ADR-0145).
+
+Rationale: an admin who sets a budget needs to see what a member uses, and
+the member what is left of it.

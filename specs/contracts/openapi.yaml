@@ -977,6 +977,131 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [administration]
+      operationId: deleteUser
+      summary: Delete a disabled account and everything of its user, for good (tenant admin only).
+      description: |
+        Deletes the user's conversations with their runs, messages,
+        workflows and workspaces, and every other row of theirs, their cost
+        ledger entries and audit events included; their username is free
+        again (AUTH-014, ADR-0144). A tenant admin cannot delete their own
+        account nor any instance admin's (`permission.denied`). When a
+        workspace cannot be deleted, the account stays, disabled, and the
+        deletion can be repeated.
+      x-requirements: [AUTH-014, TEN-006]
+      responses:
+        "204": { description: The account and everything of its user are deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The account is not disabled (`resource.conflict`), or one of its
+            runs is queued or running (`run.in_progress`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/SandboxUnavailable" }
+
+  /tenant/users/{user_id}/password:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [administration]
+      operationId: resetUserPassword
+      summary: Give a user a new initial password (tenant admin only).
+      description: |
+        The user replaces it at their next sign-in (AUTH-012). Every session
+        of the account is revoked and its notification subscriptions are
+        forgotten in the same change; its passkeys stay (AUTH-013,
+        ADR-0144). A tenant admin cannot reset their own password, which
+        they change with `POST /me/password`, nor an instance admin's unless
+        they are one (`permission.denied`).
+      x-requirements: [AUTH-013, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
+      responses:
+        "200":
+          description: The user, with `password_change_required`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /tenant/users/{user_id}/budget:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [administration]
+      operationId: getUserBudget
+      summary: A user's budget (tenant admin only).
+      x-requirements: [MOD-004, UX-045, TEN-006]
+      responses:
+        "200":
+          description: The user's limits; `null` for a kind without one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [administration]
+      operationId: setUserBudget
+      summary: Replace a user's budget (tenant admin only).
+      description: |
+        A `null` limit removes it. Applies from the user's next model
+        request, also during a run (MOD-004, ADR-0145). Any tenant admin
+        sets the budget of any user of the tenant, their own included.
+      x-requirements: [MOD-004, UX-045, TEN-006]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Budget" }
+      responses:
+        "200":
+          description: The user's budget, as stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /tenant/users/{user_id}/usage:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [administration]
+      operationId: getUserUsage
+      summary: A user's usage over time and the state of their budget (tenant admin only).
+      description: |
+        Only sums per day, month and model, never a ledger entry nor
+        anything per conversation or run (MOD-021, TEN-007, ADR-0145).
+      x-requirements: [MOD-021, UX-045, TEN-006]
+      parameters:
+        - $ref: "#/components/parameters/UsageTimeZone"
+      responses:
+        "200":
+          description: The user's usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageOverview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /tenant/users/{user_id}/passkeys:
     parameters:
@@ -1595,7 +1720,8 @@ paths:
           description: |
             The household has no transcription model (`speech.unavailable`),
             or the user's data egress policy refuses it
-            (`model.egress_refused`, MOD-003).
+            (`model.egress_refused`, MOD-003), or the user's budget for its
+            kind of model is used up (`budget.exhausted`, MOD-004).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -1646,7 +1772,8 @@ paths:
           description: |
             The household has no speech model (`speech.unavailable`), or the
             user's data egress policy refuses it (`model.egress_refused`,
-            MOD-003).
+            MOD-003), or the user's budget for its kind of model is used up
+            (`budget.exhausted`, MOD-004).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -2229,6 +2356,26 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/PasswordChangeRequired" }
 
+  /me/usage/overview:
+    get:
+      tags: [conversations]
+      operationId: getUsageOverview
+      summary: The user's own usage over time and the state of their budget.
+      description: |
+        The same as a tenant admin sees of the user (MOD-021, ADR-0145).
+      x-requirements: [MOD-004, MOD-021, UX-045]
+      parameters:
+        - $ref: "#/components/parameters/UsageTimeZone"
+      responses:
+        "200":
+          description: The user's usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageOverview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/PasswordChangeRequired" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
   /tools:
     get:
       tags: [conversations]
@@ -2525,7 +2672,9 @@ paths:
             (`resource.conflict`), or the conversation's model is not offered
             by a connection of the tenant, or it has none and the tenant has no
             default model (`model.unavailable`, MOD-012), or the user's data
-            egress policy refuses it (`model.egress_refused`, MOD-003).
+            egress policy refuses it (`model.egress_refused`, MOD-003), or
+            the user's budget for its kind of model is used up in the current
+            period (`budget.exhausted`, MOD-004).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -3057,6 +3206,11 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Id" }
+    UsageTimeZone:
+      name: time_zone
+      in: query
+      description: The IANA time zone the days and months of the usage are counted in; `UTC` when absent.
+      schema: { $ref: "#/components/schemas/TimeZone" }
     Cursor:
       name: cursor
       in: query
@@ -3322,6 +3476,7 @@ components:
         - model.request_failed
         - model.refused
         - model.egress_refused
+        - budget.exhausted
         - model.tool_misuse
         - model.context_exceeded
         - speech.unavailable
@@ -3561,6 +3716,13 @@ components:
       properties:
         role: { $ref: "#/components/schemas/Role" }
         disabled: { type: boolean }
+
+    ResetPasswordRequest:
+      type: object
+      required: [password]
+      additionalProperties: false
+      properties:
+        password: { type: string, minLength: 12, maxLength: 1024, writeOnly: true }
 
     UserPage:
       type: object
@@ -5101,6 +5263,124 @@ components:
         last_30_days: { type: array, items: { $ref: "#/components/schemas/Money" } }
         unpriced_requests: { type: integer, minimum: 0, description: "Requests in the last 30 days whose price is unknown." }
 
+    BudgetPeriod:
+      type: string
+      enum: [day, week, month]
+      description: A calendar day, a week from Monday or a month, in a time zone (ADR-0145).
+
+    CostLimit:
+      type: object
+      description: A limit on the cost of the user's requests to remote models (MOD-004).
+      required: [amount, currency, period, time_zone]
+      additionalProperties: false
+      properties:
+        amount:
+          type: string
+          pattern: "^[0-9]{1,12}(\\.[0-9]{1,4})?$"
+          description: Greater than zero.
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        period: { $ref: "#/components/schemas/BudgetPeriod" }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+
+    TokenLimit:
+      type: object
+      description: A limit on the input and output tokens of the user's requests to local models (MOD-004).
+      required: [tokens, period, time_zone]
+      additionalProperties: false
+      properties:
+        tokens: { type: integer, minimum: 1, maximum: 1000000000000 }
+        period: { $ref: "#/components/schemas/BudgetPeriod" }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+
+    Budget:
+      type: object
+      required: [cost, tokens]
+      additionalProperties: false
+      properties:
+        cost:
+          oneOf: [{ $ref: "#/components/schemas/CostLimit" }, { type: "null" }]
+        tokens:
+          oneOf: [{ $ref: "#/components/schemas/TokenLimit" }, { type: "null" }]
+
+    UsageTotals:
+      type: object
+      description: |
+        Sums of cost ledger entries: the cost per currency, the input and
+        output tokens of local and of remote models, the requests, and the
+        requests whose price is unknown (MOD-021).
+      required: [cost, local_tokens, remote_tokens, requests, unpriced_requests]
+      properties:
+        cost: { type: array, items: { $ref: "#/components/schemas/Money" } }
+        local_tokens: { type: integer, minimum: 0 }
+        remote_tokens: { type: integer, minimum: 0 }
+        requests: { type: integer, minimum: 0 }
+        unpriced_requests: { type: integer, minimum: 0 }
+
+    UsageDay:
+      allOf:
+        - { $ref: "#/components/schemas/UsageTotals" }
+        - type: object
+          required: [day]
+          properties:
+            day: { type: string, format: date }
+
+    UsageMonth:
+      allOf:
+        - { $ref: "#/components/schemas/UsageTotals" }
+        - type: object
+          required: [month]
+          properties:
+            month: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$" }
+
+    UsageModel:
+      allOf:
+        - { $ref: "#/components/schemas/UsageTotals" }
+        - type: object
+          required: [provider, model]
+          properties:
+            provider: { type: string }
+            model: { type: string }
+
+    LimitState:
+      type: object
+      description: |
+        A limit of the user's budget and its use in the current period:
+        `used` and `limit` are amounts of `currency` for `cost`, numbers of
+        tokens for `tokens`; `share` is `used` divided by `limit`, and may
+        exceed 1 by the cost of the request that reached it (MOD-004,
+        ADR-0145).
+      required: [kind, period, time_zone, limit, used, currency, share, exhausted, starts_at, ends_at]
+      properties:
+        kind: { type: string, enum: [cost, tokens] }
+        period: { $ref: "#/components/schemas/BudgetPeriod" }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+        limit: { type: string, pattern: "^[0-9]{1,13}(\\.[0-9]{1,10})?$" }
+        used: { type: string, pattern: "^[0-9]{1,13}(\\.[0-9]{1,10})?$" }
+        currency:
+          oneOf: [{ type: string, pattern: "^[A-Z]{3}$" }, { type: "null" }]
+        share: { type: number, minimum: 0 }
+        exhausted: { type: boolean, description: "`used` reached `limit`: requests of this kind are refused until `ends_at`." }
+        starts_at: { $ref: "#/components/schemas/Timestamp" }
+        ends_at: { $ref: "#/components/schemas/Timestamp" }
+
+    UsageOverview:
+      type: object
+      description: |
+        A user's usage since their account was created, with days and
+        months in `time_zone`: `days` holds the last 30 days, today
+        included, and `months` every month since the account was created,
+        each only when it has usage; `models` is per provider and model
+        since the account was created (MOD-021, ADR-0145).
+      required: [since, time_zone, total, months, days, models, limits]
+      properties:
+        since: { $ref: "#/components/schemas/Timestamp" }
+        time_zone: { $ref: "#/components/schemas/TimeZone" }
+        total: { $ref: "#/components/schemas/UsageTotals" }
+        months: { type: array, items: { $ref: "#/components/schemas/UsageMonth" } }
+        days: { type: array, items: { $ref: "#/components/schemas/UsageDay" } }
+        models: { type: array, items: { $ref: "#/components/schemas/UsageModel" } }
+        limits: { type: array, items: { $ref: "#/components/schemas/LimitState" } }
+
     Folder:
       type: object
       required: [id, name, pinned, collapsed, last_message_at, created_at]
@@ -5432,7 +5712,9 @@ components:
         with the reason the model or its provider gave, when there is one;
         a request the model refuses fails with `model.refused` (MOD-015),
         a request the user's data egress policy refuses, checked before
-        each model request, with `model.egress_refused` (MOD-003), a model
+        each model request, with `model.egress_refused` (MOD-003), a
+        request the user's budget refuses, checked before each model
+        request, with `budget.exhausted` (MOD-004), a model
         that keeps calling a tool in a way that fails, after three
         consecutive retries, with `model.tool_misuse`, and an answer that
         stops at the model's length or context limit before it says or

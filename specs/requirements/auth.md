@@ -135,8 +135,10 @@ passkey MUST require the user's password (ADR-0094).
 
 A user MUST be able to change their own password by giving their current
 one, which is checked and rate-limited like a sign-in. The change MUST
-revoke every other session of the user. Only the user MUST be able to change
-their password: no tenant admin and no other user (ADR-0105).
+revoke every other session of the user. Only the user MUST be able to choose
+their password: no tenant admin and no other user. A tenant admin MAY only
+give a new initial password, which the user then replaces (AUTH-013,
+ADR-0105, ADR-0144).
 
 ## AUTH-012: An initial password is replaced at the first sign-in
 
@@ -149,3 +151,42 @@ An account created by a tenant admin or the instance admin MUST have its
 user choose a new password at their first sign-in. Until they do, every
 request of their sessions MUST be refused, except reading their own account,
 changing their password and signing out (ADR-0105).
+
+## AUTH-013: A new initial password from an administrator
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+A tenant admin MUST be able to give an account of their tenant a new
+initial password, never their own and never an instance admin's unless
+they are one. Its user MUST then replace it at their next sign-in, as at
+the first (AUTH-012). The change MUST revoke every session of the account
+and forget its notification subscriptions in the same change, and MUST
+keep its passkeys, so that a user who has one still needs it to sign in
+(ADR-0144).
+
+Rationale: a user who forgets their password is otherwise locked out for
+good, since only they can change it (AUTH-011).
+
+## AUTH-014: Deleting an account
+
+- **Status:** accepted
+- **Priority:** MUST
+- **Phase:** 3
+- **Verification:** integration, security
+
+A tenant admin MUST be able to delete a disabled account of their tenant,
+never their own and never an instance admin's. Deleting an account MUST
+delete for good everything that is its user's: their conversations with
+their runs, messages, workflows and workspaces, their folders, memory,
+skills, tasks and settings, their sessions, passkeys and notification
+subscriptions, their credentials for remote MCP servers, the tool
+permissions, data egress policies and budget set for them, their audit
+events and their entries in the cost ledger. An account that is not
+disabled, or that has a run queued or running, MUST NOT be deleted
+(ADR-0144).
+
+Rationale: a member who leaves the household otherwise leaves everything
+they had behind, disabled but kept.

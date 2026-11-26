@@ -109,13 +109,15 @@ beyond keeping them configurable and updatable.
 | T-37 | A user's credential for a remote MCP server is used in another user's runs, or read by a tenant admin, so that one person acts on a service as another | X2 | AGT-030, TEN-007 |
 | T-38 | A sign-in to a remote MCP server is subverted: an attacker's authorization is bound to a victim's account, a code is intercepted or replayed, a token is obtained for another server or sent to one, or the server's OAuth metadata leads the control plane to the household's network | X1, X2, X4 | AGT-031, MOD-009 |
 | T-40 | Another app, or a web page that posts a form to the app's share address, puts text of its choosing in a new chat and has it sent as the user's own message | X1 | UX-006 |
-| T-41 | A tenant admin signs in as a member with the password the admin chose, and reads or changes the member's private data | X2 | AUTH-008, AUTH-011, AUTH-012, TEN-007 |
+| T-41 | A tenant admin signs in as a member with the password the admin chose, or gave as a new initial password, and reads or changes the member's private data | X2 | AUTH-008, AUTH-011, AUTH-012, AUTH-013, TEN-007 |
 | T-42 | Injected instructions in a page or an event read by a task's run, while nobody watches, use the task's grants to send data out or to act | X1 | AGT-003, AGT-004, TSK-004, TSK-005 |
 | T-43 | Forged, replayed or flooded webhook requests or MCP event deliveries start conversations, plant content in them, or spend the household's model budget | X1, X4 | TSK-007, TSK-008, TSK-009 |
 | T-44 | Injected instructions make the assistant propose a task, so that they run again later, unattended, with standing grants | X1 | TSK-005, TSK-006 |
 | T-45 | Injected instructions read in one conversation reach another, unseen, when the assistant searches or reads the user's earlier conversations | X1 | AGT-003, AGT-004, AGT-032, AGT-033 |
 | T-46 | Injected instructions make the assistant ask for internet access, again and again or at a moment the user expects it, so that what the conversation holds can then be sent out | X1 | AGT-034, SBX-024, UX-022, UX-041 |
 | T-47 | Code in a sandbox reaches the sandbox engine's container runtime or the network guard over the network, and takes over the engine, which is privileged | X3 | SBX-005, SBX-015, SBX-025 |
+| T-48 | A member, or injected instructions in their conversations and tasks, spend the household's money at a provider or keep its own models busy without bound | X1, X2 | MOD-004, MOD-006 |
+| T-49 | A tenant admin learns what a member talks about from their usage, or deletes a member's data while the member still uses it | X2 | AUTH-014, MOD-021, TEN-007 |
 | T-48 | Injected instructions read by a delegated run reach the delegating run through its report, or travel from the delegating run into a delegated run through its brief, unseen, and lead it to send data out | X1 | AGT-003, AGT-004, AGT-037 |
 | T-49 | Injected instructions use a delegated run, which nobody watches, to make calls that the delegating run would have had to ask the user for | X1 | AGT-006, AGT-036 |
 | T-50 | Injected instructions in a page make the assistant act on a site through the browser: fill and send its forms, follow its links, or post where no sign-in is needed, with what the conversation holds | X1 | AGT-003, AGT-034, AGT-039, SBX-024, SBX-026 |
@@ -158,9 +160,14 @@ Prompts are never relied upon as a security boundary.
 
 ## Residual risks
 
-- **Nothing deletes a user or a household yet.** A disabled account keeps
-  its data, which only its owner could read; its audit events would go with
-  it (AGT-008). Deleting accounts and households is future work.
+- **Nothing deletes a household yet.** A tenant admin deletes a disabled
+  account with everything of its user, their audit events and ledger
+  entries included (AUTH-014, ADR-0144); a backup made before keeps them.
+  Deleting a household is future work.
+- **The last request of a budget period.** A request's cost is known only
+  once it is answered, so the request that reaches a limit may go over it
+  by its own cost, and remote requests whose price is unknown count toward
+  no cost limit (MOD-004, ADR-0145).
 - **Audit events of a reused call ID.** A model server that gives two calls
   of one run the same ID makes them one audit event, with its attempts
   counted (AGT-008, ADR-0132).
