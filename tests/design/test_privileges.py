@@ -122,7 +122,7 @@ OWNER_POLICIES = {
     "users": {"SELECT", "INSERT", "DELETE"},
     "device_sessions": {"SELECT", "UPDATE"},
     # A new initial password forgets the account's notification subscriptions (AUTH-013, ADR-0144).
-    "notification_subscriptions": {"DELETE"},
+    "notification_subscriptions": {"SELECT", "DELETE"},
     # Usage over time, as sums per day (MOD-021, ADR-0145).
     "usage_ledger": {"SELECT"},
     "login_attempts": {"SELECT", "INSERT", "DELETE"},
