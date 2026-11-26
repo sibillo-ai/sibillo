@@ -66,7 +66,7 @@ volumes:
 
 services:
   postgres:
-    image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     logging: *logging
     environment:
       POSTGRES_PASSWORD: ${SIBILLO_POSTGRES_PASSWORD:-}
