@@ -65,9 +65,10 @@ from pydantic_ai_harness.tool_output_limits import ToolOutputLimits
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from sibillo_server import errors, schemas
+from sibillo_server import budgets, errors, schemas
 from sibillo_server.approvals import Approvals, record
 from sibillo_server.browser import Browser
+from sibillo_server.budgets import BudgetExhaustedError
 from sibillo_server.changes import announce
 from sibillo_server.changes import event as change_event
 from sibillo_server.config import WorkerConfiguration
@@ -518,6 +519,9 @@ def _error_code(error: BaseException) -> str:
         return "sandbox.unavailable"
     if isinstance(error, EgressRefusedError):
         return "model.egress_refused"
+    # The household's admin set the limit: not a fault of Sibillo, nor of the model (MOD-004, ADR-0145).
+    if isinstance(error, BudgetExhaustedError):
+        return "budget.exhausted"
     # A model that cannot go on is not a fault of Sibillo (MOD-017). Pydantic AI raises the same class for
     # both, so its messages tell them apart.
     if isinstance(error, IncompleteToolCall | ModelContextWindowExceededError | PromptCutError):
@@ -804,7 +808,14 @@ async def _execute(
             # A run stops after its limit of model requests, and says so (AGT-027, ADR-0097).
             usage_limits=UsageLimits(request_limit=_WORKER.run_request_limit),
         )
-    except (ModelUnavailableError, EgressRefusedError, ModelAPIError, ContentFilterError, UsageLimitExceeded) as error:
+    except (
+        ModelUnavailableError,
+        EgressRefusedError,
+        BudgetExhaustedError,
+        ModelAPIError,
+        ContentFilterError,
+        UsageLimitExceeded,
+    ) as error:
         code = _error_code(error)
         logger.warning("run %s failed: %s", run.run_id, code)
         if run.run_id in _TITLES:
@@ -1153,6 +1164,8 @@ async def _name_conversation(run: RunWorkflowInput, deps: RunDeps) -> str | None
     if title != "":
         return None
     model = await connection_model(deps, uuid.UUID(run.connection_id), run.model)
+    # Not asked for once the budget is used up: the conversation stays without a title (MOD-004, ADR-0145).
+    await budgets.check(deps.engine, deps.identity, deps.location)
     response = await model.request(
         [ModelRequest(parts=[UserPromptPart(TITLE_PROMPT + run.user_text[:TITLE_INPUT_CHARS])])],
         None,

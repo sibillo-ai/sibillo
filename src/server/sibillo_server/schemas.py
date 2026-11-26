@@ -1292,3 +1292,79 @@ class TaskConversation(Response):
 class TaskConversationPage(Response):
     items: list[TaskConversation]
     next_cursor: str | None
+
+
+class ResetPasswordRequest(Request):
+    """A new initial password a tenant admin gives a user, who replaces it (AUTH-013, ADR-0144)."""
+
+    password: Annotated[str, Field(min_length=12, max_length=1024)]
+
+
+# --- Budgets and usage over time (MOD-004, MOD-021, ADR-0145) ---
+
+type BudgetPeriod = Literal["day", "week", "month"]
+type Currency = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+
+
+class CostLimit(Request):
+    amount: Annotated[str, Field(pattern=r"^[0-9]{1,12}(\.[0-9]{1,4})?$")]
+    currency: Currency
+    period: BudgetPeriod
+    time_zone: TimeZone
+
+
+class TokenLimit(Request):
+    tokens: Annotated[int, Field(ge=1, le=1_000_000_000_000)]
+    period: BudgetPeriod
+    time_zone: TimeZone
+
+
+class Budget(Request):
+    """A user's limits; `null` for a kind without one. Both are required, so that a request says what it means."""
+
+    cost: CostLimit | None
+    tokens: TokenLimit | None
+
+
+class UsageTotals(Response):
+    cost: list[Money]
+    local_tokens: int
+    remote_tokens: int
+    requests: int
+    unpriced_requests: int
+
+
+class UsageDay(UsageTotals):
+    day: datetime.date
+
+
+class UsageMonth(UsageTotals):
+    month: str
+
+
+class UsageModel(UsageTotals):
+    provider: str
+    model: str
+
+
+class LimitState(Response):
+    kind: Literal["cost", "tokens"]
+    period: BudgetPeriod
+    time_zone: str
+    limit: str
+    used: str
+    currency: str | None
+    share: float
+    exhausted: bool
+    starts_at: Timestamp
+    ends_at: Timestamp
+
+
+class UsageOverview(Response):
+    since: Timestamp
+    time_zone: str
+    total: UsageTotals
+    months: list[UsageMonth]
+    days: list[UsageDay]
+    models: list[UsageModel]
+    limits: list[LimitState]

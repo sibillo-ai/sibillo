@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from sibillo_server import (
+    accounts,
     admin,
     auth,
+    budgets,
     changes,
     connections,
     conversations,
@@ -75,6 +77,8 @@ def create_app(configuration: ApiConfiguration) -> FastAPI:
     app.include_router(memory.router, prefix=API_PREFIX)
     app.include_router(skills.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
+    app.include_router(accounts.router, prefix=API_PREFIX)
+    app.include_router(budgets.router, prefix=API_PREFIX)
     app.include_router(connections.router, prefix=API_PREFIX)
     app.include_router(mcp_servers.router, prefix=API_PREFIX)
     app.include_router(conversations.router, prefix=API_PREFIX)

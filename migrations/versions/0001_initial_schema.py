@@ -2,9 +2,10 @@
 
 Tables, row-level security, policies, privileges and the pre-authentication
 functions (TEN-001 to TEN-004, TEN-006, AUTH-001, AUTH-004, AUTH-006 to
-AUTH-009, AUTH-010, MOD-008, MOD-009, TSK-001 to TSK-010; ADR-0009, ADR-0046 to
-ADR-0049, ADR-0052, ADR-0068, ADR-0069, ADR-0094, ADR-0106). Roles and the database itself are created before any
-migration, by the initialization of the contract. Until the first release,
+AUTH-010, AUTH-013, AUTH-014, MOD-004, MOD-008, MOD-009, MOD-021, TSK-001 to
+TSK-010; ADR-0009, ADR-0046 to ADR-0049, ADR-0052, ADR-0068, ADR-0069,
+ADR-0094, ADR-0106, ADR-0144, ADR-0145). Roles and the database itself are
+created before any migration, by the initialization of the contract. Until the first release,
 this one migration is rewritten whenever the contract changes (ADR-0071).
 
 Revision ID: 0001
@@ -52,6 +53,7 @@ CONTRACT_TABLES = (
     "usage_ledger",
     "tool_permissions",
     "egress_policies",
+    "budgets",
     "audit_events",
     "mcp_credentials",
     "mcp_sign_ins",
@@ -229,7 +231,7 @@ TABLES = [
       expires_at timestamptz NOT NULL,
       revoked_at timestamptz,
       UNIQUE (tenant_id, user_id, id),
-      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id)
+      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
     )
     """,
     "CREATE INDEX device_sessions_user_idx ON device_sessions (tenant_id, user_id)",
@@ -243,7 +245,7 @@ TABLES = [
       p256dh text NOT NULL,
       auth text NOT NULL,
       created_at timestamptz NOT NULL,
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, owner_id, device_session_id)
         REFERENCES device_sessions (tenant_id, user_id, id) ON DELETE CASCADE
     )
@@ -589,7 +591,7 @@ TABLES = [
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       UNIQUE (tenant_id, owner_id, id),
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id)
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
     )
     """,
     # A user's defaults for their conversations (CNV-013, CNV-014, ADR-0081).
@@ -613,7 +615,7 @@ TABLES = [
       disabled_builtin_skills text[] NOT NULL DEFAULT '{{}}',
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (tenant_id, owner_id),
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE SET NULL (connection_id)
     )
     """,
@@ -659,7 +661,7 @@ TABLES = [
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       UNIQUE (tenant_id, owner_id, id),
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, owner_id, folder_id)
         REFERENCES folders (tenant_id, owner_id, id) ON DELETE SET NULL (folder_id),
       FOREIGN KEY (tenant_id, owner_id, forked_from_conversation_id)
@@ -705,7 +707,7 @@ TABLES = [
       finished_at timestamptz,
       UNIQUE (tenant_id, owner_id, id),
       UNIQUE (tenant_id, owner_id, conversation_id, id),
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, connection_id) REFERENCES connections (tenant_id, id) ON DELETE SET NULL (connection_id),
       FOREIGN KEY (tenant_id, owner_id, conversation_id)
         REFERENCES conversations (tenant_id, owner_id, id) ON DELETE CASCADE,
@@ -724,7 +726,7 @@ TABLES = [
       owner_id uuid NOT NULL,
       run_id uuid NOT NULL,
       seen_at timestamptz NOT NULL,
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, owner_id, run_id) REFERENCES runs (tenant_id, owner_id, id) ON DELETE CASCADE
     )
     """,
@@ -828,7 +830,7 @@ TABLES = [
       created_at timestamptz NOT NULL,
       -- A currency exactly when there is a cost.
       CHECK ((cost IS NULL) = (currency IS NULL)),
-      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id),
+      FOREIGN KEY (tenant_id, owner_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
       FOREIGN KEY (tenant_id, owner_id, conversation_id)
         REFERENCES conversations (tenant_id, owner_id, id) ON DELETE SET NULL (conversation_id),
       FOREIGN KEY (tenant_id, owner_id, run_id) REFERENCES runs (tenant_id, owner_id, id) ON DELETE SET NULL (run_id)
@@ -918,7 +920,7 @@ TABLES = [
       ),
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (tenant_id, user_id, subject_kind, subject),
-      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id)
+      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
     )
     """,
     # Data egress policies stricter than `any`: the household's, an admin's for a user, a user's own (MOD-003,
@@ -932,6 +934,25 @@ TABLES = [
       updated_at timestamptz NOT NULL,
       CHECK (set_by = 'admin' OR user_id IS NOT NULL),
       UNIQUE NULLS NOT DISTINCT (tenant_id, user_id, set_by),
+      FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
+    )
+    """,
+    # A tenant admin's limits on a user's model requests: a cost on remote models, tokens of local ones, each
+    # over a calendar period in a time zone (MOD-004, ADR-0145).
+    """
+    CREATE TABLE budgets (
+      tenant_id uuid NOT NULL,
+      user_id uuid NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('cost', 'tokens')),
+      amount numeric(20, 4) NOT NULL CHECK (amount > 0 AND amount <= 1000000000000),
+      currency text CHECK (currency ~ '^[A-Z]{3}$'),
+      period text NOT NULL CHECK (period IN ('day', 'week', 'month')),
+      time_zone text NOT NULL CHECK (length(time_zone) BETWEEN 1 AND 64),
+      updated_at timestamptz NOT NULL,
+      -- A currency exactly for a cost, and whole tokens.
+      CHECK ((kind = 'cost') = (currency IS NOT NULL)),
+      CHECK (kind = 'cost' OR amount = trunc(amount)),
+      PRIMARY KEY (tenant_id, user_id, kind),
       FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
     )
     """,
@@ -966,8 +987,9 @@ TRIGGERS = [
     # Row-level security cannot compare old and new values, so this trigger
     # keeps users from changing their own role or account state, tenant admins
     # from changing an instance admin's (AUTH-008, ADR-0046), and anyone but
-    # the user from changing their password (AUTH-011, AUTH-012, ADR-0105). It
-    # runs as the caller, whose request context it reads.
+    # the user from choosing their password: a tenant admin gives only a new
+    # initial password (AUTH-011 to AUTH-013, ADR-0105, ADR-0144). It runs as
+    # the caller, whose request context it reads.
     """
     CREATE FUNCTION users_guard() RETURNS trigger LANGUAGE plpgsql
     SET search_path = pg_catalog, pg_temp
@@ -983,14 +1005,23 @@ TRIGGERS = [
             USING ERRCODE = 'insufficient_privilege';
         END IF;
       END IF;
-      IF (NEW.password_hash IS DISTINCT FROM OLD.password_hash
-          OR NEW.password_change_required IS DISTINCT FROM OLD.password_change_required)
-         AND OLD.id IS DISTINCT FROM public.app_user_id() THEN
-        RAISE EXCEPTION 'only the user changes their password' USING ERRCODE = 'insufficient_privilege';
-      END IF;
-      IF NEW.password_change_required AND NOT OLD.password_change_required THEN
-        RAISE EXCEPTION 'a password is initial only when the account is created'
-          USING ERRCODE = 'insufficient_privilege';
+      IF NEW.password_hash IS DISTINCT FROM OLD.password_hash
+         OR NEW.password_change_required IS DISTINCT FROM OLD.password_change_required THEN
+        IF OLD.id IS NOT DISTINCT FROM public.app_user_id() THEN
+          IF NEW.password_change_required AND NOT OLD.password_change_required THEN
+            RAISE EXCEPTION 'a user never marks their own password as initial'
+              USING ERRCODE = 'insufficient_privilege';
+          END IF;
+        ELSIF public.app_is_tenant_admin() AND NEW.password_change_required
+              AND NEW.password_hash IS DISTINCT FROM OLD.password_hash THEN
+          IF OLD.instance_admin AND NOT public.app_is_instance_admin() THEN
+            RAISE EXCEPTION 'resetting the password of an instance admin requires an instance admin'
+              USING ERRCODE = 'insufficient_privilege';
+          END IF;
+        ELSE
+          RAISE EXCEPTION 'only the user chooses their password, and an admin gives only a new initial one'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
       END IF;
       RETURN NEW;
     END
@@ -1054,19 +1085,24 @@ TRIGGERS = [
     CREATE TRIGGER mcp_servers_guard BEFORE INSERT OR UPDATE ON mcp_servers
     FOR EACH ROW EXECUTE FUNCTION mcp_servers_guard()
     """,
-    # Disabling an account revokes its sessions (AUTH-009, ADR-0048). It runs
-    # as sibillo_owner: row-level security keeps a tenant admin from reaching
+    # Disabling an account, and giving it a new initial password, revoke its
+    # sessions; a new initial password also forgets its notification
+    # subscriptions (AUTH-009, AUTH-013, ADR-0048, ADR-0144). It runs as
+    # sibillo_owner: row-level security keeps a tenant admin from reaching
     # other users' sessions, so the function works through the owner policies
-    # on device_sessions (ADR-0046). It is not executable by sibillo_app; triggers
-    # call it whatever the caller's privileges.
+    # (ADR-0046). It is not executable by sibillo_app; triggers call it
+    # whatever the caller's privileges.
     """
-    CREATE FUNCTION revoke_sessions_of_disabled_user() RETURNS trigger
+    CREATE FUNCTION revoke_sessions_of_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
       UPDATE public.device_sessions s SET revoked_at = now()
       WHERE s.tenant_id = NEW.tenant_id AND s.user_id = NEW.id AND s.revoked_at IS NULL;
+      IF TG_ARGV[0] = 'reset' THEN
+        DELETE FROM public.notification_subscriptions n WHERE n.tenant_id = NEW.tenant_id AND n.owner_id = NEW.id;
+      END IF;
       RETURN NULL;
     END
     $$
@@ -1074,7 +1110,12 @@ TRIGGERS = [
     """
     CREATE TRIGGER revoke_sessions_of_disabled_user AFTER UPDATE OF disabled_at ON users
     FOR EACH ROW WHEN (OLD.disabled_at IS NULL AND NEW.disabled_at IS NOT NULL)
-    EXECUTE FUNCTION revoke_sessions_of_disabled_user()
+    EXECUTE FUNCTION revoke_sessions_of_user('disable')
+    """,
+    """
+    CREATE TRIGGER revoke_sessions_of_reset_user AFTER UPDATE OF password_hash ON users
+    FOR EACH ROW WHEN (NEW.password_change_required AND NEW.password_hash IS DISTINCT FROM OLD.password_hash)
+    EXECUTE FUNCTION revoke_sessions_of_user('reset')
     """,
     # A run of kind `resume` has the interrupted run as parent and is its only
     # child (ADR-0033, ADR-0037). The parent row is locked, so concurrent
@@ -1434,6 +1475,105 @@ PRE_AUTHENTICATION_FUNCTIONS = [
     """,
 ]
 
+# What a tenant admin does with another user's private rows; each function checks the request context
+# itself (ADR-0144, ADR-0145). Parameters are referred to by position, as above.
+ADMINISTRATION_FUNCTIONS = [
+    # A user's usage, summed per day in a time zone, for the user or a tenant admin of their tenant (MOD-021).
+    """
+    CREATE FUNCTION usage_of_user(user_id uuid, time_zone text)
+    RETURNS TABLE (day date, provider text, model text, price_source text, currency text, cost numeric,
+                   input_tokens bigint, output_tokens bigint, requests bigint)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    #variable_conflict use_column
+    DECLARE
+      target public.users%ROWTYPE;
+    BEGIN
+      SELECT * INTO target FROM public.users u WHERE u.id = $1 AND u.tenant_id = public.app_tenant_id();
+      IF target.id IS NULL THEN
+        RAISE EXCEPTION 'the tenant has no such user' USING ERRCODE = 'no_data_found';
+      END IF;
+      IF target.id IS DISTINCT FROM public.app_user_id() AND NOT public.app_is_tenant_admin() THEN
+        RAISE EXCEPTION 'only the user and their tenant admins see their usage'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      RETURN QUERY
+        SELECT (l.created_at AT TIME ZONE $2)::date, l.provider, l.model, l.price_source, l.currency,
+               sum(l.cost), sum(l.input_tokens)::bigint, sum(l.output_tokens)::bigint, count(*)
+        FROM public.usage_ledger l
+        WHERE l.tenant_id = target.tenant_id AND l.owner_id = target.id
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY 1, 2, 3, 4, 5;
+    END
+    $$
+    """,
+    # The identifiers of what an account keeps outside the tables, before its deletion (AUTH-014).
+    """
+    CREATE FUNCTION account_storage(user_id uuid) RETURNS TABLE (kind text, id uuid)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    #variable_conflict use_column
+    DECLARE
+      target public.users%ROWTYPE;
+    BEGIN
+      SELECT * INTO target FROM public.users u WHERE u.id = $1 AND u.tenant_id = public.app_tenant_id();
+      IF target.id IS NULL THEN
+        RAISE EXCEPTION 'the tenant has no such user' USING ERRCODE = 'no_data_found';
+      END IF;
+      IF NOT public.app_is_tenant_admin() OR target.id = public.app_user_id() OR target.instance_admin
+         OR target.disabled_at IS NULL THEN
+        RAISE EXCEPTION 'only a tenant admin deletes a disabled account of another user, never an instance admin''s'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM public.runs r
+        WHERE r.tenant_id = target.tenant_id AND r.owner_id = target.id AND r.status IN ('queued', 'running')
+      ) THEN
+        RAISE EXCEPTION 'a run of the account is in progress' USING ERRCODE = 'object_in_use';
+      END IF;
+      RETURN QUERY
+        SELECT 'conversation'::text, c.id FROM public.conversations c
+        WHERE c.tenant_id = target.tenant_id AND c.owner_id = target.id
+        UNION ALL
+        SELECT 'run'::text, r.id FROM public.runs r WHERE r.tenant_id = target.tenant_id AND r.owner_id = target.id
+        UNION ALL
+        SELECT 'firing'::text, f.id FROM public.task_firings f
+        WHERE f.tenant_id = target.tenant_id AND f.owner_id = target.id;
+    END
+    $$
+    """,
+    # Deletes an account's row; every foreign key to users cascades, outside row-level security (AUTH-014).
+    """
+    CREATE FUNCTION delete_account(user_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    AS $$
+    DECLARE
+      target public.users%ROWTYPE;
+    BEGIN
+      SELECT * INTO target FROM public.users u WHERE u.id = $1 AND u.tenant_id = public.app_tenant_id();
+      IF target.id IS NULL THEN
+        RAISE EXCEPTION 'the tenant has no such user' USING ERRCODE = 'no_data_found';
+      END IF;
+      IF NOT public.app_is_tenant_admin() OR target.id = public.app_user_id() OR target.instance_admin
+         OR target.disabled_at IS NULL THEN
+        RAISE EXCEPTION 'only a tenant admin deletes a disabled account of another user, never an instance admin''s'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM public.runs r
+        WHERE r.tenant_id = target.tenant_id AND r.owner_id = target.id AND r.status IN ('queued', 'running')
+      ) THEN
+        RAISE EXCEPTION 'a run of the account is in progress' USING ERRCODE = 'object_in_use';
+      END IF;
+      DELETE FROM public.users u WHERE u.id = target.id;
+    END
+    $$
+    """,
+]
+
 ROW_LEVEL_SECURITY = [
     statement
     for table in CONTRACT_TABLES
@@ -1550,6 +1690,21 @@ APPLICATION_POLICIES = [
             ("DELETE", "USING (tenant_id = app_tenant_id() AND app_is_tenant_admin())"),
         )
     ),
+    # Users read their own budget, which the gateway checks; tenant admins read and change everyone's (MOD-004,
+    # ADR-0145).
+    *(
+        f"CREATE POLICY budgets_app_{operation.lower()} ON budgets FOR {operation} TO sibillo_app {clause}"
+        for operation, clause in (
+            ("SELECT", "USING (tenant_id = app_tenant_id() AND (user_id = app_user_id() OR app_is_tenant_admin()))"),
+            ("INSERT", "WITH CHECK (tenant_id = app_tenant_id() AND app_is_tenant_admin())"),
+            (
+                "UPDATE",
+                "USING (tenant_id = app_tenant_id() AND app_is_tenant_admin())"
+                " WITH CHECK (tenant_id = app_tenant_id() AND app_is_tenant_admin())",
+            ),
+            ("DELETE", "USING (tenant_id = app_tenant_id() AND app_is_tenant_admin())"),
+        )
+    ),
     *(
         statement
         for table in TENANT_TABLES
@@ -1579,6 +1734,15 @@ OWNER_POLICIES = [
     "CREATE POLICY tenants_owner_insert ON tenants FOR INSERT TO sibillo_owner WITH CHECK (true)",
     "CREATE POLICY users_owner_select ON users FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY users_owner_insert ON users FOR INSERT TO sibillo_owner WITH CHECK (true)",
+    # Deleting an account (AUTH-014, ADR-0144).
+    "CREATE POLICY users_owner_delete ON users FOR DELETE TO sibillo_owner USING (true)",
+    # A new initial password forgets the account's notification subscriptions (AUTH-013, ADR-0144).
+    "CREATE POLICY notification_subscriptions_owner_select ON notification_subscriptions FOR SELECT TO sibillo_owner"
+    " USING (true)",
+    "CREATE POLICY notification_subscriptions_owner_delete ON notification_subscriptions FOR DELETE TO sibillo_owner"
+    " USING (true)",
+    # Usage over time, as sums per day (MOD-021, ADR-0145).
+    "CREATE POLICY usage_ledger_owner_select ON usage_ledger FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY device_sessions_owner_select ON device_sessions FOR SELECT TO sibillo_owner USING (true)",
     "CREATE POLICY device_sessions_owner_update ON device_sessions FOR UPDATE TO sibillo_owner USING (true)",
     "CREATE POLICY login_attempts_owner_select ON login_attempts FOR SELECT TO sibillo_owner USING (true)",
@@ -1637,6 +1801,7 @@ PRIVILEGES = [
     "GRANT SELECT, INSERT, DELETE ON task_grants TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON tool_permissions TO sibillo_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON egress_policies TO sibillo_app",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON budgets TO sibillo_app",
     # An audit event is written when its call is decided, and completed as it runs (ADR-0090).
     "GRANT SELECT, INSERT ON audit_events TO sibillo_app",
     "GRANT UPDATE (outcome, scope, reason, attempts) ON audit_events TO sibillo_app",
@@ -1652,6 +1817,7 @@ PRIVILEGES = [
       due_task_triggers(), waiting_task_firings(), find_webhook_trigger(bytea), find_event_subscription(uuid)
       TO sibillo_app
     """,
+    "GRANT EXECUTE ON FUNCTION usage_of_user(uuid, text), account_storage(uuid), delete_account(uuid) TO sibillo_app",
 ]
 
 
@@ -1670,6 +1836,7 @@ def upgrade() -> None:
             *TABLES,
             *TRIGGERS,
             *PRE_AUTHENTICATION_FUNCTIONS,
+            *ADMINISTRATION_FUNCTIONS,
             *ROW_LEVEL_SECURITY,
             *APPLICATION_POLICIES,
             *OWNER_POLICIES,
@@ -1691,7 +1858,10 @@ def downgrade() -> None:
             "DROP FUNCTION waiting_task_firings()",
             "DROP FUNCTION find_webhook_trigger(bytea)",
             "DROP FUNCTION find_event_subscription(uuid)",
-            "DROP FUNCTION revoke_sessions_of_disabled_user()",
+            "DROP FUNCTION revoke_sessions_of_user()",
+            "DROP FUNCTION usage_of_user(uuid, text)",
+            "DROP FUNCTION account_storage(uuid)",
+            "DROP FUNCTION delete_account(uuid)",
             "DROP FUNCTION connections_guard()",
             "DROP FUNCTION mcp_servers_guard()",
             "DROP FUNCTION bootstrap_instance(text, text, text, text)",

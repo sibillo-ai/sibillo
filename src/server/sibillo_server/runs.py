@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from sibillo_server import egress, errors, schemas
+from sibillo_server import budgets, egress, errors, schemas
 from sibillo_server.approvals import record
 from sibillo_server.auth import Authenticated, Engine
 from sibillo_server.changes import announce, event
@@ -154,7 +154,7 @@ async def _instructions(connection: AsyncConnection, conversation: Any) -> tuple
     return base, additional, defaults.language
 
 
-async def _run_model(connection: AsyncConnection, conversation: Any) -> Any:
+async def _run_model(connection: AsyncConnection, conversation: Any, *, budget: bool = True) -> Any:
     """The connection and model that answer the conversation's next run (MOD-012, ADR-0069).
 
     A conversation created before there was a default model takes the user's
@@ -190,9 +190,12 @@ async def _run_model(connection: AsyncConnection, conversation: Any) -> Any:
     ).one_or_none()
     if row is None:
         raise errors.ApiError(409, "model.unavailable", "The conversation's model is no longer offered")
-    # Refused before anything is sent, and never replaced by another model (MOD-003, ADR-0091).
+    # Refused before anything is sent, and never replaced by another model (MOD-003, ADR-0091); so is a run
+    # whose budget for its kind of model is used up (MOD-004, ADR-0145).
     if not await egress.allows(connection, row.location):
         raise egress.refused()
+    if budget:
+        await budgets.refuse(connection, row.location)
     return row
 
 
@@ -207,6 +210,7 @@ async def create_run(
     attachments: list[dict[str, Any]] | None = None,
     voice: str | None = None,
     expired: bool = False,
+    budget: bool = True,
 ) -> RunWorkflowInput:
     """Record a run that continues the conversation, in the caller's transaction: its workflow's input.
 
@@ -214,7 +218,9 @@ async def create_run(
     conversation or the turn, and each call they denied, or that expired, is audited (ADR-0090).
     """
     parent = conversation.active_run_id
-    model = await _run_model(connection, conversation)
+    # `budget` false for a task's run, which then fails on its budget in its conversation, for its user to see,
+    # rather than start nothing at all (MOD-004, ADR-0145).
+    model = await _run_model(connection, conversation, budget=budget)
     base, additional, language = await _instructions(connection, conversation)
     resuming = answers is not None
     # Internet access for the turn, and whether it was denied in the turn (AGT-034, ADR-0113).

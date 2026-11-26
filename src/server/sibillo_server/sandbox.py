@@ -195,6 +195,23 @@ async def workspace_request(
         raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable")
 
 
+async def delete_account_workspace(
+    driver: SandboxDriver, tenant_id: uuid.UUID, user_id: uuid.UUID, conversation_id: uuid.UUID
+) -> None:
+    """Delete a workspace of an account being deleted, named from the identifiers `account_storage` returned only
+    to a tenant admin of its tenant (AUTH-014, TEN-008, ADR-0144); refused as unavailable."""
+    path = f"/sandboxes/{tenant_id}/{user_id}/{conversation_id}/workspace"
+    try:
+        async with httpx.AsyncClient(
+            base_url=driver.url, headers={"Authorization": f"Bearer {driver.token}"}, timeout=DRIVER_TIMEOUT_SECONDS
+        ) as client:
+            response = await client.delete(path)
+    except httpx.HTTPError as error:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable") from error
+    if response.status_code != 204:
+        raise errors.ApiError(503, "sandbox.unavailable", "The sandbox is unavailable")
+
+
 async def withdraw_network(driver: SandboxDriver, identity: Identity, conversation_id: uuid.UUID) -> None:
     """Take the network from a conversation's sandbox, at once, as its user withdraws internet access (SBX-024)."""
     path = f"/sandboxes/{identity.tenant_id}/{identity.user_id}/{conversation_id}/network"

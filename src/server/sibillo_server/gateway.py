@@ -41,6 +41,7 @@ from pydantic_ai.tools import ToolDefinition
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from sibillo_server import budgets
 from sibillo_server.costs import amount
 from sibillo_server.database import Identity, transaction
 from sibillo_server.egress import check
@@ -326,8 +327,11 @@ class Gateway(AbstractCapability[RunDeps]):
     ) -> ModelRequestContext:
         # The user's message is kept even if the run stops before the answer.
         await store_messages(ctx.deps, ctx.messages[ctx.deps.history_length :])
-        # Checked before every request, so that a policy changed during the run applies (MOD-003, ADR-0091).
+        # Checked before every request, so that a policy changed during the run applies (MOD-003, ADR-0091);
+        # so is the budget, which the run's own requests use up: a run stops between requests, after its tool
+        # calls, never during one (MOD-004, ADR-0145). Compaction is a request too.
         await check(ctx.deps.engine, ctx.deps.identity, ctx.deps.location)
+        await budgets.check(ctx.deps.engine, ctx.deps.identity, ctx.deps.location)
         request_context.messages = await _compacted(ctx, list(request_context.messages))
         if self.show_images is not None:
             # After compaction: the images of the turns it kept, read from the workspace (CNV-020, ADR-0110).

@@ -351,8 +351,15 @@ async def _start_firing(firing_id: str, tenant_id: str, owner_id: str) -> str | 
         await announce(connection, identity, event("conversation_created", conversation_id=conversation_id))
         run_id = uuid7()
         try:
+            # A run refused by its budget starts, and fails in its conversation, which says why (MOD-004).
             await create_run(
-                connection, identity, conversation, run_id=run_id, answers=None, user_text=task.instructions
+                connection,
+                identity,
+                conversation,
+                run_id=run_id,
+                answers=None,
+                user_text=task.instructions,
+                budget=False,
             )
         except Exception:
             # No model to answer with: the firing ends without a conversation's run (TSK-009).
