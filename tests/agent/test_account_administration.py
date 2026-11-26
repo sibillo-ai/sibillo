@@ -72,8 +72,9 @@ def test_a_member_signs_in_with_the_new_initial_password_and_must_replace_it(
 def test_a_reset_ends_every_session_of_the_member_and_keeps_their_passkeys(
     database: Database, server: Server, admin: Account, member: Account
 ) -> None:
-    arrange_passkey(database, member, "Phone")
+    # Signed in before the passkey, which a sign-in would then ask for.
     session = login(server, member)
+    arrange_passkey(database, member, "Phone")
     admin_token = login(server, admin)
     assert _reset(server, admin_token, member.id, _password()).status_code == 200
     with server.client(session) as client:
@@ -210,7 +211,8 @@ def test_a_deletion_is_refused_where_the_api_does_not_allow_it(
     operator = create_account(database, admin.tenant_id, "tenant_admin", instance_admin=True)
     operator_token = login(server, operator)
     disabled_operator = create_account(database, admin.tenant_id, "tenant_admin", instance_admin=True)
-    disable_account(database, disabled_operator)
+    with database.superuser() as conn:
+        conn.execute("UPDATE users SET disabled_at = now() WHERE id = %s", (disabled_operator.id,))
     assert_problem(_delete(server, admin_token, disabled_operator.id), 403, "permission.denied")
     assert_problem(_delete(server, operator_token, disabled_operator.id), 403, "permission.denied")
     # Another household's account is not found.
