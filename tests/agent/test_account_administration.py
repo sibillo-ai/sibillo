@@ -212,6 +212,8 @@ def test_a_deletion_is_refused_where_the_api_does_not_allow_it(
     operator_token = login(server, operator)
     disabled_operator = create_account(database, admin.tenant_id, "tenant_admin", instance_admin=True)
     with database.superuser() as conn:
+        # Arranged data, without the triggers that guard changes.
+        conn.execute("SET session_replication_role = replica")
         conn.execute("UPDATE users SET disabled_at = now() WHERE id = %s", (disabled_operator.id,))
     assert_problem(_delete(server, admin_token, disabled_operator.id), 403, "permission.denied")
     assert_problem(_delete(server, operator_token, disabled_operator.id), 403, "permission.denied")
