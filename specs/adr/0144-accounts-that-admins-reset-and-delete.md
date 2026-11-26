@@ -99,8 +99,8 @@ We will:
   identifiers come from `account_storage`, not from rows the admin reads
   under row-level security.
 - The `users` table gains an owner policy for `DELETE`, and
-  `notification_subscriptions` one for `DELETE`, used by `delete_account`
-  and `revoke_sessions_of_user()`.
+  `notification_subscriptions` owner policies for `SELECT` and `DELETE`,
+  used by `delete_account` and `revoke_sessions_of_user()`.
 - Foreign keys to `users` that did not cascade now do. No code of the
   application deletes a user's row, so nothing else changes: `sibillo_app`
   has no `DELETE` on `users`.

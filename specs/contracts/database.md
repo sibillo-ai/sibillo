@@ -127,7 +127,7 @@ these are the only policies for that role:
 | `tenants` | `SELECT`, `INSERT` | `bootstrap_instance` |
 | `users` | `SELECT`, `INSERT`, `DELETE` | `auth_find_login`, `auth_find_session`, `auth_take_sign_in`, `bootstrap_instance`, `remove_passkeys`, the task functions, for the account's state, and the administration functions; `DELETE` only by `delete_account` |
 | `device_sessions` | `SELECT`, `UPDATE` | `auth_find_session`, `auth_touch_session`, `revoke_sessions_of_user` |
-| `notification_subscriptions` | `DELETE` | `revoke_sessions_of_user`, as a password is reset (AUTH-013) |
+| `notification_subscriptions` | `SELECT`, `DELETE` | `revoke_sessions_of_user`, as a password is reset (AUTH-013) |
 | `usage_ledger` | `SELECT` | `usage_of_user` |
 | `login_attempts` | `SELECT`, `INSERT`, `DELETE` | `auth_record_login_attempt`, which also deletes rows older than the rate-limit window, and `auth_check_login_attempt`, which only reads |
 | `passkey_challenges` | `SELECT`, `DELETE` | `auth_take_sign_in` |
