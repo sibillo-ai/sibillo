@@ -139,6 +139,9 @@ jobs:
           - part: web
             paths: >-
               tests/web --ignore=tests/web/test_workspace_panel.py --ignore=tests/web/test_web_client.py
+              --ignore=tests/web/test_voice.py --ignore=tests/web/test_internet_switch.py
+              --ignore=tests/web/test_conversation_settings.py --ignore=tests/web/test_tasks.py
+              --ignore=tests/web/test_steps.py
             # Raised from 300 with the remote MCP servers' browser tests (UX-029), about 25 seconds,
             # and from 360 with the sandbox engine (ADR-0114), as the core part.
             budget: 420
@@ -148,6 +151,14 @@ jobs:
           - part: web-chat
             paths: tests/web/test_web_client.py
             budget: 240
+          # The browser tests that took the longest of the web part, which took 419 seconds on a runner with
+          # them: voice, the internet switch, the conversation's settings, tasks and steps; the part is as
+          # slow as its session's start and its tests.
+          - part: web-settings
+            paths: >-
+              tests/web/test_voice.py tests/web/test_internet_switch.py tests/web/test_conversation_settings.py
+              tests/web/test_tasks.py tests/web/test_steps.py
+            budget: 300
           # The workspace panel in Chromium (ADR-0079): its files live in a
           # sandbox, which each test starts.
           - part: web-files
