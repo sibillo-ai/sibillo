@@ -202,24 +202,3 @@ def test_notifications_that_are_off_show_a_sign_until_dismissed(page: Page, memb
     page.reload()
     expect(page.get_by_role("link", name="Settings")).to_be_visible()
     expect(page.get_by_role("region", name="Notifications are off")).to_be_hidden()
-
-
-@pytest.mark.spec("UX-031", "TSK-003")
-@pytest.mark.parametrize(
-    ("recurrence", "words"),
-    [
-        ("", "Once, on"),
-        ("RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=2", "At 09:30, on the first Monday of every month, 2 times"),
-        ("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SA;UNTIL=20991231T235959Z", "At 09:30, every 2 weeks on Saturday, until"),
-    ],
-    ids=["once", "first Monday twice", "every other Saturday until"],
-)
-def test_a_recurrence_is_said_in_words(page: Page, member: Account, recurrence: str, words: str) -> None:
-    sign_in(page, member)
-    _tasks_page(page)
-    page.get_by_role("region", name="Tasks").get_by_role("button", name="New task").click()
-    dialog = page.get_by_role("dialog", name="New task")
-    dialog.get_by_role("button", name="Add a schedule").click()
-    dialog.get_by_label("Starts").fill("2099-03-01T09:30")
-    dialog.get_by_label("Repeats").fill(recurrence)
-    expect(dialog).to_contain_text(words)

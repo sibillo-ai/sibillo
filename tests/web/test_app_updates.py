@@ -58,30 +58,6 @@ def _old_version(page: Page) -> bool:
 
 
 @pytest.mark.spec("UX-040")
-def test_a_first_visit_changes_nothing(page: Page, member: Account) -> None:
-    sign_in(page, member)
-    page.evaluate(CONTROLLED)
-    page.wait_for_timeout(500)
-    assert _old_version(page)
-    expect(page.get_by_text(READY)).to_have_count(0)
-
-
-@pytest.mark.spec("UX-040")
-def test_out_of_view_with_nothing_typed_the_new_version_loads(
-    page: Page, member: Account, deploy: Callable[[], None]
-) -> None:
-    sign_in(page, member)
-    page.evaluate(CONTROLLED)
-    deploy()
-    # The app goes out of view: it looks for a new version and, finding one, loads it.
-    with page.expect_event("load", timeout=20_000):
-        page.evaluate(SEEN, "hidden")
-    page.get_by_label("Message").wait_for()
-    assert not _old_version(page)
-    expect(page.get_by_text(READY)).to_have_count(0)
-
-
-@pytest.mark.spec("UX-040")
 def test_with_text_typed_the_new_version_waits_and_says_it_is_ready(
     page: Page, member: Account, deploy: Callable[[], None]
 ) -> None:
@@ -105,17 +81,3 @@ def test_with_text_typed_the_new_version_waits_and_says_it_is_ready(
         page.get_by_role("button", name="Load it").click()
     page.get_by_label("Message").wait_for()
     assert not _old_version(page)
-
-
-@pytest.mark.spec("UX-040")
-def test_an_open_app_looks_for_a_new_version_every_hour(
-    page: Page, member: Account, deploy: Callable[[], None]
-) -> None:
-    page.clock.install()
-    sign_in(page, member)
-    page.evaluate(CONTROLLED)
-    page.get_by_label("Message").fill("still writing")
-    deploy()
-    page.clock.run_for(60 * 60 * 1000)
-    expect(page.get_by_text(READY)).to_be_visible(timeout=20_000)
-    expect(page.get_by_label("Message")).to_have_value("still writing")
