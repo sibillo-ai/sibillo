@@ -226,8 +226,9 @@ client_max_body_size 1g;
 
 **Passwords**
 
-A household's administrator creates each member's account with a first
-password (AUTH-002). That password only signs them in the first time: the
+A household's administrator adds each member in **Settings**, then
+**Members**, with a username, a name and a first password (AUTH-002,
+UX-044). That password only signs them in the first time: the
 app then asks them to choose their own and shows nothing else until they do,
 so that the administrator never knows the password they use (AUTH-012,
 ADR-0105). Through the API, such an account is answered `403` with
@@ -235,8 +236,34 @@ ADR-0105). Through the API, such an account is answered `403` with
 
 Anyone changes their password in **Settings**, then **Security**, with their
 current one; their other devices are then signed out (AUTH-011). Nobody else
-can change it, not even an administrator, so a forgotten password cannot be
-recovered yet.
+can choose it, not even an administrator. A member who forgot theirs asks an
+administrator, who gives them a new first password on their page in
+**Members**: every device of theirs is signed out, they choose their own at
+the next sign-in, and their passkeys stay, so that they still need one
+(AUTH-013, ADR-0144).
+
+**Members who leave**
+
+On a member's page, an administrator changes their role and disables their
+account, which signs them out everywhere and keeps their data (AUTH-008,
+AUTH-009). A disabled account can then be deleted, for good: its
+conversations, files, memory, skills, tasks, settings and usage go with it,
+and only a backup made before keeps them (AUTH-014, ADR-0144). Nobody
+deletes their own account or the instance administrator's.
+
+**Budgets**
+
+On a member's page, an administrator also limits what the member's requests
+use: a cost, such as 5 US dollars a week, on remote models, and a number of
+tokens, such as two million a month, on the household's own models, each
+per day, week from Monday or month, starting at midnight in the
+administrator's time zone (MOD-004, ADR-0145). Once a limit is reached, no
+request of that kind is sent until the period ends: a new message is
+refused, and an answer in progress stops before its next request. The page
+shows the member's usage since their account was created, per month, per day
+and per model, never what they asked; each person sees the same of their own
+in **Settings**, then **Usage**, and is warned where they write from 80% of
+a limit (MOD-021, UX-045).
 
 **Passkeys**
 
