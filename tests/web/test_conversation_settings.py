@@ -298,9 +298,15 @@ def test_each_piece_of_reasoning_is_shown_where_it_happened(page: Page, member: 
         expect(thoughts).to_have_count(2, timeout=30_000)
         # Folded, each on its own.
         expect(main.locator("details[open]")).to_have_count(0)
+        # The history comes in pieces after a reload: each is waited for before it is measured.
+        step, answer = (
+            main.locator("summary", has_text="Sandbox command"),
+            main.get_by_text(f"Tool said: [stdout] seen-{mark}"),
+        )
+        expect(step).to_be_visible(timeout=30_000)
+        expect(answer).to_be_visible(timeout=30_000)
         first, second = thoughts.nth(0).bounding_box(), thoughts.nth(1).bounding_box()
-        call = main.locator("summary", has_text="Sandbox command").bounding_box()
-        reply = main.get_by_text(f"Tool said: [stdout] seen-{mark}").bounding_box()
+        call, reply = step.bounding_box(), answer.bounding_box()
         assert first is not None
         assert second is not None
         assert call is not None
