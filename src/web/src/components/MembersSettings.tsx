@@ -63,7 +63,23 @@ export function MembersSection({ me }: { me: User }) {
           <Card>
             <ul aria-label={t("members.title")} className="divide-y divide-line">
               {(users.data ?? []).map((user) => (
-                <li key={user.id}>
+                <MemberRow key={user.id} me={me} user={user} onOpen={() => open(user.id)} />
+              ))}
+            </ul>
+          </Card>
+        )}
+      </Group>
+      {adding && <AddMemberDialog onClose={() => setAdding(false)} />}
+    </Page>
+  );
+}
+
+/** A member in the list: their name and role, how many passkeys they have, for the admin to remove (UX-026), and their page. */
+function MemberRow({ me, user, onOpen }: { me: User; user: User; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const passkeys = usePasskeys(user);
+  return (
+                <li>
                   <Row
                     leading={<Avatar name={user.display_name} />}
                     title={
@@ -74,20 +90,23 @@ export function MembersSection({ me }: { me: User }) {
                         {user.disabled && <Badge tone="warn">{t("members.disabled")}</Badge>}
                       </span>
                     }
-                    description={user.username}
+                    description={
+                      <>
+                        {user.username}
+                        {passkeys.count !== undefined && " · "}
+                        {passkeys.count === undefined ? "" : passkeys.count === 0 ? t("members.noPasskeys") : t("members.passkeys", { count: passkeys.count })}
+                      </>
+                    }
                   >
-                    <Button size="sm" aria-label={t("members.manage", { username: user.username })} onClick={() => open(user.id)}>
-                      {t("members.open")}
-                    </Button>
+                    <span className="flex flex-wrap justify-end gap-2">
+                      {mayChange(me, user) && passkeys.count !== undefined && passkeys.count > 0 && passkeys.removeButton}
+                      <Button size="sm" aria-label={t("members.manage", { username: user.username })} onClick={onOpen}>
+                        {t("members.open")}
+                      </Button>
+                    </span>
                   </Row>
+                  {passkeys.dialog}
                 </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-      </Group>
-      {adding && <AddMemberDialog onClose={() => setAdding(false)} />}
-    </Page>
   );
 }
 
@@ -314,8 +333,8 @@ function ResetPasswordDialog({ user, onClose }: { user: User; onClose: () => voi
   );
 }
 
-/** How many passkeys the member has, for the admin to remove them all (UX-026). */
-function PasskeysRow({ me, user }: { me: User; user: User }) {
+/** How many passkeys a member has, and a button that removes them all after a confirmation (UX-026). */
+function usePasskeys(user: User) {
   const { t } = useTranslation();
   const queries = useQueryClient();
   const notify = useNotify();
@@ -337,14 +356,14 @@ function PasskeysRow({ me, user }: { me: User; user: User }) {
     await queries.invalidateQueries({ queryKey: key });
   }
 
-  const passkeys = count.data;
-  return (
-    <Row title={t("members.passkeysRow")} description={passkeys === undefined ? "" : passkeys === 0 ? t("members.noPasskeys") : t("members.passkeys", { count: passkeys })}>
-      {mayChange(me, user) && passkeys !== undefined && passkeys > 0 && (
-        <Button variant="danger" size="sm" aria-label={t("members.removeLabel", { username: user.username })} onClick={() => setConfirming(true)}>
-          {t("passkeys.remove")}
-        </Button>
-      )}
+  return {
+    count: count.data,
+    removeButton: (
+      <Button variant="danger" size="sm" aria-label={t("members.removeLabel", { username: user.username })} onClick={() => setConfirming(true)}>
+        {t("passkeys.remove")}
+      </Button>
+    ),
+    dialog: (
       <Dialog
         asks
         open={confirming}
@@ -361,6 +380,19 @@ function PasskeysRow({ me, user }: { me: User; user: User }) {
           </>
         }
       />
+    ),
+  };
+}
+
+/** The member's passkeys on their page. */
+function PasskeysRow({ me, user }: { me: User; user: User }) {
+  const { t } = useTranslation();
+  const passkeys = usePasskeys(user);
+  const count = passkeys.count;
+  return (
+    <Row title={t("members.passkeysRow")} description={count === undefined ? "" : count === 0 ? t("members.noPasskeys") : t("members.passkeys", { count })}>
+      {mayChange(me, user) && count !== undefined && count > 0 && passkeys.removeButton}
+      {passkeys.dialog}
     </Row>
   );
 }
