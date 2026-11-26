@@ -48,7 +48,7 @@ def test_an_admin_adds_a_member_resets_their_password_and_deletes_them(
     members.get_by_role("button", name="Add a member").click()
     adding = page.get_by_role("dialog", name="Add a member")
     adding.get_by_label("Username").fill(username)
-    adding.get_by_label("Name").fill("Giulia")
+    adding.get_by_label("Name", exact=True).fill("Giulia")
     adding.get_by_label("Initial password").fill(first)
     adding.get_by_role("button", name="Add", exact=True).click()
     row = members.get_by_role("listitem").filter(has_text=username)
