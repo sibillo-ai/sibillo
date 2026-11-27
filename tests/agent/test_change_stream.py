@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 import pytest
 
+from tests.support.accounts import body
 from tests.support.database import Database
 from tests.support.fixtures import HarnessModel
 from tests.support.households import Member, new_member
@@ -26,6 +27,8 @@ from tests.support.tasks import create_task, wait_for_conversations
 
 # A change reaches the stream within a second; the test allows for a busy machine.
 ARRIVAL_SECONDS = 3
+# How long the model takes to write a title, when the test makes it slow (tests/support/model.py).
+SLOW_TITLE_SECONDS = 6
 
 
 @pytest.fixture
@@ -110,6 +113,28 @@ def test_conversations_and_runs_reach_the_stream_of_their_user(server: Server, m
         finished = changes.wait_for(lambda e: e["type"] == "run_finished" and e.get("run_id") == run_id)
     for event in (started, finished):
         assert event == {"type": event["type"], "conversation_id": conversation_id, "run_id": run_id}
+
+
+@pytest.mark.spec("CNV-006", "API-008")
+def test_a_run_ends_before_a_slow_title_which_the_stream_then_announces(server: Server, member: Member) -> None:
+    conversation_id = create_conversation(server, member.token)["id"]
+    with following(server, member.token) as changes:
+        began = time.monotonic()
+        run_id, events = start_run(
+            server, member.token, conversation_id, f"slow-title:{SLOW_TITLE_SECONDS} ||| plan a trip"
+        )
+        assert wait_for_run(server, member.token, run_id)["status"] == "completed"
+        # The answer did not wait for the title (ADR-0146).
+        assert time.monotonic() - began < SLOW_TITLE_SECONDS
+        assert not [e for e in events if e.type == "CUSTOM" and e.data.get("name") == "sibillo.title"]
+        with server.client(member.token) as client:
+            assert body(client.get(f"/conversations/{conversation_id}"))["title"] == ""
+        titled = changes.wait_for(
+            lambda e: e["type"] == "conversation_titled", timeout=SLOW_TITLE_SECONDS + ARRIVAL_SECONDS
+        )
+    assert titled == {"type": "conversation_titled", "conversation_id": conversation_id}
+    with server.client(member.token) as client:
+        assert body(client.get(f"/conversations/{conversation_id}"))["title"]
 
 
 @pytest.mark.spec("API-008", "TSK-002")

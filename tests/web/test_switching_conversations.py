@@ -1,4 +1,4 @@
-"""Going from one conversation to another in the list (CNV-015, UX-001).
+"""Going from one conversation to another in the list, and the titles they show there (CNV-006, CNV-015, UX-001).
 
 The model the tests serve answers `Echo: <message>`, and `slow:N` streams N
 pieces of text, half a second apart (tests/support/model.py).
@@ -50,3 +50,22 @@ def test_a_run_in_progress_stays_in_its_own_conversation(
     expect(main).not_to_contain_text(f"earlier {mark}")
     page.get_by_role("button", name="Stop").click()
     expect(page.get_by_role("status")).to_contain_text("Stopped.", timeout=15_000)
+
+
+@pytest.mark.spec("CNV-006", "API-008", "UX-039")
+def test_a_title_that_comes_after_the_answer_still_shows(
+    page: Page, member: Account, default_model: HarnessModel
+) -> None:
+    sign_in(page, member)
+    mark = uuid4().hex[:8]
+    main = page.get_by_role("main")
+    nav = page.get_by_role("navigation", name="Conversations")
+    # The title takes longer than the answer, which does not wait for it (ADR-0146).
+    _send(page, f"slow-title:4 ||| later {mark}")
+    expect(main).to_contain_text(f"Echo: later {mark}", timeout=30_000)
+    expect(page.get_by_role("button", name="Send")).to_be_visible()
+    here = urlsplit(page.url).path
+    expect(nav.locator(f'a[href="{here}"]')).to_contain_text("New conversation")
+    # The stream of changes names it once it is stored, in the list and in the top bar.
+    expect(nav.locator(f'a[href="{here}"]')).to_contain_text("Write a title", timeout=15_000)
+    expect(main).to_contain_text("Write a title")

@@ -42,6 +42,10 @@ last user message:
 - `wait:<seconds> ||| <script>` waits that many seconds before every answer,
   then answers as `<script>` does, so that a client can leave a run before it
   ends (ADR-0101);
+- `slow-title:<seconds> ||| <script>` answers as `<script>` does, while a
+  request that quotes the message after text of its own, as the request for
+  the conversation's title does, waits that many seconds first, so that the
+  title arrives after the run ends (ADR-0146);
 - anything else streams `Echo: <message>`.
 
 The command tool is found among the tools the request offers, by its name or
@@ -439,6 +443,13 @@ def _handler(model: ModelServer) -> type[BaseHTTPRequestHandler]:
             if last.startswith("wait:") and " ||| " in last:
                 seconds, _, last = last.removeprefix("wait:").partition(" ||| ")
                 time.sleep(float(seconds))
+            if "slow-title:" in last and " ||| " in last:
+                quoted, _, script = last.partition("slow-title:")
+                seconds, _, script = script.partition(" ||| ")
+                if quoted:
+                    time.sleep(float(seconds))
+                else:
+                    last = script
             self.prompt_tokens = PROMPT_TOKENS
             if last.startswith("prompt-tokens:"):
                 self.prompt_tokens = int(last.removeprefix("prompt-tokens:"))

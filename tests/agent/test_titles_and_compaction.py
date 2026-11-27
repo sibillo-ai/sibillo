@@ -52,11 +52,14 @@ def test_a_new_conversation_gets_a_title_from_its_model(database: Database, serv
         assert time.monotonic() < deadline, "the conversation got no title"
         time.sleep(0.3)
     assert 0 < len(title) <= 200
-    # The run announces the title before it finishes, so clients show it while it is answered.
-    (announced,) = [e for e in events if e.type == "CUSTOM" and e.data.get("name") == "sibillo.title"]
-    assert announced.data["value"] == {"title": title}
+    # A title that arrives while the run goes on is announced on its stream, so clients show it while it is
+    # answered; the run does not wait for one that arrives later (ADR-0146).
+    announced = [e for e in events if e.type == "CUSTOM" and e.data.get("name") == "sibillo.title"]
     finished = next(index for index, e in enumerate(events) if e.type == "RUN_FINISHED")
-    assert events.index(announced) < finished
+    for each in announced:
+        assert each.data["value"] == {"title": title}
+        assert events.index(each) < finished
+    assert len(announced) <= 1
     # The title is a model request of the conversation's own model, in the ledger; it is made
     # alongside the answer, so either may be recorded first.
     assert sorted(_purposes(database, conversation["id"])) == ["run", "title"]
