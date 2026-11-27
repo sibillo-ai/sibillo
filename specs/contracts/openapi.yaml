@@ -6003,10 +6003,11 @@ components:
       type: object
       description: |
         What changed for the user, with identifiers only (API-008, ADR-0108):
-        a conversation created, a run started or finished, or a task fired.
+        a conversation created or given its automatic title (CNV-006,
+        ADR-0146), a run started or finished, or a task fired.
       required: [type]
       properties:
-        type: { type: string, enum: [conversation_created, run_started, run_finished, task_fired] }
+        type: { type: string, enum: [conversation_created, conversation_titled, run_started, run_finished, task_fired] }
         conversation_id: { $ref: "#/components/schemas/Id" }
         run_id: { $ref: "#/components/schemas/Id" }
         task_id: { $ref: "#/components/schemas/Id" }

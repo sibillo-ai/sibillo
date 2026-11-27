@@ -95,16 +95,16 @@ in the user's language.
 
 ## API-008: A stream of the user's changes
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 2
 - **Verification:** integration
 
 The API SHOULD offer each signed-in client a Server-Sent Events stream of
-what changes for its user: a conversation created, a run started or
-finished, and a task fired, each with its identifiers and nothing of its
+what changes for its user: a conversation created or titled, a run started
+or finished, and a task fired, each with its identifiers and nothing of its
 content. A change MUST reach the streams of its user within a second of its
-transaction, and MUST NOT reach any other user's (ADR-0108).
+transaction, and MUST NOT reach any other user's (ADR-0108, ADR-0146).
 
 ## API-009: Bounded request bodies
 

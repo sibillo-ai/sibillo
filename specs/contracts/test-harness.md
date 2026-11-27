@@ -168,7 +168,10 @@ with every model that has answered a request, loaded with the context window
 the test sets. Outside `/ollama`, `/api/version` is not found, as on any other
 server. It records the headers of each request, so
 tests can check what the gateway sends. A test can also have it wait before
-it answers, so that a client can leave a run before the run ends (ADR-0101).
+it answers, so that a client can leave a run before the run ends (ADR-0101),
+or wait only before answering the request for a conversation's title, which
+quotes the first message, so that the title arrives after the run ends
+(ADR-0146).
 
 It also serves speech (ADR-0088). As an OpenAI-compatible server it lists
 `test-transcribe` and `test-tts` among its models, named so that their kind

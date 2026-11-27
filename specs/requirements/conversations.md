@@ -83,7 +83,7 @@ Rationale: journeys J2 and J3.
 
 ## CNV-006: Automatic titles
 
-- **Status:** implemented
+- **Status:** accepted
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** integration
@@ -92,7 +92,8 @@ A new conversation SHOULD receive a short title generated from its first
 message by the conversation's own model, while the first answer is being
 written, unless the user has already named it. Title generation is a model call and is subject to the data egress
 policy (MOD-003), to the user's budget (MOD-004) and to the cost ledger
-(MOD-006, ADR-0073).
+(MOD-006, ADR-0073). The first answer, and any request it ends with for the
+user, MUST NOT wait for the title (ADR-0146).
 
 ## CNV-007: Folders
 
