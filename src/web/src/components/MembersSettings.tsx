@@ -453,7 +453,7 @@ function BudgetForm({ user, budget }: { user: User; budget: Budget }) {
   return (
     <form onSubmit={(event) => void run("save", () => save(event))} className="flex flex-col gap-3">
       <Card rows>
-        <Row title={t("budget.cost", { currency: budget.cost?.currency ?? CURRENCY })} description={t("budget.costHint")} htmlFor={`cost-${user.id}`}>
+        <Row title={t("budget.cost", { currency: budget.cost?.currency ?? CURRENCY })} description={t("budget.costHint")} htmlFor={`cost-${user.id}`} wide>
           <TextInput id={`cost-${user.id}`} inputMode="decimal" value={cost} onChange={(event) => setCost(event.target.value)} placeholder={t("budget.none")} />
         </Row>
         <Row title={t("budget.costPeriod")} htmlFor={`cost-period-${user.id}`} wide>
@@ -461,7 +461,7 @@ function BudgetForm({ user, budget }: { user: User; budget: Budget }) {
             {periods}
           </Select>
         </Row>
-        <Row title={t("budget.tokens")} description={t("budget.tokensHint")} htmlFor={`tokens-${user.id}`}>
+        <Row title={t("budget.tokens")} description={t("budget.tokensHint")} htmlFor={`tokens-${user.id}`} wide>
           <TextInput id={`tokens-${user.id}`} inputMode="numeric" value={tokens} onChange={(event) => setTokens(event.target.value)} placeholder={t("budget.none")} />
         </Row>
         <Row title={t("budget.tokensPeriod")} htmlFor={`tokens-period-${user.id}`} wide>
