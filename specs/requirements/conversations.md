@@ -83,7 +83,7 @@ Rationale: journeys J2 and J3.
 
 ## CNV-006: Automatic titles
 
-- **Status:** accepted
+- **Status:** implemented
 - **Priority:** SHOULD
 - **Phase:** 1
 - **Verification:** integration
