@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, Brain, CalendarClock, Check, ChevronRight, ListChecks, ShieldCheck, ShieldX, Sparkles, Copy, Download, FilePen, FileText, FolderOpen, Ghost, GitFork, LoaderCircle, Pencil, SlidersHorizontal, Square, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 
@@ -136,9 +136,27 @@ interface PendingEdit {
   deleted: number;
 }
 
+/**
+ * The conversation the address names. Each conversation has a view of its own, so that what one holds, such as a
+ * run being answered, never shows in another; the workspace panel stays open or closed from one to the next
+ * (CNV-015, UX-001).
+ */
 export function ConversationView() {
-  const { t } = useTranslation();
   const { conversationId = "" } = useParams();
+  const [panelOpen, setPanelOpen] = useState(false);
+  return <Conversation key={conversationId} conversationId={conversationId} panelOpen={panelOpen} setPanelOpen={setPanelOpen} />;
+}
+
+function Conversation({
+  conversationId,
+  panelOpen,
+  setPanelOpen,
+}: {
+  conversationId: string;
+  panelOpen: boolean;
+  setPanelOpen: Dispatch<SetStateAction<boolean>>;
+}) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const queries = useQueryClient();
@@ -182,23 +200,12 @@ export function ConversationView() {
   }, [liveStatus]);
   // The latest context reading stays in view after the run, until another conversation opens.
   const [contextUsage, setContextUsage] = useState<RunUsage | null>(null);
-  const [usageFor, setUsageFor] = useState(conversationId);
-  if (usageFor !== conversationId) {
-    setUsageFor(conversationId);
-    setContextUsage(null);
-  }
   if (live?.usage && live.usage !== contextUsage) setContextUsage(live.usage);
   const [pending, setPending] = useState<PendingEdit | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const thread = useRef<HTMLDivElement>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reveal, setReveal] = useState<Reveal | null>(null);
-  const [panelFor, setPanelFor] = useState(conversationId);
-  if (panelFor !== conversationId) {
-    setPanelFor(conversationId);
-    setReveal(null);
-  }
   const owner = useCallback(() => Promise.resolve(conversationId), [conversationId]);
   const attachments = useAttachments(owner);
   const show = useCallback((path: string) => {
