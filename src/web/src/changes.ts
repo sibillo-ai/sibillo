@@ -1,5 +1,5 @@
 // The stream of the user's changes (API-008, UX-032, ADR-0108): what it announces is shown at once, such as a
-// conversation a task started, marked as running until its run ends.
+// conversation a task started, marked as running until its run ends, or a title (ADR-0146).
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -8,7 +8,7 @@ import { CONVERSATIONS } from "./conversations";
 
 type ChangeEvent = Schemas["ChangeEvent"];
 
-const KINDS = ["conversation_created", "run_started", "run_finished", "task_fired"] as const;
+const KINDS = ["conversation_created", "conversation_titled", "run_started", "run_finished", "task_fired"] as const;
 
 // The conversations with a run in progress, as the stream announced them.
 let running = new Set<string>();
@@ -55,6 +55,10 @@ export function useChangeStream() {
       if (change.type === "run_finished" && change.conversation_id) {
         setRunning(change.conversation_id, false);
         void queries.invalidateQueries({ queryKey: ["conversation", change.conversation_id] });
+      }
+      // A title can arrive after the run that asked for it (ADR-0146).
+      if (change.type === "conversation_titled" && change.conversation_id) {
+        void queries.invalidateQueries({ queryKey: ["conversation", change.conversation_id, "details"] });
       }
       refresh();
     };

@@ -334,6 +334,8 @@ _ENCODERS: dict[str, AGUIEventStream[Any, Any]] = {}
 _WRITTEN: dict[str, int] = {}
 # The title request of each first run executing in this process, until announced (CNV-006).
 _TITLES: dict[str, asyncio.Task[str | None]] = {}
+# Title requests that go on after their run ended, held until they end (ADR-0146).
+_LATE_TITLES: set[asyncio.Task[str | None]] = set()
 
 
 async def _write(run_id: str, event: dict[str, Any]) -> None:
@@ -375,9 +377,17 @@ async def _handle_events(ctx: RunContext[RunDeps], events: AsyncIterable[AgentSt
 
 
 async def _announce_title(run_id: str) -> None:
-    """Wait for the run's title request, and name the conversation on the run's stream (CNV-006, ADR-0073)."""
-    title = await _TITLES.pop(run_id)
-    if title is not None:
+    """Name the conversation on the run's stream, if its title request ended; or else let the request go on
+    without the run, which does not wait for it (CNV-006, ADR-0073, ADR-0146)."""
+    request = _TITLES.pop(run_id, None)
+    if request is None:
+        return
+    if not request.done():
+        # Its title is announced on the stream of the user's changes once it is stored.
+        _LATE_TITLES.add(request)
+        request.add_done_callback(_LATE_TITLES.discard)
+        return
+    if (title := await request) is not None:
         await _write(run_id, {"type": "CUSTOM", "name": "sibillo.title", "value": {"title": title}})
 
 
@@ -818,8 +828,7 @@ async def _execute(
     ) as error:
         code = _error_code(error)
         logger.warning("run %s failed: %s", run.run_id, code)
-        if run.run_id in _TITLES:
-            await _announce_title(run.run_id)
+        await _announce_title(run.run_id)
         followed = await _followed(identity, deps.run_id)
         await _write_error(run.run_id, code, _reason(error))
         await _set_status(identity, deps.run_id, "failed", code)
@@ -830,8 +839,7 @@ async def _execute(
             title.cancel()
         raise
     await store_messages(deps, result.new_messages())
-    if run.run_id in _TITLES:
-        await _announce_title(run.run_id)
+    await _announce_title(run.run_id)
     output = result.output
     pending = REQUESTS.dump_python(output, mode="json") if isinstance(output, DeferredToolRequests) else None
     if isinstance(output, DeferredToolRequests) and not asks_user(output):
@@ -1182,7 +1190,13 @@ async def _name_conversation(run: RunWorkflowInput, deps: RunDeps) -> str | None
             text("UPDATE conversations SET title = :title WHERE id = :id AND title = ''"),
             {"title": title, "id": deps.conversation_id},
         )
-    return title if result.rowcount == 1 else None
+        if result.rowcount != 1:
+            return None
+        # The user's clients name the conversation, also once its run has ended (API-008, ADR-0146).
+        await announce(
+            connection, deps.identity, change_event("conversation_titled", conversation_id=deps.conversation_id)
+        )
+    return title
 
 
 def _reason(error: BaseException) -> str | None:
